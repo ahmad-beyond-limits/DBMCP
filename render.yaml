@@ -1,0 +1,48 @@
+services:
+  # Backend FastAPI service on Render
+  - type: web
+    name: dbmcp-backend
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: WORKSPACE_HASH_SECRET
+        generateValue: true
+      - key: MCP_TOKEN_SECRET
+        generateValue: true
+      - key: MCP_SESSION_SECRET
+        generateValue: true
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: workspace-files
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+  # Frontend Next.js service on Render
+  - type: web
+    name: dbmcp-frontend
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
