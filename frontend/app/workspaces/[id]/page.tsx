@@ -44,6 +44,7 @@ import {
   Eye,
   Columns,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 
 export default function WorkspaceDetailPage() {
@@ -91,19 +92,15 @@ export default function WorkspaceDetailPage() {
   const [shareName, setShareName] = useState("Claude Assistant");
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   
-  // Power Query Transformation States (Only for Tabular Data Files: CSV, Excel, JSON)
+  // Power Query Transformation States (Dynamically populated from the real file content)
   const [activeTransformFileId, setActiveTransformFileId] = useState<string>("");
-  const [selectedColumnName, setSelectedColumnName] = useState<string>("email");
+  const [selectedColumnName, setSelectedColumnName] = useState<string>("");
   const [customColumnsToHide, setCustomColumnsToHide] = useState("");
-  const [columnActions, setColumnActions] = useState<Record<string, "KEEP" | "MASK" | "REMOVE">>({
-    email: "MASK",
-    ssn: "MASK",
-    salary: "REMOVE",
-    credit_card: "REMOVE",
-    customer_id: "KEEP",
-    region: "KEEP",
-  });
+  const [columnActions, setColumnActions] = useState<Record<string, "KEEP" | "MASK" | "REMOVE">>({});
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [dynamicColumns, setDynamicColumns] = useState<Array<{ name: string; letter: string; type: string; sample: string[] }>>([]);
+  const [dynamicRowsCount, setDynamicRowsCount] = useState<number>(0);
+  const [loadingTransformFile, setLoadingTransformFile] = useState(false);
 
   // Playground States
   const [playgroundToken, setPlaygroundToken] = useState("");
@@ -117,6 +114,13 @@ export default function WorkspaceDetailPage() {
       loadWorkspaceData();
     }
   }, [workspaceId]);
+
+  // Load real dynamic data columns whenever activeTransformFileId changes
+  useEffect(() => {
+    if (activeTransformFileId && workspaceId && shareWizardOpen) {
+      loadDynamicFileSchema(activeTransformFileId);
+    }
+  }, [activeTransformFileId, shareWizardOpen]);
 
   const loadWorkspaceData = async () => {
     try {
@@ -150,6 +154,50 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  const loadDynamicFileSchema = async (fileId: string) => {
+    setLoadingTransformFile(true);
+    try {
+      const content = await api.getFileContent(workspaceId, fileId);
+      if (content.structured_data && content.structured_data.columns && content.structured_data.columns.length > 0) {
+        const cols: string[] = content.structured_data.columns;
+        const rows: any[] = content.structured_data.rows || [];
+        const schema: Record<string, string> = content.structured_data.schema || {};
+
+        const parsed = cols.map((colName, idx) => {
+          const letter = String.fromCharCode(65 + (idx % 26)) + (idx >= 26 ? Math.floor(idx / 26) : "");
+          const colType = schema[colName] || (
+            colName.toLowerCase().includes("email") ? "email" :
+            colName.toLowerCase().includes("ssn") || colName.toLowerCase().includes("id") ? "tax_id" :
+            colName.toLowerCase().includes("score") || colName.toLowerCase().includes("salary") || colName.toLowerCase().includes("age") ? "number" :
+            "string"
+          );
+          const sample = rows.slice(0, 5).map((r) => String(r[colName] !== undefined && r[colName] !== null ? r[colName] : ""));
+          return {
+            name: colName,
+            letter,
+            type: colType,
+            sample,
+          };
+        });
+
+        setDynamicColumns(parsed);
+        setDynamicRowsCount(Math.min(5, rows.length || 4));
+        if (parsed.length > 0) {
+          setSelectedColumnName(parsed[0].name);
+        }
+      } else {
+        // Fallback if structured data is plain text
+        setDynamicColumns([]);
+        setDynamicRowsCount(0);
+      }
+    } catch (err) {
+      setDynamicColumns([]);
+      setDynamicRowsCount(0);
+    } finally {
+      setLoadingTransformFile(false);
+    }
+  };
+
   const notify = (type: "success" | "error", text: string) => {
     setNotification({ type, text });
     setTimeout(() => setNotification(null), 5000);
@@ -178,6 +226,9 @@ export default function WorkspaceDetailPage() {
       notify("success", `File '${uploadFile.name}' processed successfully.`);
       setFiles((prev) => [uploaded, ...prev]);
       setSelectedFileIds((prev) => [...prev, uploaded.id]);
+      if (isDataFile(uploaded)) {
+        setActiveTransformFileId(uploaded.id);
+      }
       setUploadModalOpen(false);
       setUploadFile(null);
       setUploadDescription("");
@@ -393,13 +444,9 @@ export default function WorkspaceDetailPage() {
   const hasDataFilesSelected = selectedDataFiles.length > 0;
   const activeTransformFile = selectedDataFiles.find((f) => f.id === activeTransformFileId) || selectedDataFiles[0];
 
-  // Available Columns for Dataset Transformation
-  const availableColumns = [
-    { name: "customer_id", letter: "A", type: "string", sample: ["CUST_101", "CUST_102", "CUST_103", "CUST_104"] },
-    { name: "email", letter: "B", type: "email", sample: ["alex@corp.com", "maya@corp.com", "david@corp.com", "sarah@corp.com"] },
-    { name: "ssn", letter: "C", type: "tax_id", sample: ["458-12-9011", "291-88-3402", "994-10-8812", "112-90-4820"] },
-    { name: "salary", letter: "D", type: "currency", sample: ["$95,000", "$120,000", "$85,000", "$140,000"] },
-    { name: "region", letter: "E", type: "string", sample: ["North America", "Europe", "Asia-Pacific", "Latin America"] },
+  // Dynamic Columns parsed from the actual file in this specific workspace
+  const availableColumns = dynamicColumns.length > 0 ? dynamicColumns : [
+    { name: "column_1", letter: "A", type: "string", sample: ["Data Row 1", "Data Row 2", "Data Row 3"] },
   ];
 
   return (
@@ -483,6 +530,7 @@ export default function WorkspaceDetailPage() {
               const firstDataFile = files.find(isDataFile);
               if (firstDataFile) {
                 setActiveTransformFileId(firstDataFile.id);
+                loadDynamicFileSchema(firstDataFile.id);
               }
               setShareWizardOpen(true);
             }}
@@ -648,6 +696,7 @@ export default function WorkspaceDetailPage() {
                   const firstDataFile = files.find(isDataFile);
                   if (firstDataFile) {
                     setActiveTransformFileId(firstDataFile.id);
+                    loadDynamicFileSchema(firstDataFile.id);
                   }
                   setShareWizardOpen(true);
                 }}
@@ -1503,7 +1552,7 @@ export default function WorkspaceDetailPage() {
               )}
 
               {/* ========================================================================= */}
-              {/* STEP 2: POWER QUERY TRANSFORMATION STUDIO (ONLY FOR DATA FILES)           */}
+              {/* STEP 2: POWER QUERY TRANSFORMATION STUDIO (DYNAMIC FILE COLUMNS & ROWS)   */}
               {/* ========================================================================= */}
               {shareStep === 2 && hasDataFilesSelected && (
                 <div>
@@ -1516,7 +1565,10 @@ export default function WorkspaceDetailPage() {
                       {selectedDataFiles.map((f) => (
                         <button
                           key={f.id}
-                          onClick={() => setActiveTransformFileId(f.id)}
+                          onClick={() => {
+                            setActiveTransformFileId(f.id);
+                            loadDynamicFileSchema(f.id);
+                          }}
                           className={`pill-tab ${activeTransformFile?.id === f.id ? "active" : ""}`}
                           style={{ fontSize: "0.8rem", padding: "0.35rem 0.85rem", gap: "0.4rem", display: "flex", alignItems: "center" }}
                         >
@@ -1527,7 +1579,12 @@ export default function WorkspaceDetailPage() {
                     </div>
                   </div>
 
-                  {activeTransformFile && (
+                  {loadingTransformFile ? (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "4rem 0", gap: "0.6rem", color: "var(--text-muted)" }}>
+                      <Loader2 size={20} className="animate-spin" />
+                      <span>Reading file columns &amp; sample data...</span>
+                    </div>
+                  ) : activeTransformFile && (
                     <div style={{
                       display: "grid",
                       gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
@@ -1545,13 +1602,13 @@ export default function WorkspaceDetailPage() {
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
                             <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                               <Columns size={14} color="var(--accent-lime)" />
-                              <span>Columns ({availableColumns.length})</span>
+                              <span>Detected Columns ({availableColumns.length})</span>
                             </div>
                             <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Click to Inspect</span>
                           </div>
 
                           {/* Column Selection List */}
-                          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.25rem" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.25rem", maxHeight: "240px", overflowY: "auto" }}>
                             {availableColumns.map((col) => {
                               const action = columnActions[col.name] || "KEEP";
                               const isSelected = selectedColumnName === col.name;
@@ -1572,7 +1629,7 @@ export default function WorkspaceDetailPage() {
                                     boxShadow: isSelected ? "0 2px 8px rgba(132, 204, 22, 0.12)" : "none",
                                   }}
                                 >
-                                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
                                     <span style={{
                                       width: "20px",
                                       height: "20px",
@@ -1585,11 +1642,12 @@ export default function WorkspaceDetailPage() {
                                       display: "flex",
                                       alignItems: "center",
                                       justifyContent: "center",
+                                      flexShrink: 0,
                                     }}>
                                       {col.letter}
                                     </span>
-                                    <div>
-                                      <div style={{ fontSize: "0.84rem", fontWeight: isSelected ? 700 : 500, color: "var(--color-obsidian)", fontFamily: "JetBrains Mono, monospace" }}>
+                                    <div style={{ minWidth: 0, overflow: "hidden" }}>
+                                      <div style={{ fontSize: "0.84rem", fontWeight: isSelected ? 700 : 500, color: "var(--color-obsidian)", fontFamily: "JetBrains Mono, monospace", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                                         {col.name}
                                       </div>
                                       <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
@@ -1606,6 +1664,7 @@ export default function WorkspaceDetailPage() {
                                     borderRadius: "var(--radius-pill)",
                                     background: action === "REMOVE" ? "var(--status-deny-bg)" : action === "MASK" ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
                                     color: action === "REMOVE" ? "var(--status-deny)" : action === "MASK" ? "var(--accent-lime)" : "var(--text-secondary)",
+                                    flexShrink: 0,
                                   }}>
                                     {action === "REMOVE" ? "Dropped" : action === "MASK" ? "Masked" : "Passed"}
                                   </span>
@@ -1622,7 +1681,7 @@ export default function WorkspaceDetailPage() {
                             <input
                               type="text"
                               className="modern-input"
-                              placeholder="e.g. credit_card, zip_code"
+                              placeholder="e.g. credit_card, phone_number"
                               value={customColumnsToHide}
                               onChange={(e) => setCustomColumnsToHide(e.target.value)}
                               style={{ fontSize: "0.8rem", padding: "0.45rem 0.7rem" }}
@@ -1666,7 +1725,7 @@ export default function WorkspaceDetailPage() {
                                 borderRadius: "4px",
                                 border: "1px solid var(--accent-lime-border)",
                               }}>
-                                {selectedColumnName}
+                                {selectedColumnName || "—"}
                               </span>
                             </div>
 
@@ -1675,6 +1734,7 @@ export default function WorkspaceDetailPage() {
                               <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginRight: "0.2rem" }}>Action:</span>
                               <button
                                 type="button"
+                                disabled={!selectedColumnName}
                                 onClick={() => setColumnActions({ ...columnActions, [selectedColumnName]: "KEEP" })}
                                 style={{
                                   fontSize: "0.75rem",
@@ -1693,6 +1753,7 @@ export default function WorkspaceDetailPage() {
 
                               <button
                                 type="button"
+                                disabled={!selectedColumnName}
                                 onClick={() => setColumnActions({ ...columnActions, [selectedColumnName]: "MASK" })}
                                 style={{
                                   fontSize: "0.75rem",
@@ -1711,6 +1772,7 @@ export default function WorkspaceDetailPage() {
 
                               <button
                                 type="button"
+                                disabled={!selectedColumnName}
                                 onClick={() => setColumnActions({ ...columnActions, [selectedColumnName]: "REMOVE" })}
                                 style={{
                                   fontSize: "0.75rem",
@@ -1782,7 +1844,7 @@ export default function WorkspaceDetailPage() {
                               </thead>
 
                               <tbody>
-                                {[0, 1, 2, 3].map((rowIdx) => (
+                                {Array.from({ length: dynamicRowsCount || 3 }).map((_, rowIdx) => (
                                   <tr key={rowIdx} style={{ borderBottom: "1px solid #f1f5f9", background: rowIdx % 2 === 0 ? "#ffffff" : "#fafafa" }}>
                                     <td style={{
                                       padding: "0.45rem",
@@ -1799,15 +1861,19 @@ export default function WorkspaceDetailPage() {
                                     {availableColumns.map((col) => {
                                       const action = columnActions[col.name] || "KEEP";
                                       const isSelected = selectedColumnName === col.name;
-                                      const rawVal = col.sample[rowIdx];
+                                      const rawVal = col.sample[rowIdx] !== undefined ? col.sample[rowIdx] : "";
 
                                       let displayVal = rawVal;
                                       if (action === "REMOVE") {
                                         displayVal = "[DROPPED BY POLICY]";
                                       } else if (action === "MASK") {
-                                        if (col.type === "email") displayVal = rawVal.replace(/(^.).*(@.*)/, "$1***$2");
-                                        else if (col.type === "tax_id") displayVal = "XXX-XX-" + rawVal.slice(-4);
-                                        else displayVal = `***${rawVal.slice(-3)}`;
+                                        if (col.type === "email" && rawVal.includes("@")) {
+                                          displayVal = rawVal.replace(/(^.).*(@.*)/, "$1***$2");
+                                        } else if (rawVal.length > 4) {
+                                          displayVal = `***${rawVal.slice(-3)}`;
+                                        } else {
+                                          displayVal = "***";
+                                        }
                                       }
 
                                       return (
@@ -1824,7 +1890,7 @@ export default function WorkspaceDetailPage() {
                                             cursor: "pointer",
                                           }}
                                         >
-                                          {displayVal}
+                                          {displayVal || <span style={{ color: "var(--text-dim)", fontStyle: "italic" }}>null</span>}
                                         </td>
                                       );
                                     })}
@@ -1846,9 +1912,9 @@ export default function WorkspaceDetailPage() {
                             flexWrap: "wrap",
                             gap: "0.3rem",
                           }}>
-                            <span>Live Power Query Output Preview for AI Agents</span>
+                            <span>Real columns &amp; rows dynamically loaded from {activeTransformFile.original_filename}</span>
                             <span style={{ color: "var(--accent-lime)", fontWeight: 600 }}>
-                              ✓ Changes Applied Dynamically
+                              ✓ Live Workspace Isolated
                             </span>
                           </div>
                         </div>
