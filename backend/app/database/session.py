@@ -1,5 +1,7 @@
+import logging
 import os
 from typing import AsyncGenerator
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -8,6 +10,8 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import declarative_base
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Engine configuration
 connect_args = {}
@@ -44,8 +48,26 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Initialize database tables for local/dev/testing environments."""
+    """Initialize database tables and run automatic safe schema migrations."""
     async with engine.begin() as conn:
         # Import models so Base has all metadata registered
         from app.database import models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
+
+        # Automatic schema migration: ensure `permissions` column exists on `mcp_credentials`
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(
+                    text("ALTER TABLE mcp_credentials ADD COLUMN IF NOT EXISTS permissions JSON DEFAULT '{}'::json")
+                )
+                logger.info("Executed schema migration: ensure mcp_credentials.permissions column exists.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(
+                        text("ALTER TABLE mcp_credentials ADD COLUMN permissions JSON DEFAULT '{}'")
+                    )
+                except Exception:
+                    # In SQLite, duplicate column error is expected if column already exists
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning: {e}")
