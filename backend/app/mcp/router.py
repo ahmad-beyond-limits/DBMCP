@@ -5,6 +5,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy.orm.attributes import flag_modified
+
 from app.audit.service import AuditService
 from app.auth.router import get_current_user
 from app.core.rate_limit import rate_limit
@@ -19,6 +21,7 @@ from app.mcp.schemas import (
     MCPCredentialCreateRequest,
     MCPCredentialCreateResponse,
     MCPCredentialListItem,
+    MCPCredentialUpdateRequest,
 )
 from app.mcp.server import MCPServer
 from app.workspaces.service import WorkspaceService
@@ -58,6 +61,12 @@ async def list_mcp_credentials(
             revoked_at=c.revoked_at,
             last_used_at=c.last_used_at,
             is_active=(c.revoked_at is None) and (c.expires_at is None or ensure_utc(c.expires_at) > now),
+            permissions=c.permissions or {
+                "read_resource": True,
+                "search": True,
+                "query_dataset": True,
+                "edit_dataset": True,
+            },
         )
         for c in creds
     ]
@@ -75,7 +84,7 @@ async def create_mcp_credential(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Generate a new high-entropy private MCP credential (OWNER only).
+    Generate a new high-entropy private MCP credential (OWNER only) with specific tool permissions.
     The raw token is displayed ONCE and never stored or returned again.
     """
     await WorkspaceService.verify_access(db, workspace_id, user.id, require_owner=True)
@@ -84,12 +93,21 @@ async def create_mcp_credential(
     now = utc_now()
     expires_at = now + timedelta(days=data.expires_in_days or 30)
 
+    default_permissions = {
+        "read_resource": True,
+        "search": True,
+        "query_dataset": True,
+        "edit_dataset": True,
+    }
+    assigned_permissions = dict(data.permissions) if data.permissions else default_permissions
+
     cred = MCPCredential(
         workspace_id=workspace_id,
         name=data.name.strip(),
         credential_prefix=prefix,
         secret_hash=secret_hash,
         expires_at=expires_at,
+        permissions=assigned_permissions,
     )
     db.add(cred)
     await db.commit()
@@ -103,8 +121,8 @@ async def create_mcp_credential(
         user_id=user.id,
         credential_id=cred.id,
         decision="ALLOW",
-        reason="MCP credential created",
-        request_metadata={"credential_prefix": prefix, "name": cred.name},
+        reason=f"MCP credential created with permissions: {assigned_permissions}",
+        request_metadata={"credential_prefix": prefix, "name": cred.name, "permissions": assigned_permissions},
     )
 
     return MCPCredentialCreateResponse(
@@ -115,6 +133,64 @@ async def create_mcp_credential(
         raw_token=raw_token,
         expires_at=expires_at,
         created_at=cred.created_at,
+        permissions=cred.permissions,
+    )
+
+
+@router.patch("/workspaces/{workspace_id}/mcp-credentials/{credential_id}", response_model=MCPCredentialListItem)
+async def update_mcp_credential(
+    workspace_id: str,
+    credential_id: str,
+    data: MCPCredentialUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update permissions or label of an existing MCP credential (OWNER only).
+    """
+    await WorkspaceService.verify_access(db, workspace_id, user.id, require_owner=True)
+
+    stmt = select(MCPCredential).where(
+        MCPCredential.id == credential_id,
+        MCPCredential.workspace_id == workspace_id,
+    )
+    cred = (await db.execute(stmt)).scalar_one_or_none()
+    if not cred:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
+
+    if data.name is not None and data.name.strip():
+        cred.name = data.name.strip()
+    if data.permissions is not None:
+        cred.permissions = dict(data.permissions)
+        flag_modified(cred, "permissions")
+
+    await db.commit()
+    await db.refresh(cred)
+
+    await AuditService.log_event(
+        db=db,
+        workspace_id=workspace_id,
+        operation="MCP_PERMISSIONS_UPDATED",
+        actor_type="USER",
+        user_id=user.id,
+        credential_id=cred.id,
+        decision="ALLOW",
+        reason=f"Permissions updated for MCP credential {cred.credential_prefix}",
+        request_metadata={"permissions": cred.permissions, "name": cred.name},
+    )
+
+    now = utc_now()
+    return MCPCredentialListItem(
+        id=cred.id,
+        workspace_id=cred.workspace_id,
+        name=cred.name,
+        credential_prefix=cred.credential_prefix,
+        created_at=cred.created_at,
+        expires_at=cred.expires_at,
+        revoked_at=cred.revoked_at,
+        last_used_at=cred.last_used_at,
+        is_active=(cred.revoked_at is None) and (cred.expires_at is None or ensure_utc(cred.expires_at) > now),
+        permissions=cred.permissions or {},
     )
 
 
@@ -127,7 +203,7 @@ async def rotate_mcp_credential(
 ):
     """
     Rotate an existing MCP credential (OWNER only).
-    Immediately revokes the previous credential and creates a new one.
+    Immediately revokes the previous credential and creates a new one with same permissions.
     """
     await WorkspaceService.verify_access(db, workspace_id, user.id, require_owner=True)
 
@@ -156,6 +232,7 @@ async def rotate_mcp_credential(
         credential_prefix=prefix,
         secret_hash=secret_hash,
         expires_at=new_expires_at,
+        permissions=old_cred.permissions or {},
     )
     db.add(new_cred)
     await db.commit()
@@ -181,6 +258,7 @@ async def rotate_mcp_credential(
         raw_token=raw_token,
         expires_at=new_expires_at,
         created_at=new_cred.created_at,
+        permissions=new_cred.permissions,
     )
 
 
@@ -218,6 +296,43 @@ async def revoke_mcp_credential(
     )
 
     return {"status": "success", "message": f"Credential {cred.credential_prefix} revoked"}
+
+
+@router.delete("/workspaces/{workspace_id}/mcp-credentials/{credential_id}", status_code=status.HTTP_200_OK)
+async def delete_mcp_credential(
+    workspace_id: str,
+    credential_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Permanently deletes a revoked or inactive MCP credential from the workspace (OWNER only).
+    """
+    await WorkspaceService.verify_access(db, workspace_id, user.id, require_owner=True)
+
+    stmt = select(MCPCredential).where(
+        MCPCredential.id == credential_id,
+        MCPCredential.workspace_id == workspace_id,
+    )
+    cred = (await db.execute(stmt)).scalar_one_or_none()
+    if not cred:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
+
+    prefix = cred.credential_prefix
+    await db.delete(cred)
+    await db.commit()
+
+    await AuditService.log_event(
+        db=db,
+        workspace_id=workspace_id,
+        operation="MCP_TOKEN_DELETED",
+        actor_type="USER",
+        user_id=user.id,
+        decision="ALLOW",
+        reason=f"MCP credential {prefix} permanently deleted by workspace owner",
+    )
+
+    return {"status": "success", "message": f"Credential {prefix} permanently deleted"}
 
 
 # ==============================================================================

@@ -23,6 +23,7 @@ class AuthenticatedMCPContext:
     workspace_name: str
     authenticated: bool = True
     policy_version: int = 1
+    permissions: Optional[dict] = None
 
 
 class MCPAuthService:
@@ -136,4 +137,5 @@ class MCPAuthService:
             credential_prefix=cred.credential_prefix,
             workspace_name=ws.name,
             authenticated=True,
+            permissions=cred.permissions or {},
         )

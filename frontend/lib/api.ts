@@ -228,10 +228,26 @@ class ApiClient {
     return this.request<MCPCredential[]>(`/workspaces/${workspaceId}/mcp-credentials`);
   }
 
-  async createMCPCredential(workspaceId: string, name: string, expiresInDays: number = 30): Promise<MCPCredentialCreated> {
+  async createMCPCredential(
+    workspaceId: string,
+    name: string,
+    expiresInDays: number = 30,
+    permissions?: Record<string, any>
+  ): Promise<MCPCredentialCreated> {
     return this.request<MCPCredentialCreated>(`/workspaces/${workspaceId}/mcp-credentials`, {
       method: "POST",
-      body: JSON.stringify({ name, expires_in_days: expiresInDays }),
+      body: JSON.stringify({ name, expires_in_days: expiresInDays, permissions }),
+    });
+  }
+
+  async updateMCPCredential(
+    workspaceId: string,
+    credId: string,
+    data: { name?: string; permissions?: Record<string, any> }
+  ): Promise<MCPCredential> {
+    return this.request<MCPCredential>(`/workspaces/${workspaceId}/mcp-credentials/${credId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
     });
   }
 
@@ -244,6 +260,12 @@ class ApiClient {
   async revokeMCPCredential(workspaceId: string, credId: string): Promise<{ status: string }> {
     return this.request<{ status: string }>(`/workspaces/${workspaceId}/mcp-credentials/${credId}/revoke`, {
       method: "POST",
+    });
+  }
+
+  async deleteMCPCredential(workspaceId: string, credId: string): Promise<{ status: string }> {
+    return this.request<{ status: string }>(`/workspaces/${workspaceId}/mcp-credentials/${credId}`, {
+      method: "DELETE",
     });
   }
 

@@ -7,6 +7,12 @@ from pydantic import BaseModel, ConfigDict, Field
 class MCPCredentialCreateRequest(BaseModel):
     name: str = Field(default="Default AI Client", max_length=128)
     expires_in_days: Optional[int] = Field(default=30, ge=1, le=365)
+    permissions: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+
+class MCPCredentialUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    permissions: Optional[Dict[str, Any]] = None
 
 
 class MCPCredentialCreateResponse(BaseModel):
@@ -18,6 +24,7 @@ class MCPCredentialCreateResponse(BaseModel):
     warning: str = "This token grants access according to workspace policies. Store it securely. It will not be shown again."
     expires_at: Optional[datetime] = None
     created_at: datetime
+    permissions: Optional[Dict[str, Any]] = None
 
 
 class MCPCredentialListItem(BaseModel):
@@ -32,6 +39,7 @@ class MCPCredentialListItem(BaseModel):
     revoked_at: Optional[datetime] = None
     last_used_at: Optional[datetime] = None
     is_active: bool
+    permissions: Optional[Dict[str, Any]] = None
 
 
 # JSON-RPC 2.0 MCP Protocol Schemas

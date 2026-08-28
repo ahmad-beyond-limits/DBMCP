@@ -91,6 +91,13 @@ export interface MCPCredential {
   revoked_at?: string | null;
   last_used_at?: string | null;
   is_active: boolean;
+  permissions?: {
+    read_resource?: boolean;
+    search?: boolean;
+    query_dataset?: boolean;
+    edit_dataset?: boolean;
+    [key: string]: any;
+  };
 }
 
 export interface MCPCredentialCreated extends MCPCredential {

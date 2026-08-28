@@ -104,6 +104,22 @@ export default function WorkspaceDetailPage() {
   const [loadingTransformFile, setLoadingTransformFile] = useState(false);
   const [isTableDetected, setIsTableDetected] = useState(true);
 
+  // Wizard Granular Permissions State
+  const [shareCanRead, setShareCanRead] = useState(true);
+  const [shareCanSearch, setShareCanSearch] = useState(true);
+  const [shareCanQuery, setShareCanQuery] = useState(true);
+  const [shareCanEdit, setShareCanEdit] = useState(false);
+
+  // Edit Permissions Modal State
+  const [editPermsModalOpen, setEditPermsModalOpen] = useState(false);
+  const [editingCredId, setEditingCredId] = useState<string>("");
+  const [editingCredName, setEditingCredName] = useState<string>("");
+  const [editingCanRead, setEditingCanRead] = useState(true);
+  const [editingCanSearch, setEditingCanSearch] = useState(true);
+  const [editingCanQuery, setEditingCanQuery] = useState(true);
+  const [editingCanEdit, setEditingCanEdit] = useState(false);
+  const [savingPerms, setSavingPerms] = useState(false);
+
   // Playground States
   const [playgroundToken, setPlaygroundToken] = useState("");
   const [playgroundTool, setPlaygroundTool] = useState("workspace_info");
@@ -275,7 +291,14 @@ export default function WorkspaceDetailPage() {
 
     setGeneratingLink(true);
     try {
-      const created = await api.createMCPCredential(workspaceId, shareName.trim());
+      const permissions = {
+        read_resource: shareCanRead,
+        search: shareCanSearch,
+        query_dataset: shareCanQuery,
+        edit_dataset: shareCanEdit,
+      };
+
+      const created = await api.createMCPCredential(workspaceId, shareName.trim(), 30, permissions);
 
       // 1. Enforce excluded files if any
       const excludedFiles = files.filter((f) => !selectedFileIds.includes(f.id));
@@ -321,6 +344,7 @@ export default function WorkspaceDetailPage() {
           last_used_at: null,
           revoked_at: null,
           is_active: true,
+          permissions: created.permissions,
         },
         ...prev,
       ]);
@@ -333,11 +357,63 @@ export default function WorkspaceDetailPage() {
       setShareWizardOpen(false);
       setShareStep(1);
       setShareName("Claude Assistant");
-      notify("success", "Shareable ABOX MCP Link generated!");
+      setShareCanRead(true);
+      setShareCanSearch(true);
+      setShareCanQuery(true);
+      setShareCanEdit(false);
+      notify("success", "Shareable ABOX MCP Link generated with custom permissions!");
     } catch (err: any) {
       notify("error", err.message || "Failed to generate link");
     } finally {
       setGeneratingLink(false);
+    }
+  };
+
+  const handleOpenEditPermissions = (cred: MCPCredential) => {
+    setEditingCredId(cred.id);
+    setEditingCredName(cred.name);
+    const p = cred.permissions || {};
+    setEditingCanRead(p.read_resource !== false);
+    setEditingCanSearch(p.search !== false);
+    setEditingCanQuery(p.query_dataset !== false);
+    setEditingCanEdit(p.edit_dataset === true);
+    setEditPermsModalOpen(true);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!editingCredId) return;
+    setSavingPerms(true);
+    try {
+      const updated = await api.updateMCPCredential(workspaceId, editingCredId, {
+        name: editingCredName.trim(),
+        permissions: {
+          read_resource: editingCanRead,
+          search: editingCanSearch,
+          query_dataset: editingCanQuery,
+          edit_dataset: editingCanEdit,
+        },
+      });
+
+      setMCPCredentials((prev) =>
+        prev.map((c) => (c.id === editingCredId ? { ...c, name: updated.name, permissions: updated.permissions } : c))
+      );
+      setEditPermsModalOpen(false);
+      notify("success", "Permissions updated successfully.");
+    } catch (err: any) {
+      notify("error", err.message || "Failed to update permissions");
+    } finally {
+      setSavingPerms(false);
+    }
+  };
+
+  const handleDeleteMCP = async (credentialId: string) => {
+    if (!confirm("Are you sure you want to permanently delete this MCP link from the workspace?")) return;
+    try {
+      await api.deleteMCPCredential(workspaceId, credentialId);
+      setMCPCredentials((prev) => prev.filter((c) => c.id !== credentialId));
+      notify("success", "MCP Link permanently deleted.");
+    } catch (err: any) {
+      notify("error", err.message || "Failed to delete link");
     }
   };
 
@@ -733,6 +809,45 @@ export default function WorkspaceDetailPage() {
                           <Key size={15} strokeWidth={1.5} color="var(--text-primary)" />
                           <span>{cred.name}</span>
                         </div>
+                        <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+                          <span style={{
+                            fontSize: "0.68rem",
+                            padding: "0.1rem 0.45rem",
+                            borderRadius: "9999px",
+                            background: cred.permissions?.read_resource !== false ? "rgba(46, 48, 50, 0.06)" : "rgba(220, 38, 38, 0.08)",
+                            color: cred.permissions?.read_resource !== false ? "var(--text-secondary)" : "var(--status-deny)",
+                          }}>
+                            {cred.permissions?.read_resource !== false ? "Read: ON" : "Read: OFF"}
+                          </span>
+                          <span style={{
+                            fontSize: "0.68rem",
+                            padding: "0.1rem 0.45rem",
+                            borderRadius: "9999px",
+                            background: cred.permissions?.search !== false ? "rgba(46, 48, 50, 0.06)" : "rgba(220, 38, 38, 0.08)",
+                            color: cred.permissions?.search !== false ? "var(--text-secondary)" : "var(--status-deny)",
+                          }}>
+                            {cred.permissions?.search !== false ? "Search: ON" : "Search: OFF"}
+                          </span>
+                          <span style={{
+                            fontSize: "0.68rem",
+                            padding: "0.1rem 0.45rem",
+                            borderRadius: "9999px",
+                            background: cred.permissions?.query_dataset !== false ? "rgba(46, 48, 50, 0.06)" : "rgba(220, 38, 38, 0.08)",
+                            color: cred.permissions?.query_dataset !== false ? "var(--text-secondary)" : "var(--status-deny)",
+                          }}>
+                            {cred.permissions?.query_dataset !== false ? "Query: ON" : "Query: OFF"}
+                          </span>
+                          <span style={{
+                            fontSize: "0.68rem",
+                            padding: "0.1rem 0.45rem",
+                            borderRadius: "9999px",
+                            background: cred.permissions?.edit_dataset ? "rgba(234, 179, 8, 0.15)" : "rgba(46, 48, 50, 0.06)",
+                            color: cred.permissions?.edit_dataset ? "#B45309" : "var(--text-tertiary)",
+                            fontWeight: cred.permissions?.edit_dataset ? 600 : 400,
+                          }}>
+                            {cred.permissions?.edit_dataset ? "Edit Data: ENABLED" : "Edit Data: BLOCKED"}
+                          </span>
+                        </div>
                       </td>
                       <td style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
                         {cred.credential_prefix}...
@@ -746,22 +861,45 @@ export default function WorkspaceDetailPage() {
                         </span>
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        {workspace.role === "OWNER" && cred.is_active && (
-                          <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
+                        {workspace.role === "OWNER" && (
+                          <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
                             <button
-                              onClick={() => handleRotateMCP(cred.id)}
+                              onClick={() => handleOpenEditPermissions(cred)}
                               className="pill-btn pill-btn-glass"
-                              style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem" }}
+                              style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
                             >
-                              Rotate Key
+                              <Sliders size={12} strokeWidth={1.5} />
+                              Edit Permissions
                             </button>
-                            <button
-                              onClick={() => handleRevokeMCP(cred.id)}
-                              className="pill-btn pill-btn-glass"
-                              style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem", color: "var(--status-deny)" }}
-                            >
-                              Revoke
-                            </button>
+                            {cred.is_active && (
+                              <>
+                                <button
+                                  onClick={() => handleRotateMCP(cred.id)}
+                                  className="pill-btn pill-btn-glass"
+                                  style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem" }}
+                                >
+                                  Rotate Key
+                                </button>
+                                <button
+                                  onClick={() => handleRevokeMCP(cred.id)}
+                                  className="pill-btn pill-btn-glass"
+                                  style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem", color: "var(--status-deny)" }}
+                                >
+                                  Revoke
+                                </button>
+                              </>
+                            )}
+                            {!cred.is_active && (
+                              <button
+                                onClick={() => handleDeleteMCP(cred.id)}
+                                className="pill-btn pill-btn-glass"
+                                style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem", color: "var(--status-deny)", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                                title="Permanently delete revoked link"
+                              >
+                                <Trash2 size={12} strokeWidth={1.5} />
+                                Delete Link
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>
@@ -1532,6 +1670,111 @@ export default function WorkspaceDetailPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* 3. Granular Tool Permissions & AI Capabilities */}
+                  <div style={{ marginTop: "1.5rem" }}>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+                      3. MCP Tool Permissions & AI Capabilities
+                    </label>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
+                      Choose which tools this MCP credential can execute:
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.65rem" }}>
+                      {/* Read Documents */}
+                      <div
+                        onClick={() => setShareCanRead(!shareCanRead)}
+                        style={{
+                          padding: "0.75rem 0.9rem",
+                          borderRadius: "var(--radius-md)",
+                          background: shareCanRead ? "#FFFFFF" : "var(--bg-page)",
+                          border: shareCanRead ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(40, 40, 40, 0.04)",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "0.6rem",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {shareCanRead ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" style={{ marginTop: "2px" }} /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" style={{ marginTop: "2px" }} />}
+                        <div>
+                          <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Read Documents</div>
+                          <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)", marginTop: "2px" }}>read_resource tool</div>
+                        </div>
+                      </div>
+
+                      {/* Search */}
+                      <div
+                        onClick={() => setShareCanSearch(!shareCanSearch)}
+                        style={{
+                          padding: "0.75rem 0.9rem",
+                          borderRadius: "var(--radius-md)",
+                          background: shareCanSearch ? "#FFFFFF" : "var(--bg-page)",
+                          border: shareCanSearch ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(40, 40, 40, 0.04)",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "0.6rem",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {shareCanSearch ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" style={{ marginTop: "2px" }} /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" style={{ marginTop: "2px" }} />}
+                        <div>
+                          <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Full-Text Search</div>
+                          <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)", marginTop: "2px" }}>search tool</div>
+                        </div>
+                      </div>
+
+                      {/* Query Tables */}
+                      <div
+                        onClick={() => setShareCanQuery(!shareCanQuery)}
+                        style={{
+                          padding: "0.75rem 0.9rem",
+                          borderRadius: "var(--radius-md)",
+                          background: shareCanQuery ? "#FFFFFF" : "var(--bg-page)",
+                          border: shareCanQuery ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(40, 40, 40, 0.04)",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "0.6rem",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {shareCanQuery ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" style={{ marginTop: "2px" }} /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" style={{ marginTop: "2px" }} />}
+                        <div>
+                          <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Query Tables & Schema</div>
+                          <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)", marginTop: "2px" }}>query_dataset tool</div>
+                        </div>
+                      </div>
+
+                      {/* Edit / Mutate Data */}
+                      <div
+                        onClick={() => setShareCanEdit(!shareCanEdit)}
+                        style={{
+                          padding: "0.75rem 0.9rem",
+                          borderRadius: "var(--radius-md)",
+                          background: shareCanEdit ? "rgba(234, 179, 8, 0.08)" : "var(--bg-page)",
+                          border: shareCanEdit ? "1px solid rgba(234, 179, 8, 0.3)" : "1px solid rgba(40, 40, 40, 0.04)",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "0.6rem",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {shareCanEdit ? <CheckSquare size={16} strokeWidth={1.5} color="#B45309" style={{ marginTop: "2px" }} /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" style={{ marginTop: "2px" }} />}
+                        <div>
+                          <div style={{ fontSize: "0.85rem", fontWeight: 450, color: shareCanEdit ? "#B45309" : "var(--text-primary)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                            <span>AI Data Edit / Mutation</span>
+                            {shareCanEdit && <span className="badge-status badge-status-transform" style={{ fontSize: "0.65rem", padding: "0.05rem 0.35rem" }}>Active</span>}
+                          </div>
+                          <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)", marginTop: "2px" }}>
+                            {shareCanEdit ? "edit_dataset tool authorized" : "edit_dataset blocked (Read-only)"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -2200,6 +2443,199 @@ export default function WorkspaceDetailPage() {
             >
               Done, I Have Saved This Token
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDIT MCP LINK PERMISSIONS & CAPABILITIES                          */}
+      {/* ========================================================================= */}
+      {editPermsModalOpen && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(46, 48, 50, 0.4)",
+          backdropFilter: "blur(14px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 160,
+          padding: "1rem",
+        }}>
+          <div className="frosted-panel" style={{
+            width: "100%",
+            maxWidth: "540px",
+            background: "#FFFFFF",
+            boxShadow: "var(--shadow-lg)",
+            borderRadius: "var(--radius-xl)",
+            padding: "clamp(1.5rem, 3vw, 2rem)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+              <div>
+                <div className="slash-tag" style={{ margin: 0, marginBottom: "0.2rem" }}>LINK SECURITY POLICY</div>
+                <h2 style={{ fontSize: "1.3rem", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+                  Edit MCP Link Permissions
+                </h2>
+              </div>
+              <button
+                onClick={() => setEditPermsModalOpen(false)}
+                className="icon-circle-btn"
+                style={{ width: "32px", height: "32px" }}
+              >
+                <X size={15} strokeWidth={1.5} />
+              </button>
+            </div>
+
+            {/* Link Name */}
+            <div style={{ marginBottom: "1.25rem" }}>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.35rem", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+                Link Name
+              </label>
+              <input
+                type="text"
+                className="modern-input"
+                value={editingCredName}
+                onChange={(e) => setEditingCredName(e.target.value)}
+              />
+            </div>
+
+            {/* Permissions */}
+            <div style={{ marginBottom: "1.75rem" }}>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+                Authorized MCP Tools
+              </label>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {/* Read Documents */}
+                <div
+                  onClick={() => setEditingCanRead(!editingCanRead)}
+                  style={{
+                    padding: "0.75rem 0.9rem",
+                    borderRadius: "var(--radius-md)",
+                    background: editingCanRead ? "#FFFFFF" : "var(--bg-page)",
+                    border: editingCanRead ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(40, 40, 40, 0.04)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                    {editingCanRead ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" />}
+                    <div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Read Documents (read_resource)</div>
+                      <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>Access text/summary of allowed documents</div>
+                    </div>
+                  </div>
+                  <span className={`badge-status ${editingCanRead ? "badge-status-allow" : "badge-status-deny"}`}>
+                    {editingCanRead ? "Allowed" : "Blocked"}
+                  </span>
+                </div>
+
+                {/* Full-Text Search */}
+                <div
+                  onClick={() => setEditingCanSearch(!editingCanSearch)}
+                  style={{
+                    padding: "0.75rem 0.9rem",
+                    borderRadius: "var(--radius-md)",
+                    background: editingCanSearch ? "#FFFFFF" : "var(--bg-page)",
+                    border: editingCanSearch ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(40, 40, 40, 0.04)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                    {editingCanSearch ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" />}
+                    <div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Keyword Search (search)</div>
+                      <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>Perform semantic and keyword search across documents</div>
+                    </div>
+                  </div>
+                  <span className={`badge-status ${editingCanSearch ? "badge-status-allow" : "badge-status-deny"}`}>
+                    {editingCanSearch ? "Allowed" : "Blocked"}
+                  </span>
+                </div>
+
+                {/* Query Data Tables */}
+                <div
+                  onClick={() => setEditingCanQuery(!editingCanQuery)}
+                  style={{
+                    padding: "0.75rem 0.9rem",
+                    borderRadius: "var(--radius-md)",
+                    background: editingCanQuery ? "#FFFFFF" : "var(--bg-page)",
+                    border: editingCanQuery ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(40, 40, 40, 0.04)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                    {editingCanQuery ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" />}
+                    <div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Query Tables & Schema (query_dataset)</div>
+                      <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>Execute structured table filtering and aggregations</div>
+                    </div>
+                  </div>
+                  <span className={`badge-status ${editingCanQuery ? "badge-status-allow" : "badge-status-deny"}`}>
+                    {editingCanQuery ? "Allowed" : "Blocked"}
+                  </span>
+                </div>
+
+                {/* Edit / Mutate Data */}
+                <div
+                  onClick={() => setEditingCanEdit(!editingCanEdit)}
+                  style={{
+                    padding: "0.75rem 0.9rem",
+                    borderRadius: "var(--radius-md)",
+                    background: editingCanEdit ? "rgba(234, 179, 8, 0.08)" : "var(--bg-page)",
+                    border: editingCanEdit ? "1px solid rgba(234, 179, 8, 0.3)" : "1px solid rgba(40, 40, 40, 0.04)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                    {editingCanEdit ? <CheckSquare size={16} strokeWidth={1.5} color="#B45309" /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" />}
+                    <div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 450, color: editingCanEdit ? "#B45309" : "var(--text-primary)" }}>
+                        AI Data Mutation / Edit (edit_dataset)
+                      </div>
+                      <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>
+                        Allow AI to update, insert, or modify records in dataset files
+                      </div>
+                    </div>
+                  </div>
+                  <span className={`badge-status ${editingCanEdit ? "badge-status-transform" : "badge-status-deny"}`}>
+                    {editingCanEdit ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={() => setEditPermsModalOpen(false)}
+                className="pill-btn pill-btn-glass"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingPerms}
+                onClick={handleSavePermissions}
+                className="pill-btn pill-btn-solid"
+              >
+                {savingPerms ? "Saving Changes..." : "Save Permissions"}
+              </button>
+            </div>
           </div>
         </div>
       )}

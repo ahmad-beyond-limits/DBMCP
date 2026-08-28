@@ -89,3 +89,113 @@ async def test_mcp_expired_credential_fails(client: AsyncClient, db_session: Asy
 
     res = await client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"}, headers={"Authorization": f"Bearer {raw_token}"})
     assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_mcp_credential_granular_permissions_and_deletion(client: AsyncClient, db_session: AsyncSession):
+    """Test setting granular permissions on creation, changing permissions via PATCH, and deleting revoked credentials."""
+    import json
+
+    # 1. Setup workspace & upload a test CSV
+    reg = await client.post("/auth/register", json={"username": "perm_user", "password": "password123"})
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    ws = (await client.post("/workspaces", json={"name": "Permissions Vault"}, headers=headers)).json()
+    ws_id = ws["id"]
+
+    csv_content = b"id,val\n1,100\n2,200"
+    file_res = await client.post(
+        f"/workspaces/{ws_id}/files",
+        files={"file": ("test.csv", csv_content, "text/csv")},
+        headers=headers,
+    )
+    assert file_res.status_code == 201
+
+    # 2. Create MCP credential with read allowed, but edit_dataset explicitly disabled
+    cred_res = await client.post(
+        f"/workspaces/{ws_id}/mcp-credentials",
+        json={
+            "name": "Read-Only Link",
+            "permissions": {
+                "read_resource": True,
+                "search": True,
+                "query_dataset": True,
+                "edit_dataset": False,
+            }
+        },
+        headers=headers,
+    )
+    assert cred_res.status_code == 201
+    cred_data = cred_res.json()
+    raw_token = cred_data["raw_token"]
+    cred_id = cred_data["id"]
+    mcp_headers = {"Authorization": f"Bearer {raw_token}"}
+
+    # 3. Query should succeed
+    query_req = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "query_dataset",
+            "arguments": {"resource_id": "test.csv"}
+        }
+    }
+    q_res = await client.post("/mcp", json=query_req, headers=mcp_headers)
+    assert q_res.status_code == 200
+    assert "rows" in json.loads(q_res.json()["result"]["content"][0]["text"])
+
+    # 4. Edit attempt should be BLOCKED by permission policy
+    edit_req = {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "edit_dataset",
+            "arguments": {
+                "resource_id": "test.csv",
+                "action": "update",
+                "filters": {"id": "1"},
+                "updates": {"val": 999}
+            }
+        }
+    }
+    e_res = await client.post("/mcp", json=edit_req, headers=mcp_headers)
+    assert e_res.status_code == 200
+    assert e_res.json()["result"]["isError"] is True
+    assert "Policy Error" in e_res.json()["result"]["content"][0]["text"]
+
+    # 5. Change permissions via PATCH to allow edit_dataset
+    patch_res = await client.patch(
+        f"/workspaces/{ws_id}/mcp-credentials/{cred_id}",
+        json={
+            "permissions": {
+                "read_resource": True,
+                "search": True,
+                "query_dataset": True,
+                "edit_dataset": True,
+            }
+        },
+        headers=headers,
+    )
+    assert patch_res.status_code == 200
+    assert patch_res.json()["permissions"]["edit_dataset"] is True
+
+    # 6. Now edit attempt SUCCEEDS!
+    e_res2 = await client.post("/mcp", json=edit_req, headers=mcp_headers)
+    assert e_res2.status_code == 200
+    edit_out = json.loads(e_res2.json()["result"]["content"][0]["text"])
+    assert edit_out["success"] is True
+    assert edit_out["records_modified"] == 1
+
+    # 7. Revoke credential
+    rev_res = await client.post(f"/workspaces/{ws_id}/mcp-credentials/{cred_id}/revoke", headers=headers)
+    assert rev_res.status_code == 200
+
+    # 8. Delete revoked credential permanently
+    del_res = await client.delete(f"/workspaces/{ws_id}/mcp-credentials/{cred_id}", headers=headers)
+    assert del_res.status_code == 200
+    assert del_res.json()["status"] == "success"
+
+    # 9. Verify credential is completely gone
+    list_res = await client.get(f"/workspaces/{ws_id}/mcp-credentials", headers=headers)
+    assert not any(c["id"] == cred_id for c in list_res.json())

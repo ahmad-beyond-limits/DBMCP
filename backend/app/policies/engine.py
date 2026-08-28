@@ -39,6 +39,47 @@ class PolicyEngine:
         """
         target_resource_id = resource.id if resource else resource_id
 
+        # 0. Credential-level permission check
+        if hasattr(actor, "permissions") and actor.permissions:
+            perms = actor.permissions
+            if operation in perms and perms[operation] is False:
+                return PolicyDecision(
+                    allowed=False,
+                    decision="DENY",
+                    reason=f"Operation '{operation}' is not permitted by this MCP credential's permission settings",
+                )
+            if operation == "edit_dataset" and perms.get("can_edit") is False:
+                return PolicyDecision(
+                    allowed=False,
+                    decision="DENY",
+                    reason="Data edit operations ('edit_dataset') are disabled for this MCP credential",
+                )
+            if operation == "read_resource" and perms.get("can_read") is False:
+                return PolicyDecision(
+                    allowed=False,
+                    decision="DENY",
+                    reason="Document read operations are disabled for this MCP credential",
+                )
+            if operation in ["query_dataset", "get_dataset_schema"] and perms.get("can_query") is False:
+                return PolicyDecision(
+                    allowed=False,
+                    decision="DENY",
+                    reason="Dataset querying is disabled for this MCP credential",
+                )
+            if operation == "search" and perms.get("can_search") is False:
+                return PolicyDecision(
+                    allowed=False,
+                    decision="DENY",
+                    reason="Keyword search is disabled for this MCP credential",
+                )
+            allowed_tools = perms.get("allowed_tools")
+            if allowed_tools is not None and isinstance(allowed_tools, list) and operation not in allowed_tools:
+                return PolicyDecision(
+                    allowed=False,
+                    decision="DENY",
+                    reason=f"Tool '{operation}' is not authorized for this MCP credential",
+                )
+
         # 1. Operation-level check
         op_stmt = select(OperationPolicy).where(
             OperationPolicy.workspace_id == workspace_id,
