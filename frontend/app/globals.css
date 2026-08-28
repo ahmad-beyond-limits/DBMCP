@@ -146,7 +146,7 @@ body {
 }
 
 /* ========================================================================= */
-/* PILL BUTTONS & CONTROLS                                                   */
+/* BUTTONS & PILLS                                                           */
 /* ========================================================================= */
 
 .pill-btn {
@@ -155,13 +155,13 @@ body {
   justify-content: center;
   gap: 0.5rem;
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 450;
   border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
   text-decoration: none;
-  border: none;
+  border: 1px solid transparent;
   outline: none;
 }
 
@@ -170,11 +170,14 @@ body {
   background: #2E3032;
   color: #FFFFFF;
   border: 1px solid #2E3032;
+  box-shadow: 0 2px 6px rgba(46, 48, 50, 0.12);
 }
 
 .pill-btn-solid:hover {
   background: #1e2022;
+  border-color: #1e2022;
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(46, 48, 50, 0.18);
 }
 
 .pill-btn-solid:disabled {
@@ -183,40 +186,47 @@ body {
   border-color: transparent;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
-/* Soft Subtle Pill Button */
+/* Soft Tactile Grey Pill Button */
 .pill-btn-glass {
-  background: rgba(255, 255, 255, 0.8);
+  background: #ECECED;
   color: var(--text-primary);
-  border: 1px solid rgba(40, 40, 40, 0.06);
+  border: 1px solid rgba(40, 40, 40, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
 .pill-btn-glass:hover {
-  background: #FFFFFF;
-  border-color: rgba(40, 40, 40, 0.12);
+  background: #E2E2E4;
+  color: #1e2022;
+  border-color: rgba(40, 40, 40, 0.18);
   transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 /* Circular Icon Container Button */
 .icon-circle-btn {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.65);
-  border: 1px solid rgba(40, 40, 40, 0.05);
+  background: #ECECED;
+  border: 1px solid rgba(40, 40, 40, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
   flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
 .icon-circle-btn:hover {
   background: #FFFFFF;
+  border-color: rgba(40, 40, 40, 0.16);
   transform: scale(1.04);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
 }
 
 /* ========================================================================= */
@@ -231,15 +241,15 @@ body {
   border-radius: var(--radius-pill);
   font-size: 0.76rem;
   font-weight: 450;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(40, 40, 40, 0.05);
+  background: #ECECED;
+  border: 1px solid rgba(40, 40, 40, 0.08);
   color: var(--text-secondary);
 }
 
 .badge-status-allow {
-  background: rgba(255, 255, 255, 0.8);
-  color: #2E3032;
-  border: 1px solid rgba(40, 40, 40, 0.08);
+  background: #E8F5E9;
+  color: #2E7D32;
+  border: 1px solid rgba(46, 125, 50, 0.2);
 }
 
 .badge-status-deny {
@@ -249,9 +259,9 @@ body {
 }
 
 .badge-status-transform {
-  background: rgba(255, 255, 255, 0.8);
-  color: var(--text-secondary);
-  border: 1px solid rgba(40, 40, 40, 0.08);
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid rgba(217, 119, 6, 0.2);
 }
 
 /* ========================================================================= */
@@ -305,40 +315,70 @@ body {
 }
 
 /* ========================================================================= */
-/* NAVIGATION & PILL TABS                                                    */
+/* NAVIGATION & SUBMENU PILL TABS                                            */
 /* ========================================================================= */
 
 .pill-tabs-bar {
   display: flex;
   gap: 0.4rem;
-  background: rgba(255, 255, 255, 0.6);
+  background: #ECECED;
   padding: 0.35rem;
   border-radius: var(--radius-pill);
-  border: 1px solid rgba(40, 40, 40, 0.04);
+  border: 1px solid rgba(40, 40, 40, 0.08);
   width: fit-content;
 }
 
 .pill-tab {
-  padding: 0.5rem 1.1rem;
+  padding: 0.45rem 1rem;
   border-radius: var(--radius-pill);
   font-size: 0.84rem;
   font-weight: 450;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
+  color: var(--text-primary);
+  background: #ECECED;
+  border: 1px solid rgba(40, 40, 40, 0.08);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .pill-tab:hover {
-  color: var(--text-primary);
+  background: #E2E2E4;
+  color: #1e2022;
+  border-color: rgba(40, 40, 40, 0.16);
+  transform: translateY(-1px);
 }
 
 .pill-tab.active {
   background: #FFFFFF;
+  color: #1e2022;
+  border: 1.5px solid #2E3032;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  font-weight: 500;
+}
+
+/* Inside dedicated grey bar, active tab pops cleanly */
+.pill-tabs-bar .pill-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+}
+
+.pill-tabs-bar .pill-tab:hover {
+  background: rgba(255, 255, 255, 0.5);
   color: var(--text-primary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transform: none;
+}
+
+.pill-tabs-bar .pill-tab.active {
+  background: #FFFFFF;
+  color: var(--text-primary);
+  border: 1px solid rgba(40, 40, 40, 0.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
   font-weight: 500;
 }
 

@@ -389,7 +389,7 @@ async def get_mcp_info(
         "protocol": "MCP JSON-RPC 2.0",
         "transport": "Streamable HTTP",
         "endpoint": "/mcp",
-        "server": "ABOX Policy-Enforced MCP Gateway",
+        "server": "POAIS (Policy-Oriented AI Space) Gateway",
         "skills_guide_endpoint": "/mcp/skills",
         "instructions": ABOX_AI_SKILLS_GUIDE,
     }
@@ -398,9 +398,9 @@ async def get_mcp_info(
 @router.get("/mcp/skills")
 @router.get("/workspaces/{workspace_id}/skills-guide")
 async def get_mcp_skills_guide():
-    """Returns the standardized ABOX AI Agent skills file and operational instructions."""
+    """Returns the standardized POAIS AI Agent skills file and operational instructions."""
     return {
-        "title": "ABOX AI Agent Skills & Operational Guide",
+        "title": "POAIS AI Agent Skills & Operational Guide",
         "version": "2024-11-05",
         "content": ABOX_AI_SKILLS_GUIDE,
         "verification_rule": "MANDATORY: Always call query_dataset immediately after calling edit_dataset to verify and confirm persisted data in storage before replying to the user.",
@@ -437,8 +437,8 @@ async def handle_mcp_rpc(
                     "prompts": {"listChanged": False},
                 },
                 "serverInfo": {
-                    "name": "ABOX Policy-Enforced Gateway",
-                    "version": "1.0.0",
+                    "name": "POAIS Policy-Oriented Gateway",
+                    "version": "2.0.0",
                 },
                 "instructions": ABOX_AI_SKILLS_GUIDE,
             },
@@ -460,8 +460,8 @@ async def handle_mcp_rpc(
                 result={
                     "resources": [
                         {
-                            "uri": "abox://skills/workflow-guide",
-                            "name": "ABOX Agent Skills & Operational Guide",
+                            "uri": "poais://skills/workflow-guide",
+                            "name": "POAIS Agent Skills & Operational Guide",
                             "mimeType": "text/markdown",
                             "description": "Mandatory operating rules, verification protocols, and tool usage guide for AI agents",
                         }
@@ -474,6 +474,10 @@ async def handle_mcp_rpc(
         uri = params.get("uri") or params.get("resource_id") or ""
         clean_uri = uri.strip().lower()
         if clean_uri in [
+            "poais://skills/workflow-guide",
+            "poais://skills/guide",
+            "poais://instructions",
+            "poais_agent_skills.md",
             "abox://skills/workflow-guide",
             "abox://skills/guide",
             "abox://instructions",
@@ -487,7 +491,7 @@ async def handle_mcp_rpc(
                 result={
                     "contents": [
                         {
-                            "uri": "abox://skills/workflow-guide",
+                            "uri": "poais://skills/workflow-guide",
                             "mimeType": "text/markdown",
                             "text": ABOX_AI_SKILLS_GUIDE,
                         }
@@ -512,8 +516,8 @@ async def handle_mcp_rpc(
             result={
                 "prompts": [
                     {
-                        "name": "abox_agent_skills",
-                        "description": "ABOX AI Agent Skills, Verification Directives & Operational Guide",
+                        "name": "poais_agent_skills",
+                        "description": "POAIS AI Agent Skills, Verification Directives & Operational Guide",
                         "arguments": [],
                     }
                 ]
@@ -524,7 +528,7 @@ async def handle_mcp_rpc(
         return JSONRPCResponse(
             id=rpc_req.id,
             result={
-                "description": "ABOX AI Agent Skills & Operational Protocol",
+                "description": "POAIS AI Agent Skills & Operational Protocol",
                 "messages": [
                     {
                         "role": "user",

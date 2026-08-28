@@ -93,6 +93,8 @@ class ContentExtractor:
             "schema": schema,
             "row_count": len(rows),
             "rows": rows,
+            "raw_matrix": [list(columns)] + [[r.get(c, "") for c in columns] for r in rows],
+            "header_row_index": 0,
             "table_detected": len(columns) > 0,
         }
         return plain_text, structured_data
@@ -110,6 +112,8 @@ class ContentExtractor:
                     "schema": schema,
                     "row_count": len(parsed),
                     "rows": parsed,
+                    "raw_matrix": [columns] + [[r.get(c, "") for c in columns] for r in parsed],
+                    "header_row_index": 0,
                     "table_detected": True,
                 }
             else:
@@ -130,6 +134,8 @@ class ContentExtractor:
         primary_columns: List[str] = []
         primary_schema: Dict[str, str] = {}
         primary_rows: List[Dict[str, Any]] = []
+        primary_raw_matrix: List[List[str]] = []
+        primary_header_idx = 0
 
         try:
             wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
@@ -184,6 +190,7 @@ class ContentExtractor:
                         "schema": sheet_schema,
                         "row_count": len(sheet_rows),
                         "rows": sheet_rows,
+                        "raw_matrix": non_empty_rows,
                         "header_row_index": best_header_idx,
                         "table_detected": len(headers) > 0 and len(sheet_rows) > 0,
                     }
@@ -192,6 +199,8 @@ class ContentExtractor:
                         primary_columns = headers
                         primary_schema = sheet_schema
                         primary_rows = sheet_rows
+                        primary_raw_matrix = non_empty_rows
+                        primary_header_idx = best_header_idx
 
                     # Build text representation for this sheet
                     lines = [f"--- Sheet: {sheet_name} ---", ",".join(headers)]
@@ -210,6 +219,8 @@ class ContentExtractor:
                 "schema": primary_schema,
                 "row_count": len(primary_rows),
                 "rows": primary_rows,
+                "raw_matrix": primary_raw_matrix,
+                "header_row_index": primary_header_idx,
                 "sheets": sheets_data,
                 "sheet_names": list(sheets_data.keys()),
                 "table_detected": len(primary_columns) > 0,

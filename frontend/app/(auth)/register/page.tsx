@@ -66,14 +66,51 @@ export default function RegisterPage() {
         boxShadow: "var(--shadow-lg)",
       }}>
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-          <div className="slash-tag" style={{ justifyContent: "center" }}>
-            CREATE ACCOUNT
+          {/* Vibrant Open Geometric POAIS Insignia */}
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: "0.85rem",
+          }}>
+            <svg width="42" height="42" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: "drop-shadow(0 3px 10px rgba(99, 102, 241, 0.3))" }}>
+              <defs>
+                <linearGradient id="poaisRegGrad1" x1="2" y1="2" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#4F46E5" />
+                  <stop offset="45%" stopColor="#8B5CF6" />
+                  <stop offset="100%" stopColor="#06B6D4" />
+                </linearGradient>
+                <linearGradient id="poaisRegGrad2" x1="34" y1="2" x2="2" y2="34" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#06B6D4" />
+                  <stop offset="50%" stopColor="#3B82F6" />
+                  <stop offset="100%" stopColor="#EC4899" />
+                </linearGradient>
+                <linearGradient id="poaisRegGlass" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="rgba(99, 102, 241, 0.12)" />
+                  <stop offset="100%" stopColor="rgba(6, 182, 212, 0.06)" />
+                </linearGradient>
+              </defs>
+
+              <rect x="2" y="2" width="32" height="32" rx="10" fill="url(#poaisRegGlass)" stroke="rgba(255, 255, 255, 0.9)" strokeWidth="1" />
+              <path
+                d="M18 6.5L27.5 11V18.2C27.5 24 23.5 28.5 18 30.5C12.5 28.5 8.5 24 8.5 18.2V11L18 6.5Z"
+                stroke="url(#poaisRegGrad1)"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <ellipse cx="18" cy="18" rx="11" ry="4.5" transform="rotate(-32 18 18)" stroke="url(#poaisRegGrad2)" strokeWidth="1.8" strokeLinecap="round" />
+              <ellipse cx="18" cy="18" rx="11" ry="4.5" transform="rotate(32 18 18)" stroke="url(#poaisRegGrad1)" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="18 4" />
+              <circle cx="18" cy="18" r="3.2" fill="url(#poaisRegGrad1)" />
+              <circle cx="18" cy="18" r="1.4" fill="#FFFFFF" />
+            </svg>
           </div>
+
           <h1 className="font-hero" style={{ fontSize: "1.85rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.03em" }}>
-            Get Started
+            Get Started with POAIS
           </h1>
           <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", fontWeight: 400 }}>
-            Create your user profile and initialize your workspace
+            Create your account to start managing AI data workspaces
           </p>
         </div>
 

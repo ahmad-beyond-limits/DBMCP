@@ -52,10 +52,11 @@ import {
   Layers,
 } from "lucide-react";
 
-const ABOX_AI_SKILLS_MARKDOWN = `# ABOX Policy-Enforced Data Gateway: AI Agent Skills & Operational Protocol
+const POAIS_AI_SKILLS_MARKDOWN = `# POAIS: Policy-Oriented AI Space
+## AI Agent Skills, Verification Directives & Operational Protocol
 
-You are connected to an ABOX Policy-Enforced Data Workspace via the Model Context Protocol (MCP).
-Use these instructions to interact accurately, securely, and effectively with workspace resources.
+You are connected to a POAIS (Policy-Oriented AI Space) Data Workspace via the Model Context Protocol (MCP).
+Use these instructions to interact accurately, securely, and effectively with workspace resources under deterministic policy enforcement.
 
 ---
 
@@ -89,8 +90,6 @@ Use these instructions to interact accurately, securely, and effectively with wo
 8. \`read_resource(resource_id)\`
    - Read extracted document text with automatic real-time PII anonymisation and policy redaction applied.
 
----
-
 ## ⚡ MANDATORY OPERATIONAL DIRECTIVES FOR AI AGENTS
 
 ### 1. RECONFIRM & VERIFY EVERY DATA MUTATION (CRITICAL)
@@ -102,15 +101,30 @@ Use these instructions to interact accurately, securely, and effectively with wo
   4. Only after positive verification, confirm the result to the user with the exact updated values and affected record count.
 - Never report that data has been changed without performing this verification query.
 
-### 2. ALWAYS INSPECT DATASET SCHEMA BEFORE QUERYING
-- Do not guess or assume column names.
-- Always call \`get_dataset_schema(resource_id)\` first when working with a new dataset to inspect exact column headers and case-sensitivity.
+### 2. SEQUENTIAL & ACCURATE MULTI-FILE ACCESS
+- When a task involves multiple files or datasets in the workspace, access and process them **one by one accurately**.
+- Avoid rushing or conflating records from disparate sources. Inspect each file individually, verify its structure, and extract necessary data before moving to the next.
 
-### 3. PRECISE FILTERING & CLEAN ENCODING
+### 3. TRANSPARENT UNREADABLE FILE HANDLING
+- If you are unable to read or parse any file (even if you have access permission to the workspace or file listing):
+  - **Explicitly and immediately inform the user** that the file cannot be read.
+  - **Clearly state the exact reason why** (e.g., corrupted file structure, unsupported binary format, empty/unextracted content, network timeout, or policy denial).
+  - Never silently ignore unreadable files or pretend data was processed when it was not.
+
+### 4. ZERO ASSUMPTIONS & ABSOLUTE CLARITY
+- **Always make everything clear and explicit to the user.**
+- **NEVER MAKE ASSUMPTIONS** about column meanings, missing values, date formats, or business metrics. Assumptions lead to critical errors and data degradation.
+- If data is ambiguous, incomplete, or contradictory, state the facts directly to the user and request clarification rather than guessing.
+
+### 5. ALWAYS INSPECT DATASET SCHEMA BEFORE QUERYING
+- Do not guess or assume column names or types.
+- Always call \`get_dataset_schema(resource_id)\` first when working with a new dataset to inspect exact column headers, case-sensitivity, and detected types.
+
+### 6. PRECISE FILTERING & CLEAN ENCODING
 - Ensure filter values match the column data type (e.g. integer \`101\` vs string \`"101"\`).
 - For text fields, use exact matching. If a query returns no rows, check case and whitespace.
 
-### 4. RESPECT POLICY BOUNDARIES & PRIVACY REDACTIONS
+### 7. RESPECT POLICY BOUNDARIES & PRIVACY REDACTIONS
 - If a resource returns \`Policy Error: Access Denied\` or a field contains \`[REDACTED]\` / \`[MASKED]\`, this is an intentional workspace privacy rule configured by the owner.
 - Explain the policy constraint clearly to the user instead of attempting to bypass it.
 `;
@@ -318,6 +332,71 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  const handleHeaderRowChange = (targetRowIdx: number) => {
+    setHeaderRowIndex(targetRowIdx);
+    if (!rawStructuredData) return;
+
+    const sheetData = activeSheetName && rawStructuredData.sheets && rawStructuredData.sheets[activeSheetName]
+      ? rawStructuredData.sheets[activeSheetName]
+      : rawStructuredData;
+
+    let matrix: string[][] = sheetData.raw_matrix || rawStructuredData.raw_matrix || [];
+    if (!matrix || matrix.length === 0) {
+      const origCols: string[] = sheetData.columns || rawStructuredData.columns || [];
+      const origRows: any[] = sheetData.rows || rawStructuredData.rows || [];
+      matrix = [origCols, ...origRows.map((r) => origCols.map((c) => String(r[c] !== undefined && r[c] !== null ? r[c] : "")))];
+    }
+
+    if (matrix.length <= targetRowIdx) {
+      notify("error", `Row ${targetRowIdx + 1} is out of bounds for this dataset.`);
+      return;
+    }
+
+    const rawHeaders = matrix[targetRowIdx];
+    const newHeaders: string[] = [];
+    rawHeaders.forEach((h, i) => {
+      const clean = String(h || "").trim();
+      newHeaders.push(clean || `Column_${i + 1}`);
+    });
+
+    const dataRows = matrix.slice(targetRowIdx + 1);
+    const newRows: Record<string, any>[] = [];
+    dataRows.forEach((r) => {
+      const rowObj: Record<string, any> = {};
+      newHeaders.forEach((colName, i) => {
+        rowObj[colName] = i < r.length ? String(r[i] !== undefined && r[i] !== null ? r[i] : "") : "";
+      });
+      newRows.push(rowObj);
+    });
+
+    const schema: Record<string, string> = {};
+    newHeaders.forEach((colName) => {
+      const hasNumbers = newRows.some((r) => r[colName] && !isNaN(Number(r[colName])));
+      schema[colName] = hasNumbers ? "number" : (colName.toLowerCase().includes("email") ? "email" : "string");
+    });
+
+    const parsed = newHeaders.map((colName, idx) => {
+      const letter = String.fromCharCode(65 + (idx % 26)) + (idx >= 26 ? Math.floor(idx / 26) : "");
+      const colType = schema[colName] || "string";
+      const sample = newRows.slice(0, 8).map((r) => String(r[colName] !== undefined && r[colName] !== null ? r[colName] : ""));
+      return {
+        name: colName,
+        letter,
+        type: colType,
+        sample,
+      };
+    });
+
+    setDynamicColumns(parsed);
+    setDynamicRowsCount(newRows.length);
+    setEditableRows(newRows);
+    if (parsed.length > 0) {
+      setSelectedColumnName(parsed[0].name);
+    }
+    setIsTableDetected(parsed.length > 0 && newRows.length > 0);
+    notify("success", `Applied Row ${targetRowIdx + 1} as headers (${parsed.length} columns detected).`);
+  };
+
   const handleSelectSheet = (sheetName: string) => {
     if (!rawStructuredData || !rawStructuredData.sheets || !rawStructuredData.sheets[sheetName]) return;
     setActiveSheetName(sheetName);
@@ -361,7 +440,7 @@ export default function WorkspaceDetailPage() {
 
   const handleAddRow = () => {
     const newRow: Record<string, string> = {};
-    availableColumns.forEach((c) => {
+    dynamicColumns.forEach((c) => {
       newRow[c.name] = "";
     });
     setEditableRows((prev) => [...prev, newRow]);
@@ -511,7 +590,7 @@ export default function WorkspaceDetailPage() {
       setShareCanSearch(true);
       setShareCanQuery(true);
       setShareCanEdit(false);
-      notify("success", "Shareable ABOX MCP Link generated with custom permissions!");
+      notify("success", "Shareable POAIS MCP Link generated with custom permissions!");
     } catch (err: any) {
       notify("error", err.message || "Failed to generate link");
     } finally {
@@ -1832,7 +1911,7 @@ export default function WorkspaceDetailPage() {
                 <div className="slash-tag" style={{ margin: 0, marginBottom: "0.2rem" }}>
                   {hasDataFilesSelected
                     ? `STEP ${shareStep} OF 2: ${shareStep === 1 ? "SELECT FILES" : "DATA & COLUMN TRANSFORMATION STUDIO"}`
-                    : "ABOX LINK CONFIGURATION"}
+                    : "POAIS LINK CONFIGURATION"}
                 </div>
                 <h2 style={{ fontSize: "clamp(1.15rem, 2.5vw, 1.35rem)", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
                   {shareStep === 1
@@ -2114,23 +2193,31 @@ export default function WorkspaceDetailPage() {
                       ))}
                     </div>
 
-                    {/* Mobile Switcher (Visible on mobile/tablets) */}
-                    <div style={{ display: "flex", gap: "0.3rem" }}>
+                    {/* Studio View Mode Switcher */}
+                    <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => setStudioMobileTab("split")}
+                        className={`pill-tab ${studioMobileTab === "split" ? "active" : ""}`}
+                        style={{ fontSize: "0.75rem", padding: "0.28rem 0.65rem" }}
+                      >
+                        ⊞ Split Studio
+                      </button>
                       <button
                         type="button"
                         onClick={() => setStudioMobileTab("sidebar")}
                         className={`pill-tab ${studioMobileTab === "sidebar" ? "active" : ""}`}
-                        style={{ fontSize: "0.75rem", padding: "0.25rem 0.65rem" }}
+                        style={{ fontSize: "0.75rem", padding: "0.28rem 0.65rem" }}
                       >
-                        Columns &amp; Sheets
+                        📑 Columns &amp; Sheets
                       </button>
                       <button
                         type="button"
                         onClick={() => setStudioMobileTab("sheet")}
                         className={`pill-tab ${studioMobileTab === "sheet" ? "active" : ""}`}
-                        style={{ fontSize: "0.75rem", padding: "0.25rem 0.65rem" }}
+                        style={{ fontSize: "0.75rem", padding: "0.28rem 0.65rem" }}
                       >
-                        Spreadsheet Grid
+                        📊 Full Spreadsheet
                       </button>
                     </div>
                   </div>
@@ -2141,12 +2228,25 @@ export default function WorkspaceDetailPage() {
                       <span>Reading Excel / CSV table columns &amp; sample data...</span>
                     </div>
                   ) : activeTransformFile && (
-                    <div className="spreadsheet-studio-container">
+                    <div className="spreadsheet-studio-container" style={{
+                      display: "flex",
+                      flex: 1,
+                      gap: "1.25rem",
+                      minHeight: 0,
+                      overflow: "hidden",
+                    }}>
                       {/* ========================================================================= */}
                       {/* LEFT SIDEBAR: SHEETS, DETECTED COLUMNS, TABLE DETECTOR                    */}
                       {/* ========================================================================= */}
                       <div className="spreadsheet-sidebar" style={{
-                        display: studioMobileTab === "sidebar" || (typeof window !== "undefined" && window.innerWidth >= 900) ? "flex" : "none"
+                        display: studioMobileTab === "sheet" ? "none" : "flex",
+                        width: studioMobileTab === "sidebar" ? "100%" : "320px",
+                        maxWidth: studioMobileTab === "sidebar" ? "100%" : "340px",
+                        flexShrink: 0,
+                        flexDirection: "column",
+                        gap: "0.75rem",
+                        overflowY: "auto",
+                        paddingRight: "0.25rem",
                       }}>
                         {/* 1. Multi-Sheet Selector (If Excel has multiple worksheets) */}
                         {availableSheets.length > 1 && (
@@ -2214,24 +2314,25 @@ export default function WorkspaceDetailPage() {
                             </span>
                           </div>
                           <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginBottom: "0.5rem" }}>
-                            Header row automatically detected. You can change row offset manually:
+                            Header row automatically detected. Click a row to change headers:
                           </div>
                           <div style={{ display: "flex", gap: "0.3rem" }}>
                             {[0, 1, 2, 3].map((rowIdx) => (
                               <button
                                 key={rowIdx}
                                 type="button"
-                                onClick={() => setHeaderRowIndex(rowIdx)}
+                                onClick={() => handleHeaderRowChange(rowIdx)}
                                 style={{
                                   flex: 1,
                                   fontSize: "0.72rem",
-                                  padding: "0.25rem 0.4rem",
+                                  padding: "0.35rem 0.4rem",
                                   borderRadius: "var(--radius-sm)",
-                                  border: headerRowIndex === rowIdx ? "1px solid #2E3032" : "1px solid rgba(40, 40, 40, 0.06)",
-                                  background: headerRowIndex === rowIdx ? "#2E3032" : "#FFFFFF",
-                                  color: headerRowIndex === rowIdx ? "#FFFFFF" : "var(--text-secondary)",
+                                  border: headerRowIndex === rowIdx ? "1.5px solid #2E3032" : "1px solid rgba(40, 40, 40, 0.1)",
+                                  background: headerRowIndex === rowIdx ? "#2E3032" : "#ECECED",
+                                  color: headerRowIndex === rowIdx ? "#FFFFFF" : "var(--text-primary)",
                                   cursor: "pointer",
-                                  fontWeight: 450,
+                                  fontWeight: 500,
+                                  transition: "all 0.15s ease",
                                 }}
                               >
                                 Row {rowIdx + 1}
@@ -2343,7 +2444,11 @@ export default function WorkspaceDetailPage() {
                       {/* RIGHT SPREADSHEET CANVAS: INTERACTIVE CELL EDITING & ACTIONS               */}
                       {/* ========================================================================= */}
                       <div className="spreadsheet-main-area" style={{
-                        display: studioMobileTab === "sheet" || (typeof window !== "undefined" && window.innerWidth >= 900) ? "flex" : "none"
+                        display: studioMobileTab === "sidebar" ? "none" : "flex",
+                        flex: 1,
+                        minWidth: 0,
+                        flexDirection: "column",
+                        overflow: "hidden",
                       }}>
                         <div style={{
                           background: "#FFFFFF",
@@ -2652,7 +2757,7 @@ export default function WorkspaceDetailPage() {
                   className="pill-btn pill-btn-solid"
                 >
                   <Key size={14} strokeWidth={1.5} />
-                  <span>{generatingLink ? "Generating Link..." : "Generate ABOX MCP Link"}</span>
+                  <span>{generatingLink ? "Generating Link..." : "Generate POAIS MCP Link"}</span>
                 </button>
               )}
             </div>
@@ -2787,7 +2892,7 @@ export default function WorkspaceDetailPage() {
             overflowY: "auto",
           }}>
             <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
-              <div className="slash-tag" style={{ justifyContent: "center" }}>ABOX MCP LINK READY</div>
+              <div className="slash-tag" style={{ justifyContent: "center" }}>POAIS MCP LINK READY</div>
               <h3 style={{ fontSize: "1.45rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
                 Your Shareable MCP Token
               </h3>
@@ -2900,7 +3005,7 @@ export default function WorkspaceDetailPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(ABOX_AI_SKILLS_MARKDOWN);
+                      navigator.clipboard.writeText(POAIS_AI_SKILLS_MARKDOWN);
                       notify("success", "AI Skills markdown copied to clipboard!");
                     }}
                     className="pill-btn pill-btn-glass"
@@ -2912,14 +3017,14 @@ export default function WorkspaceDetailPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const blob = new Blob([ABOX_AI_SKILLS_MARKDOWN], { type: "text/markdown" });
+                      const blob = new Blob([POAIS_AI_SKILLS_MARKDOWN], { type: "text/markdown" });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
                       a.href = url;
-                      a.download = "ABOX_AGENT_SKILLS.md";
+                      a.download = "POAIS_AGENT_SKILLS.md";
                       a.click();
                       URL.revokeObjectURL(url);
-                      notify("success", "Downloaded ABOX_AGENT_SKILLS.md");
+                      notify("success", "Downloaded POAIS_AGENT_SKILLS.md");
                     }}
                     className="pill-btn pill-btn-glass"
                     style={{ padding: "0.2rem 0.65rem", fontSize: "0.74rem", gap: "0.3rem" }}
@@ -3237,12 +3342,12 @@ export default function WorkspaceDetailPage() {
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem", flexWrap: "wrap", gap: "0.4rem" }}>
                   <span style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
-                    ABOX_AGENT_SKILLS.md Content
+                    POAIS_AGENT_SKILLS.md Content
                   </span>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(ABOX_AI_SKILLS_MARKDOWN);
+                        navigator.clipboard.writeText(POAIS_AI_SKILLS_MARKDOWN);
                         setCopiedSkills(true);
                         notify("success", "Skills file copied to clipboard!");
                         setTimeout(() => setCopiedSkills(false), 2000);
@@ -3255,14 +3360,14 @@ export default function WorkspaceDetailPage() {
                     </button>
                     <button
                       onClick={() => {
-                        const blob = new Blob([ABOX_AI_SKILLS_MARKDOWN], { type: "text/markdown" });
+                        const blob = new Blob([POAIS_AI_SKILLS_MARKDOWN], { type: "text/markdown" });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement("a");
                         a.href = url;
-                        a.download = "ABOX_AGENT_SKILLS.md";
+                        a.download = "POAIS_AGENT_SKILLS.md";
                         a.click();
                         URL.revokeObjectURL(url);
-                        notify("success", "Downloaded ABOX_AGENT_SKILLS.md");
+                        notify("success", "Downloaded POAIS_AGENT_SKILLS.md");
                       }}
                       className="pill-btn pill-btn-solid"
                       style={{ padding: "0.3rem 0.85rem", fontSize: "0.78rem" }}
@@ -3285,7 +3390,7 @@ export default function WorkspaceDetailPage() {
                   overflowY: "auto",
                   whiteSpace: "pre-wrap",
                 }}>
-                  {ABOX_AI_SKILLS_MARKDOWN}
+                  {POAIS_AI_SKILLS_MARKDOWN}
                 </div>
               </div>
             </div>

@@ -1,9 +1,4 @@
-"""
-POAIS (Policy-Oriented AI Space) Model Context Protocol (MCP) AI Agent Skills & Operational Guide.
-Provides standard system instructions, verification protocols, and tool usage rules for AI agents.
-"""
-
-POAIS_AI_SKILLS_GUIDE = """# POAIS: Policy-Oriented AI Space
+# POAIS: Policy-Oriented AI Space
 ## AI Agent Skills, Verification Directives & Operational Protocol
 
 You are connected to a POAIS (Policy-Oriented AI Space) Data Workspace via the Model Context Protocol (MCP).
@@ -80,8 +75,3 @@ Use these instructions to interact accurately, securely, and effectively with wo
 ### 7. RESPECT POLICY BOUNDARIES & PRIVACY REDACTIONS
 - If a resource returns `Policy Error: Access Denied` or a field contains `[REDACTED]` / `[MASKED]`, this is an intentional workspace privacy rule configured by the owner.
 - Explain the policy constraint clearly to the user instead of attempting to bypass it.
-"""
-
-# Backward compatibility alias
-ABOX_AI_SKILLS_GUIDE = POAIS_AI_SKILLS_GUIDE
-

@@ -4,8 +4,8 @@ import { GatewayProvider } from "@/lib/GatewayContext";
 import Navbar from "./Navbar";
 
 export const metadata: Metadata = {
-  title: "ABOX | Policy-Enforced AI Data Workspace",
-  description: "Expose enterprise documents and structured data to AI models via MCP with granular policies and PII anonymisation.",
+  title: "POAIS | Policy-Oriented AI Space",
+  description: "Policy-Oriented AI Space (POAIS) - The Secure, Policy-Enforced Data Gateway for AI Agents & Model Context Protocol (MCP).",
 };
 
 export default function RootLayout({
@@ -43,24 +43,24 @@ export default function RootLayout({
 
             {/* Clean Minimalist Footer */}
             <footer style={{
-              borderTop: "1px solid rgba(40, 40, 40, 0.04)",
+              borderTop: "1px solid rgba(40, 40, 40, 0.05)",
               padding: "2rem clamp(1rem, 3vw, 2.5rem)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               fontSize: "0.82rem",
               color: "var(--text-secondary)",
-              background: "rgba(255, 255, 255, 0.7)",
+              background: "rgba(255, 255, 255, 0.6)",
               backdropFilter: "blur(20px)",
               flexWrap: "wrap",
               gap: "1rem",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                <span className="slash-tag" style={{ margin: 0 }}>ABOX</span>
-                <span>Model Context Protocol Gateway with Policy-Enforced AI Access.</span>
+                <span className="slash-tag" style={{ margin: 0 }}>POAIS</span>
+                <span>Policy-Oriented AI Space • Granular Model Context Protocol (MCP) Governance.</span>
               </div>
               <div style={{ fontFamily: "JetBrains Mono, monospace", color: "var(--text-tertiary)", fontSize: "0.75rem" }}>
-                ABOX Gateway
+                POAIS v2.0
               </div>
             </footer>
           </div>

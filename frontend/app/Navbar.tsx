@@ -51,73 +51,90 @@ export default function Navbar() {
       top: "0.75rem",
       zIndex: 100,
       width: "100%",
-      maxWidth: "1160px",
+      maxWidth: "1180px",
       margin: "0 auto",
       padding: "0 clamp(0.75rem, 3vw, 1.5rem)",
     }}>
       <header style={{
-        minHeight: "56px",
+        minHeight: "58px",
         borderRadius: "var(--radius-pill)",
-        border: "1px solid rgba(40, 40, 40, 0.05)",
-        background: "rgba(255, 255, 255, 0.85)",
-        backdropFilter: "blur(24px)",
-        WebkitBackdropFilter: "blur(24px)",
-        boxShadow: "0 2px 12px rgba(0, 0, 0, 0.02)",
+        border: "1px solid rgba(255, 255, 255, 0.7)",
+        background: "rgba(255, 255, 255, 0.55)",
+        backdropFilter: "blur(28px) saturate(190%)",
+        WebkitBackdropFilter: "blur(28px) saturate(190%)",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.04), inset 0 1px 2px rgba(255, 255, 255, 0.9)",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0.4rem 0.85rem",
+        padding: "0.45rem 1rem",
         gap: "0.5rem",
         position: "relative",
       }}>
-        {/* Brand */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: "0.4rem", textDecoration: "none" }}>
-            <span style={{
-              fontWeight: 500,
-              fontSize: "1.05rem",
-              letterSpacing: "-0.03em",
-              color: "var(--text-primary)",
+        {/* Brand & Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: "0.6rem", textDecoration: "none" }}>
+            {/* Vibrant Open Geometric POAIS Insignia */}
+            <div style={{
+              width: "36px",
+              height: "36px",
               display: "flex",
               alignItems: "center",
-              gap: "0.2rem",
+              justifyContent: "center",
+              position: "relative",
+              flexShrink: 0,
             }}>
-              <span style={{ color: "var(--text-tertiary)" }}>/</span> ABOX
-            </span>
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: "drop-shadow(0 2px 8px rgba(99, 102, 241, 0.35))" }}>
+                <defs>
+                  <linearGradient id="poaisGradPrimary" x1="2" y1="2" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#4F46E5" />
+                    <stop offset="45%" stopColor="#8B5CF6" />
+                    <stop offset="100%" stopColor="#06B6D4" />
+                  </linearGradient>
+                  <linearGradient id="poaisGradSecondary" x1="34" y1="2" x2="2" y2="34" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#06B6D4" />
+                    <stop offset="50%" stopColor="#3B82F6" />
+                    <stop offset="100%" stopColor="#EC4899" />
+                  </linearGradient>
+                  <linearGradient id="poaisGlassFill" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="rgba(99, 102, 241, 0.12)" />
+                    <stop offset="100%" stopColor="rgba(6, 182, 212, 0.06)" />
+                  </linearGradient>
+                </defs>
+
+                {/* Ambient Frosted Glass Base */}
+                <rect x="2" y="2" width="32" height="32" rx="10" fill="url(#poaisGlassFill)" stroke="rgba(255, 255, 255, 0.9)" strokeWidth="1" />
+
+                {/* Outer Spatial Shield Polygon (Open strokes) */}
+                <path
+                  d="M18 6.5L27.5 11V18.2C27.5 24 23.5 28.5 18 30.5C12.5 28.5 8.5 24 8.5 18.2V11L18 6.5Z"
+                  stroke="url(#poaisGradPrimary)"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+
+                {/* Dynamic Interlocking Spatial Orbitals */}
+                <ellipse cx="18" cy="18" rx="11" ry="4.5" transform="rotate(-32 18 18)" stroke="url(#poaisGradSecondary)" strokeWidth="1.8" strokeLinecap="round" />
+                <ellipse cx="18" cy="18" rx="11" ry="4.5" transform="rotate(32 18 18)" stroke="url(#poaisGradPrimary)" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="18 4" />
+
+                {/* Glowing Nucleus Core Node */}
+                <circle cx="18" cy="18" r="3.2" fill="url(#poaisGradPrimary)" />
+                <circle cx="18" cy="18" r="1.4" fill="#FFFFFF" />
+              </svg>
+            </div>
+
             <span style={{
-              fontSize: "0.68rem",
-              fontWeight: 450,
-              color: "var(--text-secondary)",
-              background: "rgba(0, 0, 0, 0.04)",
-              border: "1px solid rgba(40, 40, 40, 0.06)",
-              padding: "0.15rem 0.5rem",
-              borderRadius: "var(--radius-pill)",
-              letterSpacing: "0.04em",
+              fontWeight: 700,
+              fontSize: "1.22rem",
+              letterSpacing: "-0.04em",
+              background: "linear-gradient(135deg, #1E2022 0%, #3B4252 60%, #4F46E5 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              display: "inline-block",
             }}>
-              GATEWAY
+              POAIS
             </span>
           </Link>
-
-          {/* Desktop Live Status Pill */}
-          <div className="hidden sm:inline-flex" style={{
-            alignItems: "center",
-            gap: "0.45rem",
-            padding: "0.25rem 0.75rem",
-            borderRadius: "var(--radius-pill)",
-            background: "rgba(255, 255, 255, 0.65)",
-            border: "1px solid rgba(40, 40, 40, 0.05)",
-            fontSize: "0.74rem",
-            fontWeight: 400,
-            color: "var(--text-secondary)",
-          }}>
-            <span style={{
-              width: "6px",
-              height: "6px",
-              borderRadius: "50%",
-              background: isReady ? "#2E3032" : "#989B9D",
-            }} />
-            <span>{isReady ? "Gateway Active" : "Waking Cloud..."}</span>
-          </div>
         </div>
 
         {/* Desktop Navigation */}
@@ -126,13 +143,16 @@ export default function Navbar() {
             <>
               <button
                 onClick={() => checkAndNavigate("/dashboard")}
-                className="pill-btn pill-btn-glass"
+                className="pill-btn"
                 style={{
-                  padding: "0.45rem 1rem",
+                  padding: "0.42rem 0.95rem",
                   fontSize: "0.82rem",
                   gap: "0.4rem",
-                  color: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "var(--text-primary)" : "var(--text-secondary)",
-                  background: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)",
+                  color: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "#1E2022" : "var(--text-secondary)",
+                  background: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "rgba(255, 255, 255, 0.95)" : "rgba(255, 255, 255, 0.5)",
+                  border: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(255, 255, 255, 0.6)",
+                  boxShadow: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "0 2px 8px rgba(0, 0, 0, 0.04)" : "none",
+                  fontWeight: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? 500 : 450,
                 }}
               >
                 <LayoutDashboard size={14} strokeWidth={1.5} />
@@ -143,7 +163,7 @@ export default function Navbar() {
                 onClick={handleLogout}
                 className="pill-btn pill-btn-glass"
                 style={{
-                  padding: "0.45rem 0.85rem",
+                  padding: "0.42rem 0.85rem",
                   fontSize: "0.82rem",
                   color: "var(--text-secondary)",
                 }}
@@ -160,8 +180,10 @@ export default function Navbar() {
                 className="pill-tab"
                 style={{
                   fontSize: "0.84rem",
-                  padding: "0.45rem 0.85rem",
-                  color: "var(--text-secondary)",
+                  padding: "0.42rem 0.85rem",
+                  color: "var(--text-primary)",
+                  background: "rgba(255, 255, 255, 0.5)",
+                  border: "1px solid rgba(255, 255, 255, 0.7)",
                 }}
               >
                 Sign In
@@ -171,7 +193,7 @@ export default function Navbar() {
                 onClick={() => checkAndNavigate("/register")}
                 className="pill-btn pill-btn-solid"
                 style={{
-                  padding: "0.45rem 1.15rem",
+                  padding: "0.42rem 1.15rem",
                   fontSize: "0.82rem",
                   gap: "0.35rem",
                 }}
@@ -211,12 +233,12 @@ export default function Navbar() {
       {mobileMenuOpen && (
         <div style={{
           marginTop: "0.6rem",
-          background: "rgba(255, 255, 255, 0.96)",
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
-          borderRadius: "var(--radius-lg)",
-          border: "1px solid rgba(40, 40, 40, 0.06)",
-          boxShadow: "var(--shadow-lg)",
+          background: "rgba(255, 255, 255, 0.75)",
+          backdropFilter: "blur(28px) saturate(190%)",
+          WebkitBackdropFilter: "blur(28px) saturate(190%)",
+          borderRadius: "var(--radius-xl)",
+          border: "1px solid rgba(255, 255, 255, 0.8)",
+          boxShadow: "0 16px 40px rgba(0, 0, 0, 0.08), inset 0 1px 2px rgba(255, 255, 255, 0.9)",
           padding: "1.25rem",
           display: "flex",
           flexDirection: "column",
@@ -229,24 +251,25 @@ export default function Navbar() {
             alignItems: "center",
             justifyContent: "space-between",
             padding: "0.5rem 0.75rem",
-            background: "var(--bg-page)",
+            background: "rgba(255, 255, 255, 0.6)",
             borderRadius: "var(--radius-pill)",
             fontSize: "0.78rem",
             color: "var(--text-secondary)",
+            border: "1px solid rgba(255, 255, 255, 0.8)",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
               <span style={{
                 width: "7px",
                 height: "7px",
                 borderRadius: "50%",
-                background: isReady ? "#2E3032" : "#989B9D",
+                background: isReady ? "#16A34A" : "#D97706",
               }} />
-              <span style={{ fontWeight: 450, color: "var(--text-primary)" }}>
-                {isReady ? "Gateway Active" : "Waking Cloud Engine..."}
+              <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>
+                {isReady ? "POAIS Gateway Active" : "Waking Cloud Engine..."}
               </span>
             </div>
             <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", fontFamily: "JetBrains Mono, monospace" }}>
-              v2024-11-05
+              POAIS v2.0
             </span>
           </div>
 
@@ -262,8 +285,8 @@ export default function Navbar() {
                 gap: "0.6rem",
                 padding: "0.75rem 1rem",
                 borderRadius: "var(--radius-md)",
-                background: pathname === "/" ? "#FFFFFF" : "transparent",
-                border: pathname === "/" ? "1px solid rgba(40, 40, 40, 0.06)" : "1px solid transparent",
+                background: pathname === "/" ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)",
+                border: pathname === "/" ? "1px solid rgba(40, 40, 40, 0.08)" : "1px solid transparent",
                 fontWeight: pathname === "/" ? 500 : 400,
                 color: "var(--text-primary)",
                 fontSize: "0.9rem",
@@ -285,8 +308,8 @@ export default function Navbar() {
                   gap: "0.6rem",
                   padding: "0.75rem 1rem",
                   borderRadius: "var(--radius-md)",
-                  background: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "#FFFFFF" : "transparent",
-                  border: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "1px solid rgba(40, 40, 40, 0.06)" : "1px solid transparent",
+                  background: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)",
+                  border: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "1px solid rgba(40, 40, 40, 0.08)" : "1px solid transparent",
                   fontWeight: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? 500 : 400,
                   color: "var(--text-primary)",
                   fontSize: "0.9rem",
@@ -294,14 +317,14 @@ export default function Navbar() {
                 }}
               >
                 <LayoutDashboard size={16} strokeWidth={1.5} />
-                <span>Workspaces Vault</span>
+                <span>Workspaces</span>
               </button>
             )}
           </div>
 
           {/* Mobile Actions Footer */}
           <div style={{
-            borderTop: "1px solid rgba(40, 40, 40, 0.04)",
+            borderTop: "1px solid rgba(40, 40, 40, 0.06)",
             paddingTop: "0.85rem",
             display: "flex",
             flexDirection: "column",

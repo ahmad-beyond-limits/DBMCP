@@ -107,7 +107,7 @@ export default function DashboardPage() {
         gap: "1.25rem",
       }}>
         <div>
-          <div className="slash-tag">ABOX GATEWAY VAULT</div>
+          <div className="slash-tag">POAIS WORKSPACE VAULT</div>
           <h1 className="font-hero" style={{ fontSize: "clamp(2rem, 3.5vw, 2.75rem)", letterSpacing: "-0.04em", color: "var(--text-primary)" }}>
             Welcome, {user?.username}
           </h1>

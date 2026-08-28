@@ -48,7 +48,7 @@ export default function LandingPage() {
         }}>
           {/* Left: Clean, Restrained Editorial Headline & CTA */}
           <div>
-            <div className="slash-tag">POLICY-ENFORCED AI DATA BOUNDARY</div>
+            <div className="slash-tag">POAIS GATEWAY</div>
 
             <h1 className="font-hero" style={{
               fontSize: "clamp(2.2rem, 4.5vw, 3.4rem)",
@@ -69,7 +69,7 @@ export default function LandingPage() {
               marginBottom: "2.25rem",
               fontWeight: 400,
             }}>
-              Connect Claude Desktop, Cursor, and custom LLM agents to your internal Excel tables, CSVs, and documents with deterministic data masking and forensic query logging.
+              POAIS (Policy-Oriented AI Space) securely connects Claude Desktop, Cursor, and custom LLM agents to your internal Excel tables, CSVs, and documents with deterministic data masking and forensic query logging.
             </p>
 
             <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -92,11 +92,12 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Right: The Soft Scientific Gradient Feature Showcase Card */}
-          <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
-            <div className="card-scientific-gradient" style={{
-              width: "100%",
-              maxWidth: "420px",
+          {/* Right: Authentic Scientific Gradient Feature Capsule */}
+          <div>
+            <div className="frosted-panel" style={{
+              background: "linear-gradient(135deg, rgba(234, 235, 237, 0.95), rgba(244, 245, 246, 0.85))",
+              border: "1px solid rgba(40, 40, 40, 0.06)",
+              boxShadow: "var(--shadow-md)",
               padding: "clamp(1.75rem, 4vw, 2.25rem)",
               borderRadius: "var(--radius-xl)",
             }}>
@@ -111,7 +112,7 @@ export default function LandingPage() {
                     color: "rgba(46, 48, 50, 0.7)",
                     marginBottom: "0.25rem",
                   }}>
-                    ABOX GATEWAY ENGINE
+                    POAIS GATEWAY ENGINE
                   </div>
                   <div style={{ fontSize: "1.25rem", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
                     Policy Boundary Active
