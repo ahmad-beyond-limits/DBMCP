@@ -1597,9 +1597,37 @@ export default function WorkspaceDetailPage() {
               </p>
             </div>
 
-            <div style={{ marginBottom: "1.5rem" }}>
+            {/* Copyable MCP HTTP Endpoint */}
+            <div style={{ marginBottom: "1.25rem" }}>
               <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-                Raw Bearer Token
+                1. MCP Server HTTP URL
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <input
+                  type="text"
+                  readOnly
+                  value={`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp`}
+                  className="modern-input"
+                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem" }}
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp`);
+                    notify("success", "MCP URL copied to clipboard.");
+                  }}
+                  className="pill-btn pill-btn-dark"
+                  style={{ padding: "0 1.15rem" }}
+                >
+                  <Copy size={15} />
+                  <span>Copy URL</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Copyable Bearer Token */}
+            <div style={{ marginBottom: "1.25rem" }}>
+              <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
+                2. Bearer Authentication Token
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <input
@@ -1620,14 +1648,15 @@ export default function WorkspaceDetailPage() {
                   style={{ padding: "0 1.15rem" }}
                 >
                   {copiedToken ? <Check size={15} /> : <Copy size={15} />}
-                  <span>{copiedToken ? "Copied" : "Copy"}</span>
+                  <span>{copiedToken ? "Copied" : "Copy Token"}</span>
                 </button>
               </div>
             </div>
 
+            {/* Claude Desktop Config Snippet */}
             <div style={{ marginBottom: "1.75rem" }}>
               <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-                Claude Desktop / Cursor Config Snippet
+                3. Claude Desktop / Cursor JSON Config
               </div>
               <div style={{
                 padding: "0.9rem 1.15rem",

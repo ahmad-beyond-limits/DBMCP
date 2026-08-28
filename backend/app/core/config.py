@@ -59,10 +59,6 @@ class Settings(BaseSettings):
         description="Base64 32-byte key for resting data encryption",
     )
 
-    # Optional AI Services
-    OPENAI_API_KEY: Optional[str] = Field(default=None, description="Optional OpenAI key")
-    ANTHROPIC_API_KEY: Optional[str] = Field(default=None, description="Optional Anthropic key")
-
     # Logging
     LOG_LEVEL: str = Field(default="INFO", description="Logging level (DEBUG, INFO, WARN, ERROR)")
 

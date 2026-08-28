@@ -73,9 +73,11 @@ class ResourceService:
         db.add(file_record)
         await db.flush()
 
-        # 3. Extract text and structured metadata
+        # 3. Extract text and structured metadata (via AI model or local engine)
         try:
-            plain_text, structured_data, detected_entities = ContentExtractor.extract(content, file_type)
+            plain_text, structured_data, detected_entities = await ContentExtractor.extract(
+                content, file_type, filename=filename
+            )
             extracted = ExtractedContent(
                 file_id=file_record.id,
                 workspace_id=workspace_id,
