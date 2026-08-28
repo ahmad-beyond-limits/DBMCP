@@ -192,7 +192,7 @@ export default function WorkspaceDetailPage() {
   const [editableRows, setEditableRows] = useState<any[]>([]);
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; colName: string } | null>(null);
   const [headerRowIndex, setHeaderRowIndex] = useState<number>(0);
-  const [studioMobileTab, setStudioMobileTab] = useState<"sidebar" | "sheet">("sheet");
+  const [studioMobileTab, setStudioMobileTab] = useState<"split" | "sidebar" | "sheet">("split");
 
   // Privacy Tab Inspector State
   const [selectedMcpPrivacyCredId, setSelectedMcpPrivacyCredId] = useState<string>("ALL");
@@ -512,6 +512,17 @@ export default function WorkspaceDetailPage() {
     } catch (err: any) {
       notify("error", err.message || "Failed to delete file");
     }
+  };
+
+  const handleOpenShareWizard = () => {
+    setSelectedFileIds(files.map((f) => f.id));
+    setShareStep(1);
+    const firstDataFile = files.find(isDataFile);
+    if (firstDataFile) {
+      setActiveTransformFileId(firstDataFile.id);
+      loadDynamicFileSchema(firstDataFile.id);
+    }
+    setShareWizardOpen(true);
   };
 
   // Generate MCP Link with Power Query & Document Policies
