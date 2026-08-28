@@ -55,6 +55,17 @@ app.include_router(mcp_router)
 app.include_router(audit_router)
 
 
+@app.get("/")
+async def root():
+    """Root endpoint for status probes."""
+    return {
+        "status": "healthy",
+        "service": "DBMCP Policy Enforced AI Gateway",
+        "version": "1.0.0",
+        "protocol": "MCP 2024-11-05",
+    }
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint for Render and container probes."""
