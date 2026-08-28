@@ -31,7 +31,14 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await api.register(username, password);
-      router.push("/dashboard");
+      // Automatically log the user in so they have an active session token
+      try {
+        await api.login(username, password);
+        router.push("/dashboard");
+      } catch (loginErr) {
+        // Fallback: take user to sign in page if auto-login had an issue
+        router.push("/login?registered=true");
+      }
     } catch (err: any) {
       const msg = err.message || "";
       if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("network")) {

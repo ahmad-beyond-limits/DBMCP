@@ -32,6 +32,11 @@ import {
   ArrowRight,
   ShieldCheck,
   AlertTriangle,
+  Share2,
+  Sparkles,
+  CheckSquare,
+  Square,
+  Lock,
 } from "lucide-react";
 
 export default function WorkspaceDetailPage() {
@@ -41,8 +46,8 @@ export default function WorkspaceDetailPage() {
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<
-    "overview" | "files" | "policies" | "anonymisation" | "mcp" | "audit" | "playground" | "settings"
-  >("overview");
+    "documents" | "links" | "privacy" | "activity" | "playground" | "settings"
+  >("documents");
 
   // State
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -62,21 +67,28 @@ export default function WorkspaceDetailPage() {
   // Modals & Action States
   const [selectedFileContent, setSelectedFileContent] = useState<ExtractedContent | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>("");
-  const [uploading, setUploading] = useState(false);
-  const [newMCPModal, setNewMCPModal] = useState(false);
-  const [newMCPName, setNewMCPName] = useState("Claude Assistant");
   const [createdCredential, setCreatedCredential] = useState<MCPCredentialCreated | null>(null);
   const [newMemberUsername, setNewMemberUsername] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("MEMBER");
 
-  // Policy Creation States
-  const [newResourceFileId, setNewResourceFileId] = useState<string>("default");
-  const [newResourceDecision, setNewResourceDecision] = useState<string>("DENY");
-  const [newOpName, setNewOpName] = useState<string>("query_dataset");
-  const [newOpDecision, setNewOpDecision] = useState<string>("ALLOW");
-  const [newAnonEntity, setNewAnonEntity] = useState<string>("email");
-  const [newAnonFieldName, setNewAnonFieldName] = useState<string>("");
-  const [newAnonTrans, setNewAnonTrans] = useState<string>("MASK");
+  // Simplified 3-Step Upload Modal State
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadDescription, setUploadDescription] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadStep, setUploadStep] = useState<1 | 2 | 3>(1);
+
+  // Simplified "Share MCP Link" Wizard State
+  const [shareWizardOpen, setShareWizardOpen] = useState(false);
+  const [shareStep, setShareStep] = useState<1 | 2 | 3>(1);
+  const [shareName, setShareName] = useState("Claude Assistant");
+  const [shareAllFiles, setShareAllFiles] = useState(true);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [maskEmails, setMaskEmails] = useState(true);
+  const [maskNames, setMaskNames] = useState(false);
+  const [maskSSN, setMaskSSN] = useState(true);
+  const [customColumnsToHide, setCustomColumnsToHide] = useState("");
+  const [generatingLink, setGeneratingLink] = useState(false);
 
   // Playground States
   const [playgroundToken, setPlaygroundToken] = useState("");
@@ -108,6 +120,8 @@ export default function WorkspaceDetailPage() {
       setMCPCredentials(creds);
       setAuditLogs(logs);
       setMembers(mems);
+      // Default file selection in share wizard
+      setSelectedFileIds(fList.map((f) => f.id));
     } catch (err: any) {
       notify("error", err.message || "Failed to load workspace");
     } finally {
@@ -120,22 +134,24 @@ export default function WorkspaceDetailPage() {
     setTimeout(() => setNotification(null), 5000);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList || fileList.length === 0) return;
+  // Simplified File Upload Flow
+  const handleExecuteUpload = async () => {
+    if (!uploadFile) return;
 
     setUploading(true);
     try {
-      const file = fileList[0];
-      await api.uploadFile(workspaceId, file);
-      notify("success", `File '${file.name}' processed successfully.`);
-      const updatedFiles = await api.getFiles(workspaceId);
-      setFiles(updatedFiles);
+      const uploaded = await api.uploadFile(workspaceId, uploadFile);
+      notify("success", `File '${uploadFile.name}' processed successfully.`);
+      // Update files state immediately
+      setFiles((prev) => [uploaded, ...prev]);
+      setUploadModalOpen(false);
+      setUploadFile(null);
+      setUploadDescription("");
+      setUploadStep(1);
     } catch (err: any) {
       notify("error", err.message || "Upload failed");
     } finally {
       setUploading(false);
-      e.target.value = "";
     }
   };
 
@@ -154,97 +170,86 @@ export default function WorkspaceDetailPage() {
     try {
       await api.deleteFile(workspaceId, fileId);
       notify("success", "File deleted.");
-      setFiles(files.filter((f) => f.id !== fileId));
+      setFiles((prev) => prev.filter((f) => f.id !== fileId));
     } catch (err: any) {
       notify("error", err.message || "Failed to delete file");
     }
   };
 
-  const handleCreateResourcePolicy = async () => {
-    try {
-      const resourceId = newResourceFileId === "default" ? null : newResourceFileId;
-      await api.createResourcePolicy(workspaceId, resourceId, "read_resource", newResourceDecision);
-      notify("success", "Resource policy saved.");
-      const updated = await api.getPolicies(workspaceId);
-      setPolicies(updated);
-    } catch (err: any) {
-      notify("error", err.message);
-    }
-  };
+  // Simplified Share / Create MCP Link Flow
+  const handleGenerateShareLink = async () => {
+    if (!shareName.trim()) return;
 
-  const handleDeleteResourcePolicy = async (policyId: string) => {
+    setGeneratingLink(true);
     try {
-      await api.deleteResourcePolicy(workspaceId, policyId);
-      notify("success", "Policy deleted.");
-      const updated = await api.getPolicies(workspaceId);
-      setPolicies(updated);
-    } catch (err: any) {
-      notify("error", err.message);
-    }
-  };
+      // 1. Create the MCP Token
+      const created = await api.createMCPCredential(workspaceId, shareName.trim());
 
-  const handleCreateOperationPolicy = async () => {
-    try {
-      await api.createOperationPolicy(workspaceId, newOpName, newOpDecision);
-      notify("success", "Operation policy saved.");
-      const updated = await api.getPolicies(workspaceId);
-      setPolicies(updated);
-    } catch (err: any) {
-      notify("error", err.message);
-    }
-  };
+      // 2. Set file-level restrictions if not sharing all files
+      if (!shareAllFiles && selectedFileIds.length > 0) {
+        // Explicitly deny files not in selected list
+        const excludedFiles = files.filter((f) => !selectedFileIds.includes(f.id));
+        for (const file of excludedFiles) {
+          try {
+            await api.createResourcePolicy(workspaceId, file.id, "read_resource", "DENY");
+          } catch (e) {}
+        }
+      }
 
-  const handleDeleteOperationPolicy = async (policyId: string) => {
-    try {
-      await api.deleteOperationPolicy(workspaceId, policyId);
-      notify("success", "Policy deleted.");
-      const updated = await api.getPolicies(workspaceId);
-      setPolicies(updated);
-    } catch (err: any) {
-      notify("error", err.message);
-    }
-  };
+      // 3. Set privacy / anonymisation rules
+      if (maskEmails) {
+        try {
+          await api.createAnonymisationRule(workspaceId, "email", null, "MASK");
+        } catch (e) {}
+      }
+      if (maskNames) {
+        try {
+          await api.createAnonymisationRule(workspaceId, "person_name", null, "PSEUDONYMIZE");
+        } catch (e) {}
+      }
+      if (maskSSN) {
+        try {
+          await api.createAnonymisationRule(workspaceId, "ssn", null, "MASK");
+        } catch (e) {}
+      }
+      if (customColumnsToHide.trim()) {
+        const columns = customColumnsToHide.split(",").map((c) => c.trim()).filter(Boolean);
+        for (const col of columns) {
+          try {
+            await api.createAnonymisationRule(workspaceId, "custom_column", col, "REMOVE");
+          } catch (e) {}
+        }
+      }
 
-  const handleCreateAnonymisationRule = async () => {
-    try {
-      await api.createAnonymisationRule(
-        workspaceId,
-        newAnonEntity,
-        newAnonFieldName.trim() || null,
-        newAnonTrans
-      );
-      notify("success", "Anonymisation rule saved.");
-      const updated = await api.getPolicies(workspaceId);
-      setPolicies(updated);
-      setNewAnonFieldName("");
-    } catch (err: any) {
-      notify("error", err.message);
-    }
-  };
+      // Update state immediately
+      setMCPCredentials((prev) => [
+        {
+          id: created.id,
+          workspace_id: created.workspace_id,
+          name: created.name,
+          credential_prefix: created.credential_prefix,
+          created_at: created.created_at,
+          expires_at: created.expires_at,
+          last_used_at: null,
+          revoked_at: null,
+          is_active: true,
+        },
+        ...prev,
+      ]);
 
-  const handleDeleteAnonymisationRule = async (ruleId: string) => {
-    try {
-      await api.deleteAnonymisationRule(workspaceId, ruleId);
-      notify("success", "Rule deleted.");
-      const updated = await api.getPolicies(workspaceId);
-      setPolicies(updated);
-    } catch (err: any) {
-      notify("error", err.message);
-    }
-  };
+      const updatedPolicies = await api.getPolicies(workspaceId);
+      setPolicies(updatedPolicies);
 
-  const handleCreateMCPCredential = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const created = await api.createMCPCredential(workspaceId, newMCPName);
       setCreatedCredential(created);
-      setNewMCPModal(false);
-      setNewMCPName("Claude Assistant");
       setPlaygroundToken(created.raw_token);
-      const updated = await api.getMCPCredentials(workspaceId);
-      setMCPCredentials(updated);
+      setShareWizardOpen(false);
+      setShareStep(1);
+      setShareName("Claude Assistant");
+      notify("success", "Shareable MCP Link generated!");
     } catch (err: any) {
-      notify("error", err.message);
+      notify("error", err.message || "Failed to generate link");
+    } finally {
+      setGeneratingLink(false);
     }
   };
 
@@ -262,12 +267,13 @@ export default function WorkspaceDetailPage() {
   };
 
   const handleRevokeMCP = async (credentialId: string) => {
-    if (!confirm("Revoking will immediately disable this token. Continue?")) return;
+    if (!confirm("Revoking will immediately disable this link. Continue?")) return;
     try {
       await api.revokeMCPCredential(workspaceId, credentialId);
-      notify("success", "Credential revoked.");
-      const updated = await api.getMCPCredentials(workspaceId);
-      setMCPCredentials(updated);
+      notify("success", "Link revoked.");
+      setMCPCredentials((prev) =>
+        prev.map((c) => (c.id === credentialId ? { ...c, is_active: false, revoked_at: new Date().toISOString() } : c))
+      );
     } catch (err: any) {
       notify("error", err.message);
     }
@@ -276,11 +282,10 @@ export default function WorkspaceDetailPage() {
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.addMember(workspaceId, newMemberUsername.trim(), newMemberRole);
+      const member = await api.addMember(workspaceId, newMemberUsername.trim(), newMemberRole);
       notify("success", `Added user '${newMemberUsername}'.`);
+      setMembers((prev) => [...prev, member]);
       setNewMemberUsername("");
-      const updated = await api.getMembers(workspaceId);
-      setMembers(updated);
     } catch (err: any) {
       notify("error", err.message);
     }
@@ -290,8 +295,7 @@ export default function WorkspaceDetailPage() {
     try {
       await api.removeMember(workspaceId, memberId);
       notify("success", "Member removed.");
-      const updated = await api.getMembers(workspaceId);
-      setMembers(updated);
+      setMembers((prev) => prev.filter((m) => m.id !== memberId));
     } catch (err: any) {
       notify("error", err.message);
     }
@@ -379,16 +383,16 @@ export default function WorkspaceDetailPage() {
         </div>
       )}
 
-      {/* Header Breadcrumbs & Quick Actions */}
+      {/* Header Banner: Clean Typography & MAIN COLORFUL ACTION BUTTONS */}
       <div style={{
         display: "flex",
         justifyContent: "space-between",
-        alignItems: "flex-end",
+        alignItems: "center",
         marginBottom: "2rem",
-        paddingBottom: "1.5rem",
+        paddingBottom: "1.75rem",
         borderBottom: "1px solid var(--border-card)",
         flexWrap: "wrap",
-        gap: "1.25rem",
+        gap: "1.5rem",
       }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.25rem" }}>
@@ -397,7 +401,7 @@ export default function WorkspaceDetailPage() {
             </Link>
             <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>/</span>
             <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
-              {workspace.id.substring(0, 14)}...
+              {workspace.name}
             </span>
           </div>
 
@@ -408,34 +412,64 @@ export default function WorkspaceDetailPage() {
             <span className={`badge-status ${workspace.is_active ? "badge-status-allow" : "badge-status-deny"}`}>
               {workspace.is_active ? "Active" : "Disabled"}
             </span>
-            <span className="badge-status" style={{ background: "#f1f5f9", color: "var(--text-secondary)" }}>
-              {workspace.role}
-            </span>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-          {workspace.role === "OWNER" && (
-            <button onClick={() => setNewMCPModal(true)} className="pill-btn pill-btn-primary">
-              <Key size={14} />
-              Generate MCP Key
-            </button>
-          )}
+        {/* 🌟 THE TWO MAIN HIGHLIGHTED BUTTONS 🌟 */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", flexWrap: "wrap" }}>
+          {/* Button 1: Upload Document */}
+          <button
+            onClick={() => {
+              setUploadFile(null);
+              setUploadDescription("");
+              setUploadStep(1);
+              setUploadModalOpen(true);
+            }}
+            className="pill-btn pill-btn-primary"
+            style={{
+              padding: "0.7rem 1.4rem",
+              fontSize: "0.92rem",
+              background: "#0f172a",
+              color: "#ffffff",
+              boxShadow: "0 4px 14px rgba(15, 23, 42, 0.2)",
+            }}
+          >
+            <Upload size={16} />
+            <span>Upload Document</span>
+          </button>
+
+          {/* Button 2: Share MCP Link */}
+          <button
+            onClick={() => {
+              setSelectedFileIds(files.map((f) => f.id));
+              setShareStep(1);
+              setShareWizardOpen(true);
+            }}
+            className="pill-btn pill-btn-blue"
+            style={{
+              padding: "0.7rem 1.4rem",
+              fontSize: "0.92rem",
+              background: "#2563eb",
+              color: "#ffffff",
+              boxShadow: "0 4px 16px rgba(37, 99, 235, 0.28)",
+            }}
+          >
+            <Share2 size={16} />
+            <span>Share MCP Link</span>
+          </button>
         </div>
       </div>
 
-      {/* Clean Pill Tabs Bar */}
+      {/* Simplified, Plain-Language Navigation Tabs */}
       <div style={{ marginBottom: "2rem", overflowX: "auto", paddingBottom: "0.5rem" }}>
         <div className="pill-tabs-bar" style={{ display: "flex", flexWrap: "nowrap" }}>
           {[
-            { id: "overview", label: "Overview", icon: <FolderGit2 size={14} /> },
-            { id: "files", label: `Files (${files.length})`, icon: <FileText size={14} /> },
-            { id: "policies", label: `Policies (${policies.resource_policies.length + policies.operation_policies.length})`, icon: <Shield size={14} /> },
-            { id: "anonymisation", label: `Anonymisation (${policies.anonymisation_rules.length})`, icon: <EyeOff size={14} /> },
-            { id: "mcp", label: `MCP Access (${mcpCredentials.length})`, icon: <Key size={14} /> },
-            { id: "audit", label: `Audit Logs (${auditLogs.length})`, icon: <ScrollText size={14} /> },
-            { id: "playground", label: "Playground", icon: <Terminal size={14} /> },
-            { id: "settings", label: "Settings", icon: <Settings size={14} /> },
+            { id: "documents", label: `Documents (${files.length})`, icon: <FileText size={15} /> },
+            { id: "links", label: `AI Links (${mcpCredentials.length})`, icon: <Key size={15} /> },
+            { id: "privacy", label: `Privacy Rules (${policies.resource_policies.length + policies.anonymisation_rules.length})`, icon: <Shield size={15} /> },
+            { id: "activity", label: `Activity Trail (${auditLogs.length})`, icon: <ScrollText size={15} /> },
+            { id: "playground", label: "Test Console", icon: <Terminal size={15} /> },
+            { id: "settings", label: "Settings", icon: <Settings size={15} /> },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -451,149 +485,61 @@ export default function WorkspaceDetailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: OVERVIEW */}
+      {/* TAB 1: DOCUMENTS (DEFAULT & CLEAN) */}
       {/* ========================================================================= */}
-      {activeTab === "overview" && (
+      {activeTab === "documents" && (
         <div>
-          {/* Quick Metrics */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1.25rem", marginBottom: "2.5rem" }}>
-            <div className="frosted-panel" style={{ padding: "1.5rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
-                  Files Uploaded
-                </span>
-                <FileText size={17} color="#475569" />
+          {files.length === 0 ? (
+            <div className="frosted-panel" style={{ textAlign: "center", padding: "4.5rem 2rem" }}>
+              <div style={{
+                width: "56px",
+                height: "56px",
+                borderRadius: "14px",
+                background: "#f1f5f9",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 1.25rem auto",
+                color: "#0f172a",
+              }}>
+                <FileText size={28} />
               </div>
-              <div style={{ fontSize: "2rem", fontWeight: 800 }}>{files.length}</div>
-              <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>Parsed and indexed</div>
+              <h3 style={{ fontSize: "1.3rem", fontWeight: 700, marginBottom: "0.4rem" }}>
+                No documents uploaded yet
+              </h3>
+              <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", maxWidth: "460px", margin: "0 auto 1.75rem auto", lineHeight: 1.5 }}>
+                Upload PDF reports, CSV data tables, or text files. AI models can safely query them using your privacy rules.
+              </p>
+              <button
+                onClick={() => setUploadModalOpen(true)}
+                className="pill-btn pill-btn-primary"
+              >
+                <Upload size={15} />
+                Upload Your First Document
+              </button>
             </div>
-
-            <div className="frosted-panel" style={{ padding: "1.5rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
-                  Resource Policies
-                </span>
-                <Shield size={17} color="#475569" />
-              </div>
-              <div style={{ fontSize: "2rem", fontWeight: 800 }}>{policies.resource_policies.length}</div>
-              <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>File-level rules</div>
-            </div>
-
-            <div className="frosted-panel" style={{ padding: "1.5rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
-                  Anonymisation Rules
-                </span>
-                <EyeOff size={17} color="#475569" />
-              </div>
-              <div style={{ fontSize: "2rem", fontWeight: 800 }}>{policies.anonymisation_rules.length}</div>
-              <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>PII transforms active</div>
-            </div>
-
-            <div className="frosted-panel" style={{ padding: "1.5rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
-                  Live MCP Keys
-                </span>
-                <Key size={17} color="#475569" />
-              </div>
-              <div style={{ fontSize: "2rem", fontWeight: 800 }}>
-                {mcpCredentials.filter((c) => c.is_active).length}
-              </div>
-              <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>Active bearer tokens</div>
-            </div>
-          </div>
-
-          {/* Clean Overview Card */}
-          <div className="frosted-panel" style={{ padding: "2.5rem", marginBottom: "2.5rem" }}>
-            <div className="slash-tag">SECURITY OVERVIEW</div>
-            <h3 className="font-editorial" style={{ fontSize: "1.35rem", marginBottom: "0.75rem" }}>
-              Workspace Access Control Model
-            </h3>
-            <p style={{ fontSize: "0.92rem", color: "var(--text-secondary)", lineHeight: 1.6, maxWidth: "720px", marginBottom: "1.5rem" }}>
-              Requests through the Model Context Protocol (MCP) resolve workspace scope from the bearer credential.
-              AI models never receive direct database connection strings or raw cloud storage URLs. Every request is verified against policies and PII rules.
-            </p>
-            <div style={{
-              padding: "0.85rem 1.25rem",
-              background: "#f8fafc",
-              border: "1px solid var(--border-card)",
-              borderRadius: "var(--radius-md)",
-              fontFamily: "JetBrains Mono, monospace",
-              fontSize: "0.8rem",
-              color: "#0f172a",
-              display: "inline-block",
-            }}>
-              AI Client ➔ Bearer Token ➔ Policy Precedence ➔ PII Engine ➔ Sanitized MCP Output
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 2: FILES */}
-      {/* ========================================================================= */}
-      {activeTab === "files" && (
-        <div>
-          {/* Upload Dropzone */}
-          <div className="frosted-panel" style={{ padding: "2.5rem 2rem", marginBottom: "2rem", textAlign: "center" }}>
-            <div style={{
-              width: "48px",
-              height: "48px",
-              borderRadius: "12px",
-              background: "#f1f5f9",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 1rem auto",
-              color: "#0f172a",
-            }}>
-              <Upload size={22} />
-            </div>
-            <h3 className="font-editorial" style={{ fontSize: "1.3rem", marginBottom: "0.35rem" }}>
-              Upload Document or Dataset
-            </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", maxWidth: "520px", margin: "0 auto 1.5rem auto", lineHeight: 1.5 }}>
-              Supported: PDF, DOCX, TXT, CSV, JSON (up to 50MB). Content is parsed and scanned for PII immediately.
-            </p>
-
-            <label className="pill-btn pill-btn-primary" style={{ cursor: "pointer" }}>
-              <Upload size={15} />
-              <span>{uploading ? "Uploading & Parsing..." : "Choose File"}</span>
-              <input
-                type="file"
-                disabled={uploading}
-                onChange={handleFileUpload}
-                accept=".pdf,.docx,.txt,.csv,.json"
-                style={{ display: "none" }}
-              />
-            </label>
-          </div>
-
-          {/* Files Table */}
-          <div className="frosted-panel" style={{ overflow: "hidden" }}>
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Filename</th>
-                  <th>Type</th>
-                  <th>Size</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th style={{ textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {files.length === 0 ? (
+          ) : (
+            <div className="frosted-panel" style={{ overflow: "hidden" }}>
+              <table className="custom-table">
+                <thead>
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: "3.5rem", color: "var(--text-muted)" }}>
-                      No files uploaded yet.
-                    </td>
+                    <th>Document Name</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                    <th>Status</th>
+                    <th>Uploaded</th>
+                    <th style={{ textAlign: "right" }}>Actions</th>
                   </tr>
-                ) : (
-                  files.map((file) => (
+                </thead>
+                <tbody>
+                  {files.map((file) => (
                     <tr key={file.id}>
-                      <td style={{ fontWeight: 600 }}>{file.original_filename}</td>
+                      <td style={{ fontWeight: 600, color: "#0f172a" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                          <FileText size={16} color="#2563eb" />
+                          <span>{file.original_filename}</span>
+                        </div>
+                      </td>
                       <td>
                         <span className="badge-status" style={{ background: "#f1f5f9", color: "var(--text-secondary)" }}>
                           {file.file_type}
@@ -604,7 +550,7 @@ export default function WorkspaceDetailPage() {
                       </td>
                       <td>
                         <span className={`badge-status ${file.status === "READY" ? "badge-status-allow" : file.status === "FAILED" ? "badge-status-deny" : "badge-status-transform"}`}>
-                          {file.status}
+                          {file.status === "READY" ? "Ready for AI" : file.status}
                         </span>
                       </td>
                       <td style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>
@@ -615,15 +561,16 @@ export default function WorkspaceDetailPage() {
                           <button
                             onClick={() => handleViewContent(file)}
                             className="pill-btn pill-btn-dark"
-                            style={{ padding: "0.3rem 0.75rem", fontSize: "0.78rem" }}
+                            style={{ padding: "0.35rem 0.85rem", fontSize: "0.78rem" }}
                           >
-                            Extracted Text
+                            View Extracted Content
                           </button>
                           {workspace.role === "OWNER" && (
                             <button
                               onClick={() => handleDeleteFile(file.id)}
                               className="pill-btn pill-btn-dark"
-                              style={{ padding: "0.3rem 0.6rem", color: "var(--status-deny)" }}
+                              style={{ padding: "0.35rem 0.65rem", color: "var(--status-deny)" }}
+                              title="Delete file"
                             >
                               <Trash2 size={13} />
                             </button>
@@ -631,402 +578,51 @@ export default function WorkspaceDetailPage() {
                         </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: POLICIES */}
+      {/* TAB 2: AI LINKS (MULTI-MCP SHARING LINKS) */}
       {/* ========================================================================= */}
-      {activeTab === "policies" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: "2rem" }}>
-          {/* Resource Access Policies */}
-          <div className="frosted-panel" style={{ padding: "2rem" }}>
-            <div className="slash-tag">FILE ACCESS</div>
-            <h3 className="font-editorial" style={{ fontSize: "1.25rem", marginBottom: "0.35rem" }}>
-              Resource Policies
-            </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
-              Set read permissions for specific files or workspace default. Explicit DENY overrides ALLOW.
-            </p>
-
-            {workspace.role === "OWNER" && (
-              <div style={{
-                background: "#f8fafc",
-                padding: "1rem 1.25rem",
-                borderRadius: "var(--radius-md)",
-                marginBottom: "1.5rem",
-                border: "1px solid var(--border-card)",
-              }}>
-                <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.6rem", color: "var(--text-muted)" }}>
-                  Add Resource Rule
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <select
-                    className="modern-input"
-                    style={{ flex: 1, minWidth: "160px" }}
-                    value={newResourceFileId}
-                    onChange={(e) => setNewResourceFileId(e.target.value)}
-                  >
-                    <option value="default">Default (All Files)</option>
-                    {files.map((f) => (
-                      <option key={f.id} value={f.id}>{f.original_filename}</option>
-                    ))}
-                  </select>
-
-                  <select
-                    className="modern-input"
-                    style={{ width: "105px" }}
-                    value={newResourceDecision}
-                    onChange={(e) => setNewResourceDecision(e.target.value)}
-                  >
-                    <option value="ALLOW">ALLOW</option>
-                    <option value="DENY">DENY</option>
-                  </select>
-
-                  <button onClick={handleCreateResourcePolicy} className="pill-btn pill-btn-primary" style={{ padding: "0.5rem 1rem" }}>
-                    Save
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div>
-              {policies.resource_policies.length === 0 ? (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic", padding: "0.5rem 0" }}>
-                  No custom rules. Default workspace permissions apply.
-                </div>
-              ) : (
-                policies.resource_policies.map((p) => {
-                  const targetFile = files.find((f) => f.id === p.resource_id);
-                  return (
-                    <div
-                      key={p.id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "0.75rem 0",
-                        borderBottom: "1px solid var(--border-subtle)",
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
-                          {targetFile ? targetFile.original_filename : "All Files (Default)"}
-                        </div>
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{p.operation}</div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                        <span className={`badge-status ${p.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
-                          {p.decision}
-                        </span>
-                        {workspace.role === "OWNER" && (
-                          <button
-                            onClick={() => handleDeleteResourcePolicy(p.id)}
-                            style={{ color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer" }}
-                          >
-                            <X size={15} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Operation Permissions */}
-          <div className="frosted-panel" style={{ padding: "2rem" }}>
-            <div className="slash-tag">OPERATION ACCESS</div>
-            <h3 className="font-editorial" style={{ fontSize: "1.25rem", marginBottom: "0.35rem" }}>
-              Operation Policies
-            </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
-              Permit or block specific MCP operations executed by AI clients.
-            </p>
-
-            {workspace.role === "OWNER" && (
-              <div style={{
-                background: "#f8fafc",
-                padding: "1rem 1.25rem",
-                borderRadius: "var(--radius-md)",
-                marginBottom: "1.5rem",
-                border: "1px solid var(--border-card)",
-              }}>
-                <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.6rem", color: "var(--text-muted)" }}>
-                  Configure Operation Rule
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <select
-                    className="modern-input"
-                    style={{ flex: 1 }}
-                    value={newOpName}
-                    onChange={(e) => setNewOpName(e.target.value)}
-                  >
-                    <option value="workspace_info">workspace_info</option>
-                    <option value="list_resources">list_resources</option>
-                    <option value="get_resource_metadata">get_resource_metadata</option>
-                    <option value="search">search</option>
-                    <option value="read_resource">read_resource</option>
-                    <option value="get_dataset_schema">get_dataset_schema</option>
-                    <option value="query_dataset">query_dataset</option>
-                  </select>
-
-                  <select
-                    className="modern-input"
-                    style={{ width: "105px" }}
-                    value={newOpDecision}
-                    onChange={(e) => setNewOpDecision(e.target.value)}
-                  >
-                    <option value="ALLOW">ALLOW</option>
-                    <option value="DENY">DENY</option>
-                  </select>
-
-                  <button onClick={handleCreateOperationPolicy} className="pill-btn pill-btn-primary" style={{ padding: "0.5rem 1rem" }}>
-                    Save
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div>
-              {policies.operation_policies.length === 0 ? (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic", padding: "0.5rem 0" }}>
-                  Standard read operations allowed by default.
-                </div>
-              ) : (
-                policies.operation_policies.map((op) => (
-                  <div
-                    key={op.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "0.75rem 0",
-                      borderBottom: "1px solid var(--border-subtle)",
-                    }}
-                  >
-                    <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.85rem", fontWeight: 600 }}>
-                      {op.operation}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      <span className={`badge-status ${op.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
-                        {op.decision}
-                      </span>
-                      {workspace.role === "OWNER" && (
-                        <button
-                          onClick={() => handleDeleteOperationPolicy(op.id)}
-                          style={{ color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer" }}
-                        >
-                          <X size={15} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 4: ANONYMISATION */}
-      {/* ========================================================================= */}
-      {activeTab === "anonymisation" && (
+      {activeTab === "links" && (
         <div>
           <div className="frosted-panel" style={{ padding: "2rem", marginBottom: "2rem" }}>
-            <div className="slash-tag">PII TRANSFORMATION</div>
-            <h3 className="font-editorial" style={{ fontSize: "1.35rem", marginBottom: "0.35rem" }}>
-              Field &amp; Entity Anonymisation Rules
-            </h3>
-            <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
-              Define how PII entities or tabular columns are masked at read-time. Original files in storage remain untouched.
-            </p>
-
-            {workspace.role === "OWNER" && (
-              <div style={{
-                background: "#f8fafc",
-                padding: "1.25rem",
-                borderRadius: "var(--radius-md)",
-                marginBottom: "2rem",
-                border: "1px solid var(--border-card)",
-              }}>
-                <div style={{ fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.75rem", color: "var(--text-muted)" }}>
-                  New Transformation Rule
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", alignItems: "flex-end" }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.3rem", fontWeight: 600 }}>
-                      Entity Type
-                    </label>
-                    <select
-                      className="modern-input"
-                      value={newAnonEntity}
-                      onChange={(e) => setNewAnonEntity(e.target.value)}
-                    >
-                      <option value="email">Email Address</option>
-                      <option value="phone">Phone Number</option>
-                      <option value="ssn">Social Security Number (SSN)</option>
-                      <option value="person_name">Person Name</option>
-                      <option value="credit_card">Credit Card Number</option>
-                      <option value="custom_column">Specific Column (CSV/JSON)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.3rem", fontWeight: 600 }}>
-                      Column Name (optional)
-                    </label>
-                    <input
-                      type="text"
-                      className="modern-input"
-                      placeholder="e.g. salary or client_ssn"
-                      value={newAnonFieldName}
-                      onChange={(e) => setNewAnonFieldName(e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.3rem", fontWeight: 600 }}>
-                      Transformation Mode
-                    </label>
-                    <select
-                      className="modern-input"
-                      value={newAnonTrans}
-                      onChange={(e) => setNewAnonTrans(e.target.value)}
-                    >
-                      <option value="MASK">MASK (j***@example.com)</option>
-                      <option value="PSEUDONYMIZE">PSEUDONYMIZE (Person_001)</option>
-                      <option value="REDACT">REDACT ([REDACTED])</option>
-                      <option value="REMOVE">REMOVE (Strip from output)</option>
-                      <option value="DENY">DENY (Strict Field Exclusion)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <button
-                      onClick={handleCreateAnonymisationRule}
-                      className="pill-btn pill-btn-primary"
-                      style={{ width: "100%", padding: "0.75rem" }}
-                    >
-                      <Plus size={15} />
-                      Add Rule
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Rules Table */}
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Target Entity</th>
-                  <th>Target Field</th>
-                  <th>Transformation Mode</th>
-                  <th>Created</th>
-                  <th style={{ textAlign: "right" }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {policies.anonymisation_rules.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
-                      No custom rules active.
-                    </td>
-                  </tr>
-                ) : (
-                  policies.anonymisation_rules.map((rule) => (
-                    <tr key={rule.id}>
-                      <td style={{ fontWeight: 600 }}>{rule.entity_type}</td>
-                      <td style={{ color: "var(--text-secondary)", fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem" }}>
-                        {rule.field_name || "All text entities"}
-                      </td>
-                      <td>
-                        <span className={`badge-status ${rule.transformation === "ALLOW" ? "badge-status-allow" : rule.transformation === "DENY" ? "badge-status-deny" : "badge-status-transform"}`}>
-                          {rule.transformation}
-                        </span>
-                      </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
-                        {new Date(rule.created_at).toLocaleDateString()}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {workspace.role === "OWNER" && (
-                          <button
-                            onClick={() => handleDeleteAnonymisationRule(rule.id)}
-                            className="pill-btn pill-btn-dark"
-                            style={{ padding: "0.25rem 0.5rem", color: "var(--status-deny)" }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 5: MCP ACCESS & CREDENTIALS */}
-      {/* ========================================================================= */}
-      {activeTab === "mcp" && (
-        <div>
-          <div className="frosted-panel" style={{ padding: "2rem", marginBottom: "2rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
               <div>
-                <div className="slash-tag">CLIENT AUTHENTICATION</div>
+                <div className="slash-tag">AI CONNECTIONS</div>
                 <h3 className="font-editorial" style={{ fontSize: "1.35rem", marginBottom: "0.35rem" }}>
-                  Model Context Protocol Credentials
+                  Active MCP Sharing Links
                 </h3>
                 <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", maxWidth: "660px", lineHeight: 1.5 }}>
-                  Generate bearer credentials to connect Claude Desktop, Cursor, or agents. The database stores only a cryptographic HMAC hash.
+                  You can create as many links as you want. Each link can have access to specific documents and custom privacy rules.
                 </p>
               </div>
-              {workspace.role === "OWNER" && (
-                <button onClick={() => setNewMCPModal(true)} className="pill-btn pill-btn-primary">
-                  <Plus size={15} />
-                  Create Token
-                </button>
-              )}
-            </div>
-
-            <div style={{
-              padding: "0.85rem 1.15rem",
-              background: "#f8fafc",
-              border: "1px solid var(--border-card)",
-              borderRadius: "var(--radius-md)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontFamily: "JetBrains Mono, monospace",
-              fontSize: "0.8rem",
-            }}>
-              <span style={{ color: "var(--text-secondary)" }}>
-                MCP Endpoint: <strong style={{ color: "#0f172a" }}>{process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp</strong>
-              </span>
-              <span className="badge-status badge-status-allow">JSON-RPC 2.0</span>
+              <button
+                onClick={() => {
+                  setSelectedFileIds(files.map((f) => f.id));
+                  setShareStep(1);
+                  setShareWizardOpen(true);
+                }}
+                className="pill-btn pill-btn-blue"
+              >
+                <Plus size={15} />
+                Create New MCP Link
+              </button>
             </div>
           </div>
 
-          {/* Credentials Table */}
           <div className="frosted-panel" style={{ overflow: "hidden" }}>
             <table className="custom-table">
               <thead>
                 <tr>
-                  <th>Label</th>
-                  <th>Prefix Identifier</th>
+                  <th>Link Name / Agent</th>
+                  <th>Key Identifier</th>
                   <th>Created</th>
-                  <th>Expires</th>
                   <th>Status</th>
                   <th style={{ textAlign: "right" }}>Actions</th>
                 </tr>
@@ -1034,22 +630,24 @@ export default function WorkspaceDetailPage() {
               <tbody>
                 {mcpCredentials.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: "3.5rem", color: "var(--text-muted)" }}>
-                      No tokens generated yet. Click &quot;Create Token&quot; to connect Claude or an AI client.
+                    <td colSpan={5} style={{ textAlign: "center", padding: "3.5rem", color: "var(--text-muted)" }}>
+                      No links created yet. Click &quot;Create New MCP Link&quot; above to connect Claude Desktop or an AI agent.
                     </td>
                   </tr>
                 ) : (
                   mcpCredentials.map((cred) => (
                     <tr key={cred.id}>
-                      <td style={{ fontWeight: 600 }}>{cred.name}</td>
+                      <td style={{ fontWeight: 600, color: "#0f172a" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <Key size={15} color="#2563eb" />
+                          <span>{cred.name}</span>
+                        </div>
+                      </td>
                       <td style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", color: "#2563eb" }}>
                         {cred.credential_prefix}...
                       </td>
                       <td style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>
                         {new Date(cred.created_at).toLocaleDateString()}
-                      </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>
-                        {cred.expires_at ? new Date(cred.expires_at).toLocaleDateString() : "Never"}
                       </td>
                       <td>
                         <span className={`badge-status ${cred.revoked_at ? "badge-status-deny" : cred.is_active ? "badge-status-allow" : "badge-status-transform"}`}>
@@ -1064,7 +662,7 @@ export default function WorkspaceDetailPage() {
                               className="pill-btn pill-btn-dark"
                               style={{ padding: "0.3rem 0.75rem", fontSize: "0.75rem" }}
                             >
-                              Rotate
+                              Rotate Key
                             </button>
                             <button
                               onClick={() => handleRevokeMCP(cred.id)}
@@ -1086,9 +684,100 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 6: AUDIT LOGS */}
+      {/* TAB 3: PRIVACY RULES & POLICIES */}
       {/* ========================================================================= */}
-      {activeTab === "audit" && (
+      {activeTab === "privacy" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: "2rem" }}>
+          {/* Anonymisation Rules */}
+          <div className="frosted-panel" style={{ padding: "2rem" }}>
+            <div className="slash-tag">DATA MASKING</div>
+            <h3 className="font-editorial" style={{ fontSize: "1.25rem", marginBottom: "0.35rem" }}>
+              Active Anonymisation Rules
+            </h3>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
+              These rules mask sensitive data before AI models receive query results.
+            </p>
+
+            <div>
+              {policies.anonymisation_rules.length === 0 ? (
+                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic", padding: "1rem 0" }}>
+                  No active masking rules.
+                </div>
+              ) : (
+                policies.anonymisation_rules.map((rule) => (
+                  <div
+                    key={rule.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "0.75rem 0",
+                      borderBottom: "1px solid var(--border-subtle)",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{rule.entity_type}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                        {rule.field_name ? `Field: ${rule.field_name}` : "All occurrences"}
+                      </div>
+                    </div>
+                    <span className="badge-status badge-status-transform">
+                      {rule.transformation}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Document Access Restrictions */}
+          <div className="frosted-panel" style={{ padding: "2rem" }}>
+            <div className="slash-tag">DOCUMENT ACCESS</div>
+            <h3 className="font-editorial" style={{ fontSize: "1.25rem", marginBottom: "0.35rem" }}>
+              File Permissions
+            </h3>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
+              Restrictions placed on individual files or workspace resources.
+            </p>
+
+            <div>
+              {policies.resource_policies.length === 0 ? (
+                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic", padding: "1rem 0" }}>
+                  All uploaded files are accessible to authorized AI tokens.
+                </div>
+              ) : (
+                policies.resource_policies.map((p) => {
+                  const targetFile = files.find((f) => f.id === p.resource_id);
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "0.75rem 0",
+                        borderBottom: "1px solid var(--border-subtle)",
+                      }}
+                    >
+                      <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                        {targetFile ? targetFile.original_filename : "All Files (Default)"}
+                      </div>
+                      <span className={`badge-status ${p.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
+                        {p.decision}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: ACTIVITY TRAIL */}
+      {/* ========================================================================= */}
+      {activeTab === "activity" && (
         <div className="frosted-panel" style={{ overflow: "hidden" }}>
           <div style={{
             padding: "1.5rem 2rem",
@@ -1100,10 +789,10 @@ export default function WorkspaceDetailPage() {
             gap: "1rem",
           }}>
             <div>
-              <div className="slash-tag">AUDIT LOGS</div>
-              <h3 className="font-editorial" style={{ fontSize: "1.25rem" }}>Security Event Trail</h3>
+              <div className="slash-tag">AUDIT TRAIL</div>
+              <h3 className="font-editorial" style={{ fontSize: "1.25rem" }}>Activity &amp; Query Log</h3>
               <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
-                Immutable event record. Passwords, secrets, and raw documents are never logged.
+                Every tool call and data request is logged securely without exposing private secrets.
               </p>
             </div>
             <button onClick={loadWorkspaceData} className="pill-btn pill-btn-dark" style={{ padding: "0.4rem 0.9rem", fontSize: "0.8rem" }}>
@@ -1117,16 +806,16 @@ export default function WorkspaceDetailPage() {
               <tr>
                 <th>Timestamp</th>
                 <th>Operation</th>
-                <th>Actor</th>
+                <th>Caller</th>
                 <th>Decision</th>
-                <th>Reason</th>
+                <th>Notes</th>
               </tr>
             </thead>
             <tbody>
               {auditLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: "center", padding: "3.5rem", color: "var(--text-muted)" }}>
-                    No audit events recorded yet.
+                    No activity recorded yet.
                   </td>
                 </tr>
               ) : (
@@ -1144,7 +833,7 @@ export default function WorkspaceDetailPage() {
                       </span>
                     </td>
                     <td>
-                      <span className={`badge-status ${log.decision === "ALLOW" ? "badge-status-allow" : log.decision === "DENY" ? "badge-status-deny" : "badge-status-transform"}`}>
+                      <span className={`badge-status ${log.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
                         {log.decision}
                       </span>
                     </td>
@@ -1160,20 +849,19 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 7: PLAYGROUND */}
+      {/* TAB 5: TEST CONSOLE (PLAYGROUND) */}
       {/* ========================================================================= */}
       {activeTab === "playground" && (
         <div className="frosted-panel" style={{ padding: "2rem" }}>
-          <div className="slash-tag">TEST CONSOLE</div>
+          <div className="slash-tag">DEVELOPER CONSOLE</div>
           <h3 className="font-editorial" style={{ fontSize: "1.35rem", marginBottom: "0.35rem" }}>
             MCP Tool Test Console
           </h3>
           <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem" }}>
-            Test MCP JSON-RPC tool calls live using your bearer token.
+            Test live JSON-RPC requests directly against your MCP gateway.
           </p>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "1.75rem" }}>
-            {/* Request Builder */}
             <div>
               <div style={{ marginBottom: "1rem" }}>
                 <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
@@ -1241,14 +929,10 @@ export default function WorkspaceDetailPage() {
                 style={{ width: "100%", padding: "0.75rem" }}
               >
                 <Terminal size={15} />
-                {playgroundLoading ? "Running Request..." : "Run MCP Request"}
-                <div className="btn-arrow-circle">
-                  <ArrowRight size={11} />
-                </div>
+                {playgroundLoading ? "Running..." : "Run MCP Request"}
               </button>
             </div>
 
-            {/* Response Viewer */}
             <div className="browser-window" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
               <div className="browser-header">
                 <div className="browser-dots">
@@ -1274,7 +958,7 @@ export default function WorkspaceDetailPage() {
                   <pre style={{ color: "#0f172a" }}>{JSON.stringify(playgroundResult, null, 2)}</pre>
                 ) : (
                   <div style={{ color: "var(--text-muted)", fontStyle: "italic", paddingTop: "2rem", textAlign: "center" }}>
-                    Response from MCP gateway will appear here after execution.
+                    Results from the MCP gateway will appear here.
                   </div>
                 )}
               </div>
@@ -1284,18 +968,18 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 8: SETTINGS */}
+      {/* TAB 6: SETTINGS */}
       {/* ========================================================================= */}
       {activeTab === "settings" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "2rem" }}>
-          {/* Members Management */}
+          {/* Members */}
           <div className="frosted-panel" style={{ padding: "2rem" }}>
-            <div className="slash-tag">MEMBERS</div>
+            <div className="slash-tag">TEAM MEMBERS</div>
             <h3 className="font-editorial" style={{ fontSize: "1.25rem", marginBottom: "0.35rem" }}>
               Workspace Access
             </h3>
             <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
-              Manage users who can view or administer this workspace.
+              Share this workspace with colleagues by username.
             </p>
 
             {workspace.role === "OWNER" && (
@@ -1304,7 +988,7 @@ export default function WorkspaceDetailPage() {
                   type="text"
                   required
                   className="modern-input"
-                  placeholder="Username to add"
+                  placeholder="Username"
                   value={newMemberUsername}
                   onChange={(e) => setNewMemberUsername(e.target.value)}
                 />
@@ -1361,11 +1045,11 @@ export default function WorkspaceDetailPage() {
             <h3 className="font-editorial" style={{ fontSize: "1.25rem", color: "var(--status-deny)", marginBottom: "0.35rem" }}>
               Delete Workspace
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem", lineHeight: 1.5 }}>
-              Permanently delete this workspace and all associated files, policies, and credentials.
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
+              Permanently delete this workspace and all associated files.
             </p>
 
-            {workspace.role === "OWNER" ? (
+            {workspace.role === "OWNER" && (
               <button
                 onClick={handleDeleteWorkspace}
                 className="pill-btn pill-btn-dark"
@@ -1374,11 +1058,394 @@ export default function WorkspaceDetailPage() {
                 <Trash2 size={14} />
                 Delete Workspace Permanently
               </button>
-            ) : (
-              <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                Only the workspace owner can delete this workspace.
-              </span>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ✨ SIMPLIFIED 3-STEP UPLOAD MODAL ✨ */}
+      {/* ========================================================================= */}
+      {uploadModalOpen && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(15, 23, 42, 0.5)",
+          backdropFilter: "blur(6px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 150,
+          padding: "1.5rem",
+        }}>
+          <div className="frosted-panel" style={{
+            width: "100%",
+            maxWidth: "520px",
+            padding: "2.5rem 2.25rem",
+            position: "relative",
+            boxShadow: "var(--shadow-lg)",
+            borderRadius: "var(--radius-xl)",
+          }}>
+            <button
+              onClick={() => setUploadModalOpen(false)}
+              style={{
+                position: "absolute",
+                top: "1.25rem",
+                right: "1.25rem",
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                background: "#f1f5f9",
+                border: "none",
+                color: "var(--text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <X size={15} />
+            </button>
+
+            <div className="slash-tag">EASY UPLOAD</div>
+            <h2 className="font-editorial" style={{ fontSize: "1.6rem", marginBottom: "0.4rem" }}>
+              Upload Document to Workspace
+            </h2>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
+              Follow 3 simple steps to add files for your AI agents to query.
+            </p>
+
+            {/* Step 1: File selection */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                <span style={{ width: "22px", height: "22px", borderRadius: "50%", background: "#0f172a", color: "#fff", fontSize: "0.75rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  1
+                </span>
+                <span style={{ fontSize: "0.85rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-primary)" }}>
+                  Choose Your File
+                </span>
+              </div>
+
+              {!uploadFile ? (
+                <label style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "2rem",
+                  border: "2px dashed var(--border-card)",
+                  borderRadius: "var(--radius-md)",
+                  background: "#f8fafc",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}>
+                  <Upload size={24} color="#2563eb" style={{ marginBottom: "0.5rem" }} />
+                  <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "#0f172a" }}>
+                    Click to browse or drag file here
+                  </span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                    PDF, CSV, TXT, DOCX, JSON (up to 50MB)
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.txt,.csv,.json"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setUploadFile(e.target.files[0]);
+                      }
+                    }}
+                    style={{ display: "none" }}
+                  />
+                </label>
+              ) : (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.85rem 1rem",
+                  background: "#f1f5f9",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-card)",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                    <FileText size={18} color="#2563eb" />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#0f172a" }}>{uploadFile.name}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{(uploadFile.size / 1024).toFixed(1)} KB</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setUploadFile(null)}
+                    style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Step 2: Description for AI */}
+            <div style={{ marginBottom: "2rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                <span style={{ width: "22px", height: "22px", borderRadius: "50%", background: "#0f172a", color: "#fff", fontSize: "0.75rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  2
+                </span>
+                <span style={{ fontSize: "0.85rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-primary)" }}>
+                  Add Description for AI (Optional)
+                </span>
+              </div>
+              <textarea
+                className="modern-input"
+                placeholder="e.g. Q3 Sales Data - AI can use this for revenue calculations and customer summaries."
+                value={uploadDescription}
+                onChange={(e) => setUploadDescription(e.target.value)}
+                style={{ height: "70px", resize: "none", fontSize: "0.85rem" }}
+              />
+            </div>
+
+            {/* Step 3: Upload Action */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={() => setUploadModalOpen(false)}
+                className="pill-btn pill-btn-dark"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!uploadFile || uploading}
+                onClick={handleExecuteUpload}
+                className="pill-btn pill-btn-primary"
+              >
+                {uploading ? "Processing Document..." : "Upload & Save"}
+                <div className="btn-arrow-circle">
+                  <ArrowRight size={12} />
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ✨ MULTI-LINK "SHARE MCP LINK" WIZARD ✨ */}
+      {/* ========================================================================= */}
+      {shareWizardOpen && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(15, 23, 42, 0.55)",
+          backdropFilter: "blur(6px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 160,
+          padding: "1.5rem",
+        }}>
+          <div className="frosted-panel" style={{
+            width: "100%",
+            maxWidth: "560px",
+            maxHeight: "90vh",
+            overflowY: "auto",
+            padding: "2.5rem 2.25rem",
+            position: "relative",
+            boxShadow: "var(--shadow-lg)",
+            borderRadius: "var(--radius-xl)",
+          }}>
+            <button
+              onClick={() => setShareWizardOpen(false)}
+              style={{
+                position: "absolute",
+                top: "1.25rem",
+                right: "1.25rem",
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                background: "#f1f5f9",
+                border: "none",
+                color: "var(--text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <X size={15} />
+            </button>
+
+            <div className="slash-tag">MCP LINK GENERATOR</div>
+            <h2 className="font-editorial" style={{ fontSize: "1.6rem", marginBottom: "0.35rem" }}>
+              Create Tailored MCP Link
+            </h2>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
+              Configure exactly which files and data this AI link can access.
+            </p>
+
+            {/* Wizard Step 1: Name */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-primary)" }}>
+                1. Link Label / Purpose
+              </label>
+              <input
+                type="text"
+                className="modern-input"
+                placeholder="e.g. Claude Support Bot or Finance Auditor"
+                value={shareName}
+                onChange={(e) => setShareName(e.target.value)}
+              />
+            </div>
+
+            {/* Wizard Step 2: Choose which files */}
+            <div style={{ marginBottom: "1.75rem" }}>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-primary)" }}>
+                2. Which files can this AI access?
+              </label>
+
+              <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareAllFiles(true);
+                    setSelectedFileIds(files.map((f) => f.id));
+                  }}
+                  className={`pill-tab ${shareAllFiles ? "active" : ""}`}
+                  style={{ fontSize: "0.8rem", padding: "0.35rem 0.9rem" }}
+                >
+                  All Documents ({files.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShareAllFiles(false)}
+                  className={`pill-tab ${!shareAllFiles ? "active" : ""}`}
+                  style={{ fontSize: "0.8rem", padding: "0.35rem 0.9rem" }}
+                >
+                  Choose Specific Files
+                </button>
+              </div>
+
+              {!shareAllFiles && (
+                <div style={{
+                  maxHeight: "140px",
+                  overflowY: "auto",
+                  background: "#f8fafc",
+                  padding: "0.75rem",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-card)",
+                }}>
+                  {files.length === 0 ? (
+                    <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>No files uploaded yet.</div>
+                  ) : (
+                    files.map((f) => {
+                      const isChecked = selectedFileIds.includes(f.id);
+                      return (
+                        <div
+                          key={f.id}
+                          onClick={() => {
+                            if (isChecked) {
+                              setSelectedFileIds(selectedFileIds.filter((id) => id !== f.id));
+                            } else {
+                              setSelectedFileIds([...selectedFileIds, f.id]);
+                            }
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.6rem",
+                            padding: "0.4rem 0",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                            color: "#0f172a",
+                          }}
+                        >
+                          {isChecked ? <CheckSquare size={16} color="#2563eb" /> : <Square size={16} color="#94a3b8" />}
+                          <span style={{ fontWeight: isChecked ? 600 : 400 }}>{f.original_filename}</span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Wizard Step 3: Privacy & Data Masking */}
+            <div style={{ marginBottom: "2rem" }}>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.6rem", color: "var(--text-primary)" }}>
+                3. Privacy &amp; Data Masking for this Link
+              </label>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1rem" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={maskEmails}
+                    onChange={(e) => setMaskEmails(e.target.checked)}
+                    style={{ accentColor: "#2563eb", width: "16px", height: "16px" }}
+                  />
+                  <span>Mask Email Addresses (e.g. <code>j***@example.com</code>)</span>
+                </label>
+
+                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={maskNames}
+                    onChange={(e) => setMaskNames(e.target.checked)}
+                    style={{ accentColor: "#2563eb", width: "16px", height: "16px" }}
+                  />
+                  <span>Pseudonymize Person Names (e.g. <code>Person_001</code>)</span>
+                </label>
+
+                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={maskSSN}
+                    onChange={(e) => setMaskSSN(e.target.checked)}
+                    style={{ accentColor: "#2563eb", width: "16px", height: "16px" }}
+                  />
+                  <span>Mask Social Security Numbers (SSN)</span>
+                </label>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.3rem", fontWeight: 600 }}>
+                  Hide specific columns (comma-separated):
+                </label>
+                <input
+                  type="text"
+                  className="modern-input"
+                  placeholder="e.g. salary, credit_card, ssn"
+                  value={customColumnsToHide}
+                  onChange={(e) => setCustomColumnsToHide(e.target.value)}
+                  style={{ fontSize: "0.82rem" }}
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={() => setShareWizardOpen(false)}
+                className="pill-btn pill-btn-dark"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={generatingLink || !shareName.trim()}
+                onClick={handleGenerateShareLink}
+                className="pill-btn pill-btn-blue"
+              >
+                <Key size={14} />
+                <span>{generatingLink ? "Creating Link..." : "Generate Shareable Link"}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1439,7 +1506,7 @@ export default function WorkspaceDetailPage() {
             </h3>
 
             <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-              <span className="badge-status badge-status-allow">Parsed</span>
+              <span className="badge-status badge-status-allow">Indexed</span>
               <span className="badge-status badge-status-transform">
                 Detected PII: {selectedFileContent.detected_entities?.length || 0}
               </span>
@@ -1472,7 +1539,7 @@ export default function WorkspaceDetailPage() {
                 border: "1px solid var(--border-card)",
               }}>
                 <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.4rem" }}>
-                  Detected Entities:
+                  Detected Entities in Document:
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
                   {selectedFileContent.detected_entities.map((e, idx) => (
@@ -1483,91 +1550,6 @@ export default function WorkspaceDetailPage() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL: GENERATE MCP CREDENTIAL */}
-      {/* ========================================================================= */}
-      {newMCPModal && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: "rgba(15, 23, 42, 0.45)",
-          backdropFilter: "blur(4px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 150,
-          padding: "1.5rem",
-        }}>
-          <div className="frosted-panel" style={{
-            width: "100%",
-            maxWidth: "460px",
-            padding: "2.5rem 2.25rem",
-            position: "relative",
-            boxShadow: "var(--shadow-lg)",
-            borderRadius: "var(--radius-xl)",
-          }}>
-            <button
-              onClick={() => setNewMCPModal(false)}
-              style={{
-                position: "absolute",
-                top: "1.25rem",
-                right: "1.25rem",
-                width: "28px",
-                height: "28px",
-                borderRadius: "50%",
-                background: "#f1f5f9",
-                border: "none",
-                color: "var(--text-secondary)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-              }}
-            >
-              <X size={15} />
-            </button>
-
-            <div className="slash-tag">NEW CREDENTIAL</div>
-            <h3 className="font-editorial" style={{ fontSize: "1.5rem", marginBottom: "0.4rem" }}>
-              Generate MCP Token
-            </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem", lineHeight: 1.5 }}>
-              Generates a secure bearer token. The raw token will be revealed once.
-            </p>
-
-            <form onSubmit={handleCreateMCPCredential}>
-              <div style={{ marginBottom: "1.75rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
-                  Token Label
-                </label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  className="modern-input"
-                  placeholder="e.g. Claude Desktop"
-                  value={newMCPName}
-                  onChange={(e) => setNewMCPName(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-                <button type="button" onClick={() => setNewMCPModal(false)} className="pill-btn pill-btn-dark">
-                  Cancel
-                </button>
-                <button type="submit" className="pill-btn pill-btn-primary">
-                  <Key size={14} />
-                  Generate
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
@@ -1598,9 +1580,9 @@ export default function WorkspaceDetailPage() {
             borderRadius: "var(--radius-xl)",
           }}>
             <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
-              <div className="slash-tag" style={{ justifyContent: "center" }}>SAVE CREDENTIAL</div>
+              <div className="slash-tag" style={{ justifyContent: "center" }}>MCP LINK READY</div>
               <h3 className="font-editorial" style={{ fontSize: "1.6rem", marginBottom: "0.4rem" }}>
-                Your Private MCP Token
+                Your Shareable MCP Token
               </h3>
               <p style={{
                 fontSize: "0.82rem",
@@ -1611,13 +1593,13 @@ export default function WorkspaceDetailPage() {
                 display: "inline-block",
                 border: "1px solid #fecaca",
               }}>
-                Save this token now. It cannot be recovered once this modal is closed.
+                Copy this token now. It cannot be recovered after closing this window.
               </p>
             </div>
 
             <div style={{ marginBottom: "1.5rem" }}>
               <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-                Raw MCP Token
+                Raw Bearer Token
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <input
@@ -1643,10 +1625,9 @@ export default function WorkspaceDetailPage() {
               </div>
             </div>
 
-            {/* Claude Desktop Config Snippet */}
             <div style={{ marginBottom: "1.75rem" }}>
               <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-                Claude Desktop Config Snippet
+                Claude Desktop / Cursor Config Snippet
               </div>
               <div style={{
                 padding: "0.9rem 1.15rem",

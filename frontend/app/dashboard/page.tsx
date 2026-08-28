@@ -47,6 +47,7 @@ export default function DashboardPage() {
     setError(null);
     try {
       const created = await api.createWorkspace(newWorkspaceName.trim());
+      setWorkspaces((prev) => [created, ...prev]);
       setShowCreateModal(false);
       setNewWorkspaceName("");
       router.push(`/workspaces/${created.id}`);
@@ -245,78 +246,99 @@ export default function DashboardPage() {
           gap: "1.5rem",
         }}>
           {filteredWorkspaces.map((ws) => (
-            <Link key={ws.id} href={`/workspaces/${ws.id}`} style={{ textDecoration: "none" }}>
-              <div className="frosted-panel" style={{
+            <div
+              key={ws.id}
+              onClick={() => router.push(`/workspaces/${ws.id}`)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter") router.push(`/workspaces/${ws.id}`); }}
+              className="frosted-panel"
+              style={{
                 height: "100%",
                 padding: "1.75rem",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
                 cursor: "pointer",
-              }}>
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-                    <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "#0f172a" }}>
-                      {ws.name}
-                    </h3>
-                    <span className={`badge-status ${ws.role === "OWNER" ? "badge-status-allow" : "badge-status-transform"}`}>
-                      {ws.role}
-                    </span>
-                  </div>
-
-                  <div style={{
-                    fontSize: "0.75rem",
-                    color: "var(--text-muted)",
-                    fontFamily: "JetBrains Mono, monospace",
-                    marginBottom: "1.5rem",
-                  }}>
-                    ID: {ws.id.substring(0, 18)}...
-                  </div>
+                transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#2563eb";
+                e.currentTarget.style.boxShadow = "0 8px 24px -4px rgba(37, 99, 235, 0.12)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--border-card)";
+                e.currentTarget.style.boxShadow = "var(--shadow-sm)";
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+                  <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "#0f172a" }}>
+                    {ws.name}
+                  </h3>
+                  <span className={`badge-status ${ws.role === "OWNER" ? "badge-status-allow" : "badge-status-transform"}`}>
+                    {ws.role}
+                  </span>
                 </div>
 
-                <div>
-                  <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
-                    gap: "0.75rem",
-                    padding: "0.75rem",
-                    background: "#f8fafc",
-                    borderRadius: "var(--radius-md)",
-                    textAlign: "center",
-                    marginBottom: "1.25rem",
-                    border: "1px solid var(--border-subtle)",
-                  }}>
-                    <div>
-                      <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>{ws.files_count}</div>
-                      <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Files</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>{ws.policies_count}</div>
-                      <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Policies</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>{ws.credentials_count}</div>
-                      <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Keys</div>
-                    </div>
-                  </div>
-
-                  <div style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    fontSize: "0.8rem",
-                    color: "var(--text-muted)",
-                    paddingTop: "0.6rem",
-                    borderTop: "1px solid var(--border-subtle)",
-                  }}>
-                    <span>Created {new Date(ws.created_at).toLocaleDateString()}</span>
-                    <span style={{ color: "#0f172a", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                      Manage <ArrowRight size={13} />
-                    </span>
-                  </div>
+                <div style={{
+                  fontSize: "0.75rem",
+                  color: "var(--text-muted)",
+                  fontFamily: "JetBrains Mono, monospace",
+                  marginBottom: "1.5rem",
+                }}>
+                  ID: {ws.id.substring(0, 18)}...
                 </div>
               </div>
-            </Link>
+
+              <div>
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: "0.75rem",
+                  padding: "0.75rem",
+                  background: "#f8fafc",
+                  borderRadius: "var(--radius-md)",
+                  textAlign: "center",
+                  marginBottom: "1.25rem",
+                  border: "1px solid var(--border-subtle)",
+                }}>
+                  <div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>{ws.files_count}</div>
+                    <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Files</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>{ws.policies_count}</div>
+                    <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Policies</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>{ws.credentials_count}</div>
+                    <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Keys</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: "0.82rem",
+                  color: "var(--text-muted)",
+                  paddingTop: "0.75rem",
+                  borderTop: "1px solid var(--border-subtle)",
+                }}>
+                  <span>Created {new Date(ws.created_at).toLocaleDateString()}</span>
+                  <span style={{
+                    color: "#2563eb",
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                  }}>
+                    Open Workspace <ArrowRight size={14} />
+                  </span>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       )}
