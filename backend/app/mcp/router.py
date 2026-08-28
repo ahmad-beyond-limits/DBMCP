@@ -232,7 +232,7 @@ async def get_mcp_context(
     key: Optional[str] = None,
     api_key: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-) -> AuthenticatedMCPContext:
+) -> Optional[AuthenticatedMCPContext]:
     """Extracts and validates private MCP token from Authorization header, custom header, or URL query param."""
     raw_token = None
     if authorization:
@@ -255,12 +255,9 @@ async def get_mcp_context(
         raw_token = request.query_params["key"]
 
     if not raw_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing MCP authorization credentials. Provide via 'Authorization: Bearer <token>' header or '?token=<token>' query parameter.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        return None
 
+    # If a token was provided, validate it strictly (raises 401 if expired, revoked, or wrong secret)
     return await MCPAuthService.validate_credential(db, raw_token)
 
 
@@ -287,17 +284,18 @@ async def get_mcp_info(
 )
 async def handle_mcp_rpc(
     rpc_req: JSONRPCRequest,
-    context: AuthenticatedMCPContext = Depends(get_mcp_context),
+    context: Optional[AuthenticatedMCPContext] = Depends(get_mcp_context),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Standard MCP JSON-RPC 2.0 Protocol Gateway.
     Evaluates every request within context.workspace_id and against workspace policies.
+    Permits initialize and tools/list for client handshakes (e.g. Claude Remote Connectors).
     """
     method = rpc_req.method
     params = rpc_req.params or {}
 
-    # Initialize
+    # 1. Initialize Handshake (Allowed without credentials to verify server capabilities)
     if method == "initialize":
         return JSONRPCResponse(
             id=rpc_req.id,
@@ -314,12 +312,12 @@ async def handle_mcp_rpc(
             },
         )
 
-    # List Tools
+    # 2. List Tools (Allowed without credentials to advertise available capabilities)
     elif method in ["tools/list", "list_tools"]:
         tools = await MCPServer.list_tools()
         return JSONRPCResponse(id=rpc_req.id, result={"tools": tools})
 
-    # Call Tool
+    # 3. Call Tool (Strictly requires valid context)
     elif method in ["tools/call", "call_tool"]:
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
@@ -328,12 +326,48 @@ async def handle_mcp_rpc(
                 id=rpc_req.id,
                 error=JSONRPCError(code=-32602, message="Missing tool name in params"),
             )
-        call_res = await MCPServer.call_tool(db, context, tool_name, arguments)
+
+        # Fallback: check if token was passed in tool arguments
+        active_context = context
+        if not active_context and "token" in arguments:
+            try:
+                active_context = await MCPAuthService.validate_credential(db, arguments["token"])
+            except Exception:
+                active_context = None
+
+        if not active_context:
+            return JSONRPCResponse(
+                id=rpc_req.id,
+                result={
+                    "isError": True,
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Authentication Error: A valid DBMCP token is required to execute tools. Pass it via URL '?token=mcp_live_...' or Authorization header.",
+                        }
+                    ],
+                },
+            )
+
+        call_res = await MCPServer.call_tool(db, active_context, tool_name, arguments)
         return JSONRPCResponse(id=rpc_req.id, result=call_res)
 
-    # Direct tool method invocation fallback
+    # 4. Direct tool method invocation fallback
     known_tool_names = [t["name"] for t in await MCPServer.list_tools()]
     if method in known_tool_names:
+        if not context:
+            return JSONRPCResponse(
+                id=rpc_req.id,
+                result={
+                    "isError": True,
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Authentication Error: A valid DBMCP token is required. Pass it via URL '?token=mcp_live_...'",
+                        }
+                    ],
+                },
+            )
         call_res = await MCPServer.call_tool(db, context, method, params)
         return JSONRPCResponse(id=rpc_req.id, result=call_res)
 
