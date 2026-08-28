@@ -94,10 +94,7 @@ export default function LandingPage() {
 
           {/* Right: Authentic Scientific Gradient Feature Capsule */}
           <div>
-            <div className="frosted-panel" style={{
-              background: "linear-gradient(135deg, rgba(234, 235, 237, 0.95), rgba(244, 245, 246, 0.85))",
-              border: "1px solid rgba(40, 40, 40, 0.06)",
-              boxShadow: "var(--shadow-md)",
+            <div className="card-scientific-gradient" style={{
               padding: "clamp(1.75rem, 4vw, 2.25rem)",
               borderRadius: "var(--radius-xl)",
             }}>

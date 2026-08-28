@@ -124,7 +124,7 @@ export default function Navbar() {
             </div>
 
             <span style={{
-              fontWeight: 700,
+              fontWeight: 600,
               fontSize: "1.22rem",
               letterSpacing: "-0.04em",
               background: "linear-gradient(135deg, #1E2022 0%, #3B4252 60%, #4F46E5 100%)",

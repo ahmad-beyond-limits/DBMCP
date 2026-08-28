@@ -5,13 +5,13 @@
   /* ========================================================================= */
 
   /* Application Canvas & Surfaces */
-  --bg-page: #F2F2F3;
+  --bg-page: #F1F1F2;
   --bg-surface: #F7F7F8;
   --bg-elevated: #FCFCFC;
   --bg-muted: #ECECED;
 
   /* Legacy aliases for backward compatibility across components */
-  --canvas-bg: #F2F2F3;
+  --canvas-bg: #F1F1F2;
   --canvas-subtle: #ECECED;
   --glass-surface: #F7F7F8;
   --glass-surface-hover: #FCFCFC;
@@ -26,6 +26,10 @@
   --text-muted: #686B6E;
   --text-dim: #989B9D;
   --text-disabled: #B9BBBD;
+
+  /* Borders */
+  --border-subtle: rgba(40, 40, 40, 0.04);
+  --border-default: rgba(40, 40, 40, 0.08);
 
   /* Accent & Attention Gradient (Reserved for hero insights & special status) */
   --gradient-highlight:
@@ -56,16 +60,27 @@
   --status-deny-bg: rgba(194, 65, 12, 0.08);
 
   /* Generous Rounded Geometry Scale */
-  --radius-xs: 8px;
-  --radius-sm: 14px;
-  --radius-md: 20px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
   --radius-lg: 28px;
-  --radius-xl: 34px;
+  --radius-xl: 36px;
   --radius-pill: 9999px;
+
+  /* Spacing Scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
 
   /* Subtle Optical Shadows */
   --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.02);
-  --shadow-glass: 0 2px 10px rgba(0, 0, 0, 0.02), 0 16px 36px rgba(0, 0, 0, 0.03);
+  --shadow-glass: 0 2px 8px rgba(0, 0, 0, 0.02), 0 12px 32px rgba(0, 0, 0, 0.03);
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.02), 0 20px 40px rgba(0, 0, 0, 0.04);
 }
 
