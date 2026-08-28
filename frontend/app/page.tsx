@@ -13,139 +13,166 @@ import {
   Activity,
   CheckCircle2,
   Check,
+  Table,
+  Sparkles,
+  Sliders,
+  Database,
+  Cpu,
 } from "lucide-react";
 
 export default function LandingPage() {
   const { checkAndNavigate } = useGateway();
 
   return (
-    <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "clamp(1.5rem, 4vw, 3rem) clamp(1rem, 3vw, 1.5rem) clamp(3rem, 6vw, 6rem) clamp(1rem, 3vw, 1.5rem)" }}>
+    <div style={{
+      maxWidth: "1160px",
+      margin: "0 auto",
+      padding: "clamp(2rem, 5vw, 3.5rem) clamp(1rem, 3vw, 1.5rem) clamp(4rem, 8vw, 6rem) clamp(1rem, 3vw, 1.5rem)",
+    }}>
       {/* ========================================================================= */}
-      {/* 1. HERO BANNER WITH TD BANK STYLE RADIANT GLASS CARD                      */}
+      {/* 1. HERO SECTION WITH AUTHENTIC SCIENTIFIC GRADIENT FEATURE SHOWCASE CARD  */}
       {/* ========================================================================= */}
       <section style={{
-        position: "relative",
         borderRadius: "var(--radius-xl)",
-        overflow: "hidden",
-        padding: "clamp(2rem, 5vw, 3.5rem) clamp(1.25rem, 4vw, 3rem)",
-        background: "rgba(255, 255, 255, 0.75)",
-        backdropFilter: "blur(36px) saturate(180%)",
-        WebkitBackdropFilter: "blur(36px) saturate(180%)",
-        border: "1px solid var(--glass-border)",
+        background: "var(--bg-surface)",
+        border: "1px solid rgba(40, 40, 40, 0.04)",
         boxShadow: "var(--shadow-glass)",
-        marginBottom: "2.5rem",
+        padding: "clamp(2.5rem, 5vw, 4rem) clamp(1.5rem, 4vw, 3.25rem)",
+        marginBottom: "2rem",
       }}>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
-          gap: "clamp(2rem, 4vw, 3rem)",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
+          gap: "clamp(2.5rem, 5vw, 3.5rem)",
           alignItems: "center",
         }}>
-          {/* Headline & CTA */}
+          {/* Left: Clean, Restrained Editorial Headline & CTA */}
           <div>
-            <div className="slash-tag">POLICY-ENFORCED AI DATA WORKSPACE</div>
+            <div className="slash-tag">POLICY-ENFORCED AI DATA BOUNDARY</div>
 
             <h1 className="font-hero" style={{
-              fontSize: "clamp(2rem, 4.5vw, 3.4rem)",
-              lineHeight: 1.15,
-              fontWeight: 600,
-              color: "var(--color-obsidian)",
+              fontSize: "clamp(2.2rem, 4.5vw, 3.4rem)",
+              lineHeight: 1.12,
+              fontWeight: 400,
+              color: "var(--text-primary)",
               marginBottom: "1.25rem",
+              letterSpacing: "-0.04em",
             }}>
-              The Power of Enterprise Data in Every AI Agent
+              Private Data Access for AI Agents, Safely.
             </h1>
 
             <p style={{
-              fontSize: "clamp(0.92rem, 1.8vw, 1rem)",
+              fontSize: "clamp(0.95rem, 1.8vw, 1.05rem)",
               lineHeight: 1.6,
               color: "var(--text-secondary)",
               maxWidth: "460px",
-              marginBottom: "2rem",
+              marginBottom: "2.25rem",
+              fontWeight: 400,
             }}>
-              Connect Claude, Cursor, and custom LLMs to your private files with granular access control, automated PII masking, and full auditability.
+              Connect Claude Desktop, Cursor, and custom LLM agents to your internal Excel tables, CSVs, and documents with deterministic data masking and forensic query logging.
             </p>
 
-            <div style={{ display: "flex", gap: "0.85rem", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
               <button
                 onClick={() => checkAndNavigate("/register")}
                 className="pill-btn pill-btn-solid"
-                style={{ padding: "0.75rem 1.6rem" }}
+                style={{ padding: "0.85rem 1.75rem", fontSize: "0.92rem" }}
               >
-                <span>Explore Now</span>
-                <ArrowUpRight size={15} />
+                <span>Get Started</span>
+                <ArrowUpRight size={15} strokeWidth={1.5} />
               </button>
 
               <button
                 onClick={() => checkAndNavigate("/dashboard")}
                 className="pill-btn pill-btn-glass"
-                style={{ padding: "0.75rem 1.4rem" }}
+                style={{ padding: "0.85rem 1.5rem", fontSize: "0.92rem" }}
               >
-                Open Console
+                <span>Open Workspaces</span>
               </button>
             </div>
           </div>
 
-          {/* Right: The Exact TD Bank Style Radiant Card from Reference */}
+          {/* Right: The Soft Scientific Gradient Feature Showcase Card */}
           <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
-            <div className="glass-card-radiant" style={{
+            <div className="card-scientific-gradient" style={{
               width: "100%",
-              maxWidth: "380px",
-              padding: "clamp(1.5rem, 3vw, 2rem)",
+              maxWidth: "420px",
+              padding: "clamp(1.75rem, 4vw, 2.25rem)",
+              borderRadius: "var(--radius-xl)",
             }}>
+              {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.75rem" }}>
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.25rem" }}>
-                    <span style={{ fontSize: "0.7rem", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.08em", color: "#d9f99d" }}>
-                      ABOX GATEWAY VAULT
-                    </span>
-                    <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#a3e635" }} />
+                  <div style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 450,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    color: "rgba(46, 48, 50, 0.7)",
+                    marginBottom: "0.25rem",
+                  }}>
+                    ABOX GATEWAY ENGINE
                   </div>
-                  <div style={{ fontSize: "1.15rem", fontWeight: 600, color: "#ffffff" }}>
-                    Active Workspace
+                  <div style={{ fontSize: "1.25rem", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+                    Policy Boundary Active
                   </div>
                 </div>
 
-                <div className="circle-action-btn circle-action-btn-dark">
-                  <ArrowUpRight size={15} />
+                <div className="icon-circle-btn">
+                  <ArrowUpRight size={16} strokeWidth={1.5} />
                 </div>
               </div>
 
-              {/* Contained Stat Capsule */}
+              {/* Elevated Clinical Capsule */}
               <div style={{
-                background: "rgba(0, 0, 0, 0.25)",
+                background: "rgba(255, 255, 255, 0.7)",
                 backdropFilter: "blur(16px)",
-                padding: "1.15rem",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid rgba(255, 255, 255, 0.15)",
+                padding: "1.25rem",
+                borderRadius: "var(--radius-lg)",
+                border: "1px solid rgba(255, 255, 255, 0.8)",
                 marginBottom: "1.5rem",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.02)",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.4rem" }}>
-                  <span style={{ fontSize: "0.75rem", color: "#cbd5e1" }}>Protected Documents</span>
-                  <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.72rem", color: "#a3e635", fontWeight: 600 }}>
-                    AES-256-GCM
+                  <span style={{ fontSize: "0.76rem", color: "var(--text-secondary)" }}>Data Transformation</span>
+                  <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.72rem", color: "var(--text-primary)", fontWeight: 500 }}>
+                    Zero-Trust Safe
                   </span>
                 </div>
-                <div style={{ fontSize: "clamp(1.8rem, 3.5vw, 2.2rem)", fontWeight: 700, lineHeight: 1, color: "#ffffff" }}>
-                  14 Files Active
+                <div style={{
+                  fontSize: "clamp(1.75rem, 3.5vw, 2.1rem)",
+                  fontWeight: 400,
+                  lineHeight: 1.1,
+                  letterSpacing: "-0.04em",
+                  color: "var(--text-primary)",
+                  marginBottom: "0.6rem",
+                }}>
+                  Live Redaction
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                  <span className="badge-status" style={{ fontSize: "0.68rem", padding: "0.15rem 0.5rem" }}>
+                    • PII Anonymized
+                  </span>
+                  <span className="badge-status" style={{ fontSize: "0.68rem", padding: "0.15rem 0.5rem" }}>
+                    • Column Level Masking
+                  </span>
+                  <span className="badge-status" style={{ fontSize: "0.68rem", padding: "0.15rem 0.5rem" }}>
+                    • AI Row Mutation
+                  </span>
                 </div>
               </div>
 
-              {/* Progress & Micro-dots Timeline */}
+              {/* Live Status Indicators */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                  <div className="dots-meter">
-                    <div className="dots-meter-dot active" />
-                    <div className="dots-meter-dot active" />
-                    <div className="dots-meter-dot active" />
-                    <div className="dots-meter-dot active" />
-                  </div>
-                  <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#d9f99d" }}>
-                    99.8% PII Masked
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#2E3032" }} />
+                  <span style={{ fontSize: "0.78rem", fontWeight: 450, color: "var(--text-primary)" }}>
+                    MCP v2024-11-05 Protocol
                   </span>
                 </div>
 
-                <span style={{ fontSize: "0.7rem", fontFamily: "JetBrains Mono, monospace", color: "rgba(255, 255, 255, 0.7)" }}>
-                  MCP v2024-11-05
+                <span style={{ fontSize: "0.74rem", color: "var(--text-secondary)", fontFamily: "JetBrains Mono, monospace" }}>
+                  SSE + Bearer Auth
                 </span>
               </div>
             </div>
@@ -154,102 +181,72 @@ export default function LandingPage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* 2. THREE CONSISTENT FROSTED GLASS FEATURE CARDS                           */}
+      {/* 2. RESTRAINED 3-COLUMN FEATURE CARDS                                      */}
       {/* ========================================================================= */}
-      <section style={{ marginBottom: "2.5rem" }}>
+      <section style={{ marginBottom: "2rem" }}>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-          gap: "1.5rem",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
+          gap: "1.25rem",
         }}>
           {/* Feature 1 */}
-          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
-              <div style={{
-                width: "38px",
-                height: "38px",
-                borderRadius: "var(--radius-sm)",
-                background: "rgba(132, 204, 22, 0.12)",
-                border: "1px solid rgba(132, 204, 22, 0.3)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--accent-lime)",
-              }}>
-                <Key size={17} />
+          <div className="frosted-panel" style={{ padding: "clamp(1.75rem, 3.5vw, 2.25rem)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+              <div className="icon-circle-btn">
+                <Key size={18} strokeWidth={1.5} />
               </div>
-              <span style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-muted)" }}>01</span>
+              <span style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-tertiary)" }}>01</span>
             </div>
-            <h3 style={{ fontSize: "1.15rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
-              Multi-Link MCP Sharing
+            <h3 style={{ fontSize: "1.2rem", fontWeight: 400, marginBottom: "0.45rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+              Custom AI MCP Links
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-              Create multiple distinct MCP links for different AI models. Each link has its own file access permissions and data privacy policies.
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6, fontWeight: 400 }}>
+              Generate independent MCP links for each AI tool or colleague. Control which files each link can access and rotate tokens with one click.
             </p>
           </div>
 
           {/* Feature 2 */}
-          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
-              <div style={{
-                width: "38px",
-                height: "38px",
-                borderRadius: "var(--radius-sm)",
-                background: "rgba(132, 204, 22, 0.12)",
-                border: "1px solid rgba(132, 204, 22, 0.3)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--accent-lime)",
-              }}>
-                <Shield size={17} />
+          <div className="frosted-panel" style={{ padding: "clamp(1.75rem, 3.5vw, 2.25rem)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+              <div className="icon-circle-btn">
+                <Sliders size={18} strokeWidth={1.5} />
               </div>
-              <span style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-muted)" }}>02</span>
+              <span style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-tertiary)" }}>02</span>
             </div>
-            <h3 style={{ fontSize: "1.15rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
-              Real-Time Data Masking
+            <h3 style={{ fontSize: "1.2rem", fontWeight: 400, marginBottom: "0.45rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+              Power Query Data Studio
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-              Automatically detect and mask emails, names, and SSNs. Remove or transform sensitive dataset columns before the AI receives results.
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6, fontWeight: 400 }}>
+              Upload Excel spreadsheets (.xlsx) and CSV files. Visually inspect columns, preview live masks, and drop confidential columns before sharing with AI.
             </p>
           </div>
 
           {/* Feature 3 */}
-          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
-              <div style={{
-                width: "38px",
-                height: "38px",
-                borderRadius: "var(--radius-sm)",
-                background: "rgba(132, 204, 22, 0.12)",
-                border: "1px solid rgba(132, 204, 22, 0.3)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--accent-lime)",
-              }}>
-                <Activity size={17} />
+          <div className="frosted-panel" style={{ padding: "clamp(1.75rem, 3.5vw, 2.25rem)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+              <div className="icon-circle-btn">
+                <Activity size={18} strokeWidth={1.5} />
               </div>
-              <span style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-muted)" }}>03</span>
+              <span style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-tertiary)" }}>03</span>
             </div>
-            <h3 style={{ fontSize: "1.15rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
-              Forensic Audit Trail
+            <h3 style={{ fontSize: "1.2rem", fontWeight: 400, marginBottom: "0.45rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+              Forensic Activity Trail
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-              Every resource read, semantic search, and dataset query is permanently logged with timestamps, caller identity, and policy decisions.
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6, fontWeight: 400 }}>
+              Every resource read, semantic search, dataset query, and AI row update is logged with exact timestamps and caller identity.
             </p>
           </div>
         </div>
       </section>
 
       {/* ========================================================================= */}
-      {/* 3. CLEAN OBSIDIAN CTA CARD                                                */}
+      {/* 3. SOFT CLINICAL CALLOUT BANNER                                           */}
       {/* ========================================================================= */}
       <section style={{
-        padding: "clamp(2rem, 4vw, 3rem) clamp(1.25rem, 4vw, 3rem)",
+        padding: "clamp(2.5rem, 5vw, 3.5rem) clamp(1.5rem, 4vw, 3rem)",
         borderRadius: "var(--radius-xl)",
-        background: "var(--color-obsidian)",
-        color: "#ffffff",
+        background: "#2E3032",
+        color: "#FFFFFF",
         boxShadow: "var(--shadow-lg)",
         display: "flex",
         justifyContent: "space-between",
@@ -258,14 +255,27 @@ export default function LandingPage() {
         gap: "1.75rem",
       }}>
         <div style={{ maxWidth: "560px" }}>
-          <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "#a3e635", fontWeight: 600, marginBottom: "0.4rem" }}>
-            INSTANT CLOUD SETUP
+          <div style={{
+            fontSize: "0.72rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            color: "rgba(255, 255, 255, 0.6)",
+            fontWeight: 450,
+            marginBottom: "0.5rem",
+          }}>
+            READY IN SECONDS
           </div>
-          <h2 style={{ fontSize: "clamp(1.5rem, 3vw, 2.1rem)", fontWeight: 600, color: "#ffffff", marginBottom: "0.6rem" }}>
-            Ready to give your AI agents safe data access?
+          <h2 style={{
+            fontSize: "clamp(1.5rem, 3vw, 2.1rem)",
+            fontWeight: 400,
+            color: "#FFFFFF",
+            marginBottom: "0.6rem",
+            letterSpacing: "-0.03em",
+          }}>
+            Give your AI agents safe data access today.
           </h2>
-          <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: 1.5 }}>
-            Create an isolated workspace, upload documents, and generate custom MCP links for Claude or Cursor in under 60 seconds.
+          <p style={{ color: "rgba(255, 255, 255, 0.7)", fontSize: "0.92rem", lineHeight: 1.5, fontWeight: 400 }}>
+            Create an isolated workspace, upload documents, and generate custom MCP links for Claude Desktop or Cursor.
           </p>
         </div>
 
@@ -273,10 +283,16 @@ export default function LandingPage() {
           <button
             onClick={() => checkAndNavigate("/register")}
             className="pill-btn"
-            style={{ background: "#ffffff", color: "var(--color-obsidian)", fontWeight: 600, padding: "0.75rem 1.6rem" }}
+            style={{
+              background: "#FFFFFF",
+              color: "#2E3032",
+              fontWeight: 450,
+              padding: "0.85rem 1.75rem",
+              fontSize: "0.92rem",
+            }}
           >
-            <span>Create Free Workspace</span>
-            <ArrowRight size={15} />
+            <span>Create Workspace</span>
+            <ArrowRight size={15} strokeWidth={1.5} />
           </button>
         </div>
       </section>

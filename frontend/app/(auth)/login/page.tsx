@@ -39,24 +39,24 @@ export default function LoginPage() {
       alignItems: "center",
       justifyContent: "center",
       minHeight: "calc(100vh - 160px)",
-      padding: "2rem",
+      padding: "2rem 1rem",
     }}>
       <div className="frosted-panel" style={{
         width: "100%",
         maxWidth: "420px",
-        padding: "2.75rem 2.25rem",
-        boxShadow: "var(--shadow-lg)",
+        padding: "clamp(2rem, 5vw, 2.75rem) clamp(1.5rem, 4vw, 2.25rem)",
         borderRadius: "var(--radius-xl)",
-        background: "#ffffff",
+        background: "#FFFFFF",
+        boxShadow: "var(--shadow-lg)",
       }}>
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div className="slash-tag" style={{ justifyContent: "center" }}>
-            ACCOUNT LOGIN
+            ACCOUNT ACCESS
           </div>
-          <h1 className="font-hero" style={{ fontSize: "1.85rem", marginBottom: "0.3rem", color: "#0f172a" }}>
+          <h1 className="font-hero" style={{ fontSize: "1.85rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.03em" }}>
             Sign In
           </h1>
-          <p style={{ fontSize: "0.88rem", color: "#64748b" }}>
+          <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", fontWeight: 400 }}>
             Access your workspaces and MCP credentials
           </p>
         </div>
@@ -64,10 +64,10 @@ export default function LoginPage() {
         {error && (
           <div style={{
             background: "var(--status-deny-bg)",
-            border: "1px solid var(--status-deny-border)",
+            border: "1px solid rgba(194, 65, 12, 0.15)",
             color: "var(--status-deny)",
             padding: "0.75rem 1rem",
-            borderRadius: "var(--radius-md)",
+            borderRadius: "var(--radius-sm)",
             fontSize: "0.85rem",
             marginBottom: "1.5rem",
           }}>
@@ -77,7 +77,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
           <div>
-            <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: "0.45rem", color: "#475569" }}>
+            <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--text-secondary)" }}>
               Username
             </label>
             <input
@@ -91,14 +91,14 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: "0.45rem", color: "#475569" }}>
+            <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--text-secondary)" }}>
               Password
             </label>
             <input
               type="password"
               required
               className="modern-input"
-              placeholder="••••••••••••"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -108,30 +108,17 @@ export default function LoginPage() {
             type="submit"
             disabled={loading}
             className="pill-btn pill-btn-solid"
-            style={{ width: "100%", padding: "0.8rem", marginTop: "0.5rem" }}
+            style={{ width: "100%", padding: "0.85rem", marginTop: "0.5rem" }}
           >
-            {loading ? "Verifying..." : "Sign In"}
-            <ArrowRight size={13} />
+            {loading ? "Authenticating..." : "Sign In"}
+            <ArrowRight size={14} strokeWidth={1.5} />
           </button>
         </form>
 
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "0.4rem",
-          marginTop: "1.75rem",
-          fontSize: "0.78rem",
-          color: "#64748b",
-        }}>
-          <ShieldCheck size={14} color="#16a34a" />
-          <span>Secure authentication with JWT</span>
-        </div>
-
-        <div style={{ textAlign: "center", marginTop: "1.25rem", fontSize: "0.85rem", color: "#64748b" }}>
+        <div style={{ marginTop: "2rem", textAlign: "center", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
           Don&apos;t have an account?{" "}
-          <Link href="/register" style={{ color: "#0f172a", fontWeight: 600, textDecoration: "underline" }}>
-            Register
+          <Link href="/register" style={{ color: "var(--text-primary)", fontWeight: 500, textDecoration: "none" }}>
+            Create one
           </Link>
         </div>
       </div>

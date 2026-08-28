@@ -189,7 +189,6 @@ export default function WorkspaceDetailPage() {
           setSelectedColumnName(parsed[0].name);
         }
       } else {
-        // Fallback if structured data is plain text
         setDynamicColumns([]);
         setDynamicRowsCount(0);
         setIsTableDetected(false);
@@ -442,7 +441,7 @@ export default function WorkspaceDetailPage() {
   if (loading || !workspace) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "65vh" }}>
-        <div style={{ color: "var(--text-muted)", fontSize: "0.95rem" }}>Loading workspace...</div>
+        <div style={{ color: "var(--text-tertiary)", fontSize: "0.95rem" }}>Loading workspace...</div>
       </div>
     );
   }
@@ -458,7 +457,11 @@ export default function WorkspaceDetailPage() {
   ];
 
   return (
-    <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "clamp(1.5rem, 3vw, 2.5rem) clamp(1rem, 3vw, 1.5rem) 5rem clamp(1rem, 3vw, 1.5rem)" }}>
+    <div style={{
+      maxWidth: "1160px",
+      margin: "0 auto",
+      padding: "clamp(2rem, 4vw, 3rem) clamp(1rem, 3vw, 1.5rem) 5rem clamp(1rem, 3vw, 1.5rem)",
+    }}>
       {/* Toast Notification */}
       {notification && (
         <div style={{
@@ -466,19 +469,19 @@ export default function WorkspaceDetailPage() {
           bottom: "2rem",
           right: "2rem",
           zIndex: 200,
-          background: notification.type === "success" ? "var(--color-obsidian)" : "#dc2626",
-          color: "#ffffff",
+          background: "#2E3032",
+          color: "#FFFFFF",
           padding: "0.75rem 1.25rem",
           borderRadius: "var(--radius-pill)",
           boxShadow: "var(--shadow-lg)",
-          fontWeight: 500,
+          fontWeight: 450,
           fontSize: "0.85rem",
           display: "flex",
           alignItems: "center",
           gap: "0.5rem",
           maxWidth: "calc(100vw - 4rem)",
         }}>
-          {notification.type === "success" ? <ShieldCheck size={16} color="#4ade80" /> : <AlertTriangle size={16} />}
+          {notification.type === "success" ? <ShieldCheck size={16} strokeWidth={1.5} /> : <AlertTriangle size={16} strokeWidth={1.5} />}
           <span>{notification.text}</span>
         </div>
       )}
@@ -490,7 +493,7 @@ export default function WorkspaceDetailPage() {
         alignItems: "center",
         marginBottom: "2.5rem",
         paddingBottom: "1.5rem",
-        borderBottom: "1px solid var(--glass-border-subtle)",
+        borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
         flexWrap: "wrap",
         gap: "1.25rem",
       }}>
@@ -499,14 +502,14 @@ export default function WorkspaceDetailPage() {
             <Link href="/dashboard" className="slash-tag" style={{ textDecoration: "none", margin: 0 }}>
               WORKSPACES
             </Link>
-            <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>/</span>
-            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
+            <span style={{ color: "var(--text-tertiary)", fontSize: "0.8rem" }}>/</span>
+            <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontFamily: "JetBrains Mono, monospace" }}>
               {workspace.name}
             </span>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <h1 className="font-hero" style={{ fontSize: "clamp(1.8rem, 3vw, 2.4rem)", letterSpacing: "-0.025em", color: "var(--color-obsidian)" }}>
+            <h1 className="font-hero" style={{ fontSize: "clamp(1.8rem, 3vw, 2.5rem)", letterSpacing: "-0.04em", color: "var(--text-primary)" }}>
               {workspace.name}
             </h1>
             <span className={`badge-status ${workspace.is_active ? "badge-status-allow" : "badge-status-deny"}`}>
@@ -527,7 +530,7 @@ export default function WorkspaceDetailPage() {
             className="pill-btn pill-btn-glass"
             style={{ padding: "0.65rem 1.25rem", fontSize: "0.88rem" }}
           >
-            <Upload size={15} />
+            <Upload size={15} strokeWidth={1.5} />
             <span>Upload Document</span>
           </button>
 
@@ -545,7 +548,7 @@ export default function WorkspaceDetailPage() {
             className="pill-btn pill-btn-solid"
             style={{ padding: "0.65rem 1.25rem", fontSize: "0.88rem" }}
           >
-            <Share2 size={15} />
+            <Share2 size={15} strokeWidth={1.5} />
             <span>Share MCP Link</span>
           </button>
         </div>
@@ -555,12 +558,12 @@ export default function WorkspaceDetailPage() {
       <div style={{ marginBottom: "2rem", overflowX: "auto", paddingBottom: "0.5rem" }}>
         <div className="pill-tabs-bar" style={{ display: "flex", flexWrap: "nowrap" }}>
           {[
-            { id: "documents", label: `Documents (${files.length})`, icon: <FileText size={14} /> },
-            { id: "links", label: `AI Links (${mcpCredentials.length})`, icon: <Key size={14} /> },
-            { id: "privacy", label: `Privacy Rules (${policies.resource_policies.length + policies.anonymisation_rules.length})`, icon: <Shield size={14} /> },
-            { id: "activity", label: `Activity Trail (${auditLogs.length})`, icon: <ScrollText size={14} /> },
-            { id: "playground", label: "Test Console", icon: <Terminal size={14} /> },
-            { id: "settings", label: "Settings", icon: <Settings size={14} /> },
+            { id: "documents", label: `Documents (${files.length})`, icon: <FileText size={14} strokeWidth={1.5} /> },
+            { id: "links", label: `AI Links (${mcpCredentials.length})`, icon: <Key size={14} strokeWidth={1.5} /> },
+            { id: "privacy", label: `Privacy Rules (${policies.resource_policies.length + policies.anonymisation_rules.length})`, icon: <Shield size={14} strokeWidth={1.5} /> },
+            { id: "activity", label: `Activity Trail (${auditLogs.length})`, icon: <ScrollText size={14} strokeWidth={1.5} /> },
+            { id: "playground", label: "Test Console", icon: <Terminal size={14} strokeWidth={1.5} /> },
+            { id: "settings", label: "Settings", icon: <Settings size={14} strokeWidth={1.5} /> },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -576,37 +579,26 @@ export default function WorkspaceDetailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: DOCUMENTS (NO VIEW CONTENT FOR PDF DOCUMENTS AS REQUESTED)        */}
+      {/* TAB 1: DOCUMENTS                                                          */}
       {/* ========================================================================= */}
       {activeTab === "documents" && (
         <div>
           {files.length === 0 ? (
             <div className="frosted-panel" style={{ textAlign: "center", padding: "clamp(3rem, 6vw, 5rem) 1.5rem" }}>
-              <div style={{
-                width: "56px",
-                height: "56px",
-                borderRadius: "14px",
-                background: "var(--accent-lime-bg)",
-                border: "1px solid var(--accent-lime-border)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 1.25rem auto",
-                color: "var(--accent-lime)",
-              }}>
-                <FileText size={26} />
+              <div className="icon-circle-btn" style={{ width: "56px", height: "56px", margin: "0 auto 1.25rem auto" }}>
+                <FileText size={24} strokeWidth={1.5} />
               </div>
-              <h3 style={{ fontSize: "1.3rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
+              <h3 style={{ fontSize: "1.3rem", fontWeight: 400, marginBottom: "0.4rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
                 No documents uploaded yet
               </h3>
-              <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", maxWidth: "440px", margin: "0 auto 1.75rem auto", lineHeight: 1.6 }}>
+              <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", maxWidth: "440px", margin: "0 auto 1.75rem auto", lineHeight: 1.6, fontWeight: 400 }}>
                 Upload Excel spreadsheets (.xlsx), CSV data tables, PDFs, or JSON datasets. AI models can safely query them under policy control.
               </p>
               <button
                 onClick={() => setUploadModalOpen(true)}
                 className="pill-btn pill-btn-solid"
               >
-                <Upload size={15} />
+                <Upload size={15} strokeWidth={1.5} />
                 Upload Your First Document
               </button>
             </div>
@@ -626,18 +618,18 @@ export default function WorkspaceDetailPage() {
                 <tbody>
                   {files.map((file) => (
                     <tr key={file.id}>
-                      <td style={{ fontWeight: 500, color: "var(--color-obsidian)" }}>
+                      <td style={{ fontWeight: 450, color: "var(--text-primary)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                          <FileText size={16} color={isDataFile(file) ? "var(--accent-lime)" : "#64748b"} />
+                          <FileText size={16} strokeWidth={1.5} color={isDataFile(file) ? "#2E3032" : "#989B9D"} />
                           <span>{file.original_filename}</span>
                         </div>
                       </td>
                       <td>
-                        <span className="badge-status" style={{ background: "rgba(0,0,0,0.04)", color: "var(--text-secondary)" }}>
+                        <span className="badge-status">
                           {file.file_type}
                         </span>
                       </td>
-                      <td style={{ color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem" }}>
+                      <td style={{ color: "var(--text-secondary)", fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem" }}>
                         {(file.file_size / 1024).toFixed(1)} KB
                       </td>
                       <td>
@@ -645,12 +637,11 @@ export default function WorkspaceDetailPage() {
                           {file.status === "READY" ? "Ready for AI" : file.status}
                         </span>
                       </td>
-                      <td style={{ color: "var(--text-dim)", fontSize: "0.82rem" }}>
+                      <td style={{ color: "var(--text-tertiary)", fontSize: "0.82rem" }}>
                         {new Date(file.created_at).toLocaleDateString()}
                       </td>
                       <td style={{ textAlign: "right" }}>
                         <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
-                          {/* ONLY CSV / XLSX / JSON show View Content; NO view content for PDF documents */}
                           {file.file_type !== "PDF" && (
                             <button
                               onClick={() => handleViewContent(file)}
@@ -667,7 +658,7 @@ export default function WorkspaceDetailPage() {
                               style={{ padding: "0.3rem 0.6rem", color: "var(--status-deny)" }}
                               title="Delete file"
                             >
-                              <Trash2 size={13} />
+                              <Trash2 size={13} strokeWidth={1.5} />
                             </button>
                           )}
                         </div>
@@ -682,18 +673,18 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: AI LINKS */}
+      {/* TAB 2: AI LINKS                                                           */}
       {/* ========================================================================= */}
       {activeTab === "links" && (
         <div>
-          <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)", marginBottom: "1.75rem" }}>
+          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)", marginBottom: "1.75rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
               <div>
                 <div className="slash-tag">AI CONNECTIONS</div>
-                <h3 style={{ fontSize: "1.3rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
+                <h3 style={{ fontSize: "1.3rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
                   Active MCP Sharing Links
                 </h3>
-                <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", maxWidth: "600px", lineHeight: 1.5 }}>
+                <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", maxWidth: "600px", lineHeight: 1.5, fontWeight: 400 }}>
                   Create as many distinct MCP links as you need. Each link has dedicated document permissions, custom data masking policies, and AI mutation rights.
                 </p>
               </div>
@@ -710,7 +701,7 @@ export default function WorkspaceDetailPage() {
                 }}
                 className="pill-btn pill-btn-solid"
               >
-                <Plus size={15} />
+                <Plus size={15} strokeWidth={1.5} />
                 Create New MCP Link
               </button>
             </div>
@@ -730,23 +721,23 @@ export default function WorkspaceDetailPage() {
               <tbody>
                 {mcpCredentials.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: "center", padding: "4rem", color: "var(--text-dim)" }}>
+                    <td colSpan={5} style={{ textAlign: "center", padding: "4rem", color: "var(--text-tertiary)" }}>
                       No links created yet. Click &quot;Create New MCP Link&quot; above to connect Claude Desktop or an AI agent.
                     </td>
                   </tr>
                 ) : (
                   mcpCredentials.map((cred) => (
                     <tr key={cred.id}>
-                      <td style={{ fontWeight: 500, color: "var(--color-obsidian)" }}>
+                      <td style={{ fontWeight: 450, color: "var(--text-primary)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <Key size={15} color="var(--accent-lime)" />
+                          <Key size={15} strokeWidth={1.5} color="var(--text-primary)" />
                           <span>{cred.name}</span>
                         </div>
                       </td>
-                      <td style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", color: "var(--accent-lime)" }}>
+                      <td style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
                         {cred.credential_prefix}...
                       </td>
-                      <td style={{ color: "var(--text-dim)", fontSize: "0.82rem" }}>
+                      <td style={{ color: "var(--text-tertiary)", fontSize: "0.82rem" }}>
                         {new Date(cred.created_at).toLocaleDateString()}
                       </td>
                       <td>
@@ -784,23 +775,23 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: PRIVACY RULES & POLICIES */}
+      {/* TAB 3: PRIVACY RULES & POLICIES                                          */}
       {/* ========================================================================= */}
       {activeTab === "privacy" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))", gap: "1.75rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))", gap: "1.5rem" }}>
           {/* Anonymisation Rules */}
-          <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)" }}>
+          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)" }}>
             <div className="slash-tag">DATA MASKING</div>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
               Active Anonymisation Rules
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem", fontWeight: 400 }}>
               These rules mask sensitive PII before AI models receive query results.
             </p>
 
             <div>
               {policies.anonymisation_rules.length === 0 ? (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", fontStyle: "italic", padding: "1rem 0" }}>
+                <div style={{ fontSize: "0.85rem", color: "var(--text-tertiary)", fontStyle: "italic", padding: "1rem 0" }}>
                   No active masking rules.
                 </div>
               ) : (
@@ -812,14 +803,14 @@ export default function WorkspaceDetailPage() {
                       justifyContent: "space-between",
                       alignItems: "center",
                       padding: "0.85rem 0",
-                      borderBottom: "1px solid var(--glass-border-subtle)",
+                      borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
                       flexWrap: "wrap",
                       gap: "0.5rem",
                     }}
                   >
                     <div>
-                      <div style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-obsidian)" }}>{rule.entity_type}</div>
-                      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                      <div style={{ fontWeight: 450, fontSize: "0.9rem", color: "var(--text-primary)" }}>{rule.entity_type}</div>
+                      <div style={{ fontSize: "0.78rem", color: "var(--text-tertiary)" }}>
                         {rule.field_name ? `Field: ${rule.field_name}` : "All occurrences"}
                       </div>
                     </div>
@@ -833,18 +824,18 @@ export default function WorkspaceDetailPage() {
           </div>
 
           {/* Document Access Restrictions */}
-          <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)" }}>
+          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)" }}>
             <div className="slash-tag">DOCUMENT ACCESS</div>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
               File Permissions
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem", fontWeight: 400 }}>
               Restrictions placed on individual files or workspace resources.
             </p>
 
             <div>
               {policies.resource_policies.length === 0 ? (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", fontStyle: "italic", padding: "1rem 0" }}>
+                <div style={{ fontSize: "0.85rem", color: "var(--text-tertiary)", fontStyle: "italic", padding: "1rem 0" }}>
                   All uploaded files are accessible to authorized AI tokens.
                 </div>
               ) : (
@@ -858,12 +849,12 @@ export default function WorkspaceDetailPage() {
                         justifyContent: "space-between",
                         alignItems: "center",
                         padding: "0.85rem 0",
-                        borderBottom: "1px solid var(--glass-border-subtle)",
+                        borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
                         flexWrap: "wrap",
                         gap: "0.5rem",
                       }}
                     >
-                      <div style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-obsidian)" }}>
+                      <div style={{ fontWeight: 450, fontSize: "0.9rem", color: "var(--text-primary)" }}>
                         {targetFile ? targetFile.original_filename : "All Files (Default)"}
                       </div>
                       <span className={`badge-status ${p.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
@@ -879,13 +870,13 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 4: ACTIVITY TRAIL */}
+      {/* TAB 4: ACTIVITY TRAIL                                                     */}
       {/* ========================================================================= */}
       {activeTab === "activity" && (
         <div className="frosted-panel" style={{ overflow: "hidden" }}>
           <div style={{
             padding: "1.25rem 1.5rem",
-            borderBottom: "1px solid var(--glass-border-subtle)",
+            borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -894,13 +885,13 @@ export default function WorkspaceDetailPage() {
           }}>
             <div>
               <div className="slash-tag">AUDIT TRAIL</div>
-              <h3 style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--color-obsidian)" }}>Activity &amp; Query Log</h3>
-              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Activity &amp; Query Log</h3>
+              <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.2rem", fontWeight: 400 }}>
                 Every tool call, query, and data mutation is logged securely without exposing secrets.
               </p>
             </div>
             <button onClick={loadWorkspaceData} className="pill-btn pill-btn-glass" style={{ padding: "0.4rem 0.9rem", fontSize: "0.8rem" }}>
-              <RefreshCw size={13} />
+              <RefreshCw size={13} strokeWidth={1.5} />
               Refresh
             </button>
           </div>
@@ -919,21 +910,21 @@ export default function WorkspaceDetailPage() {
               <tbody>
                 {auditLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: "center", padding: "4rem", color: "var(--text-dim)" }}>
+                    <td colSpan={5} style={{ textAlign: "center", padding: "4rem", color: "var(--text-tertiary)" }}>
                       No activity recorded yet.
                     </td>
                   </tr>
                 ) : (
                   auditLogs.map((log) => (
                     <tr key={log.id}>
-                      <td style={{ color: "var(--text-dim)", whiteSpace: "nowrap", fontFamily: "JetBrains Mono, monospace", fontSize: "0.78rem" }}>
+                      <td style={{ color: "var(--text-tertiary)", whiteSpace: "nowrap", fontFamily: "JetBrains Mono, monospace", fontSize: "0.78rem" }}>
                         {new Date(log.timestamp).toLocaleTimeString()} · {new Date(log.timestamp).toLocaleDateString()}
                       </td>
-                      <td style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 500, fontSize: "0.85rem", color: "var(--accent-lime)" }}>
+                      <td style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 500, fontSize: "0.85rem", color: "var(--text-primary)" }}>
                         {log.operation}
                       </td>
                       <td>
-                        <span className="badge-status" style={{ background: "rgba(0,0,0,0.04)", color: "var(--text-secondary)" }}>
+                        <span className="badge-status">
                           {log.actor_type}
                         </span>
                       </td>
@@ -942,7 +933,7 @@ export default function WorkspaceDetailPage() {
                           {log.decision}
                         </span>
                       </td>
-                      <td style={{ color: "var(--text-muted)", maxWidth: "320px", fontSize: "0.82rem" }}>
+                      <td style={{ color: "var(--text-secondary)", maxWidth: "320px", fontSize: "0.82rem" }}>
                         {log.reason || "—"}
                       </td>
                     </tr>
@@ -955,22 +946,22 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 5: TEST CONSOLE (PLAYGROUND) */}
+      {/* TAB 5: TEST CONSOLE (PLAYGROUND)                                          */}
       {/* ========================================================================= */}
       {activeTab === "playground" && (
-        <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)" }}>
+        <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)" }}>
           <div className="slash-tag">DEVELOPER CONSOLE</div>
-          <h3 style={{ fontSize: "1.3rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
+          <h3 style={{ fontSize: "1.3rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
             MCP Tool Test Console
           </h3>
-          <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.75rem" }}>
+          <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem", fontWeight: 400 }}>
             Test live JSON-RPC requests directly against your MCP gateway, including queries and data edits.
           </p>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1.75rem" }}>
             <div>
               <div style={{ marginBottom: "1.25rem" }}>
-                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
                   Bearer MCP Token
                 </label>
                 <input
@@ -984,7 +975,7 @@ export default function WorkspaceDetailPage() {
               </div>
 
               <div style={{ marginBottom: "1.25rem" }}>
-                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
                   Tool Name
                 </label>
                 <select
@@ -1026,7 +1017,7 @@ export default function WorkspaceDetailPage() {
               </div>
 
               <div style={{ marginBottom: "1.5rem" }}>
-                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
                   Arguments (JSON)
                 </label>
                 <textarea
@@ -1043,16 +1034,16 @@ export default function WorkspaceDetailPage() {
                 className="pill-btn pill-btn-solid"
                 style={{ width: "100%", padding: "0.75rem" }}
               >
-                <Terminal size={15} />
+                <Terminal size={15} strokeWidth={1.5} />
                 {playgroundLoading ? "Running..." : "Run MCP Request"}
               </button>
             </div>
 
             <div style={{
               borderRadius: "var(--radius-lg)",
-              border: "1px solid var(--glass-border-subtle)",
-              background: "var(--color-obsidian)",
-              color: "#ffffff",
+              border: "1px solid rgba(40, 40, 40, 0.06)",
+              background: "#2E3032",
+              color: "#FFFFFF",
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
@@ -1060,10 +1051,10 @@ export default function WorkspaceDetailPage() {
               <div style={{
                 padding: "0.75rem 1.25rem",
                 background: "rgba(255, 255, 255, 0.05)",
-                borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
                 fontSize: "0.75rem",
                 fontFamily: "JetBrains Mono, monospace",
-                color: "var(--text-muted)",
+                color: "rgba(255, 255, 255, 0.6)",
               }}>
                 response.json
               </div>
@@ -1077,9 +1068,9 @@ export default function WorkspaceDetailPage() {
                 maxHeight: "340px",
               }}>
                 {playgroundResult ? (
-                  <pre style={{ color: "#84cc16" }}>{JSON.stringify(playgroundResult, null, 2)}</pre>
+                  <pre style={{ color: "#FFE63C" }}>{JSON.stringify(playgroundResult, null, 2)}</pre>
                 ) : (
-                  <div style={{ color: "var(--text-dim)", fontStyle: "italic", paddingTop: "2rem", textAlign: "center" }}>
+                  <div style={{ color: "rgba(255, 255, 255, 0.4)", fontStyle: "italic", paddingTop: "2rem", textAlign: "center" }}>
                     Results from the MCP gateway will appear here.
                   </div>
                 )}
@@ -1090,17 +1081,17 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 6: SETTINGS */}
+      {/* TAB 6: SETTINGS                                                           */}
       {/* ========================================================================= */}
       {activeTab === "settings" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: "1.75rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: "1.5rem" }}>
           {/* Members */}
-          <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)" }}>
+          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)" }}>
             <div className="slash-tag">TEAM ACCESS</div>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
               Workspace Access
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem", fontWeight: 400 }}>
               Share this workspace with colleagues by username.
             </p>
 
@@ -1139,23 +1130,23 @@ export default function WorkspaceDetailPage() {
                     justifyContent: "space-between",
                     alignItems: "center",
                     padding: "0.85rem 0",
-                    borderBottom: "1px solid var(--glass-border-subtle)",
+                    borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
                     flexWrap: "wrap",
                     gap: "0.5rem",
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-obsidian)" }}>{m.username || m.user_id}</div>
-                    <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Joined {new Date(m.created_at).toLocaleDateString()}</div>
+                    <div style={{ fontWeight: 450, fontSize: "0.9rem", color: "var(--text-primary)" }}>{m.username || m.user_id}</div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-tertiary)" }}>Joined {new Date(m.created_at).toLocaleDateString()}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <span className="badge-status" style={{ background: "rgba(0,0,0,0.04)", color: "var(--text-secondary)" }}>{m.role}</span>
+                    <span className="badge-status">{m.role}</span>
                     {workspace.role === "OWNER" && m.user_id !== workspace.owner_id && (
                       <button
                         onClick={() => handleRemoveMember(m.id)}
-                        style={{ color: "var(--text-dim)", background: "transparent", border: "none", cursor: "pointer" }}
+                        style={{ color: "var(--text-tertiary)", background: "transparent", border: "none", cursor: "pointer" }}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={14} strokeWidth={1.5} />
                       </button>
                     )}
                   </div>
@@ -1165,12 +1156,12 @@ export default function WorkspaceDetailPage() {
           </div>
 
           {/* Danger Zone */}
-          <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)", border: "1px solid rgba(220, 38, 38, 0.25)", background: "var(--status-deny-bg)" }}>
+          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)", border: "1px solid rgba(194, 65, 12, 0.15)", background: "var(--status-deny-bg)" }}>
             <div className="slash-tag" style={{ color: "var(--status-deny)" }}>DANGER ZONE</div>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--status-deny)", marginBottom: "0.3rem" }}>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 400, color: "var(--status-deny)", marginBottom: "0.3rem", letterSpacing: "-0.02em" }}>
               Delete Workspace
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "#991b1b", marginBottom: "1.5rem" }}>
+            <p style={{ fontSize: "0.88rem", color: "#9a3412", marginBottom: "1.5rem", fontWeight: 400 }}>
               Permanently delete this workspace and all associated files.
             </p>
 
@@ -1178,9 +1169,9 @@ export default function WorkspaceDetailPage() {
               <button
                 onClick={handleDeleteWorkspace}
                 className="pill-btn pill-btn-glass"
-                style={{ color: "var(--status-deny)", borderColor: "rgba(220, 38, 38, 0.3)" }}
+                style={{ color: "var(--status-deny)", borderColor: "rgba(194, 65, 12, 0.25)" }}
               >
-                <Trash2 size={14} />
+                <Trash2 size={14} strokeWidth={1.5} />
                 Delete Workspace Permanently
               </button>
             )}
@@ -1189,7 +1180,7 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 3-STEP UPLOAD MODAL */}
+      {/* 3-STEP UPLOAD MODAL                                                       */}
       {/* ========================================================================= */}
       {uploadModalOpen && (
         <div style={{
@@ -1198,7 +1189,7 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(15, 23, 42, 0.35)",
+          background: "rgba(46, 48, 50, 0.35)",
           backdropFilter: "blur(12px)",
           display: "flex",
           alignItems: "center",
@@ -1211,7 +1202,7 @@ export default function WorkspaceDetailPage() {
             maxWidth: "520px",
             padding: "clamp(1.75rem, 4vw, 2.5rem) clamp(1.25rem, 3vw, 2.25rem)",
             position: "relative",
-            background: "#ffffff",
+            background: "#FFFFFF",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
             maxHeight: "92vh",
@@ -1219,40 +1210,33 @@ export default function WorkspaceDetailPage() {
           }}>
             <button
               onClick={() => setUploadModalOpen(false)}
+              className="icon-circle-btn"
               style={{
                 position: "absolute",
                 top: "1.25rem",
                 right: "1.25rem",
-                width: "30px",
-                height: "30px",
-                borderRadius: "50%",
-                background: "var(--canvas-bg)",
-                border: "1px solid var(--glass-border-subtle)",
-                color: "var(--text-muted)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
+                width: "32px",
+                height: "32px",
               }}
             >
-              <X size={14} />
+              <X size={14} strokeWidth={1.5} />
             </button>
 
-            <div className="slash-tag">EASY UPLOAD</div>
-            <h2 style={{ fontSize: "1.4rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
+            <div className="slash-tag">DOCUMENT INGESTION</div>
+            <h2 style={{ fontSize: "1.35rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
               Upload Document to Workspace
             </h2>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
-              Follow 3 simple steps to add files for your AI agents to query.
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem", lineHeight: 1.5, fontWeight: 400 }}>
+              Follow simple steps to add files for your AI agents to query.
             </p>
 
             {/* Step 1: File selection */}
             <div style={{ marginBottom: "1.5rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "var(--color-obsidian)", color: "#fff", fontSize: "0.75rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#2E3032", color: "#FFFFFF", fontSize: "0.72rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   1
                 </span>
-                <span style={{ fontSize: "0.82rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)" }}>
+                <span style={{ fontSize: "0.8rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
                   Choose Your File
                 </span>
               </div>
@@ -1263,19 +1247,19 @@ export default function WorkspaceDetailPage() {
                   flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  padding: "1.75rem 1rem",
-                  border: "2px dashed var(--glass-border-subtle)",
+                  padding: "2rem 1rem",
+                  border: "1px dashed rgba(40, 40, 40, 0.12)",
                   borderRadius: "var(--radius-md)",
-                  background: "var(--canvas-bg)",
+                  background: "var(--bg-page)",
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                   textAlign: "center",
                 }}>
-                  <Upload size={24} color="var(--accent-lime)" style={{ marginBottom: "0.5rem" }} />
-                  <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--color-obsidian)" }}>
+                  <Upload size={22} strokeWidth={1.5} color="var(--text-primary)" style={{ marginBottom: "0.5rem" }} />
+                  <span style={{ fontWeight: 450, fontSize: "0.9rem", color: "var(--text-primary)" }}>
                     Click to browse or drag file here
                   </span>
-                  <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.25rem" }}>
+                  <span style={{ fontSize: "0.78rem", color: "var(--text-tertiary)", marginTop: "0.25rem" }}>
                     Excel (.xlsx, .xls), CSV, JSON, PDF, DOCX, TXT (up to 50MB)
                   </span>
                   <input
@@ -1295,22 +1279,22 @@ export default function WorkspaceDetailPage() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "0.85rem 1.1rem",
-                  background: "var(--canvas-bg)",
+                  background: "var(--bg-page)",
                   borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--glass-border-subtle)",
+                  border: "1px solid rgba(40, 40, 40, 0.05)",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                    <FileText size={18} color="var(--accent-lime)" />
+                    <FileText size={18} strokeWidth={1.5} color="var(--text-primary)" />
                     <div>
-                      <div style={{ fontWeight: 500, fontSize: "0.88rem", color: "var(--color-obsidian)" }}>{uploadFile.name}</div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{(uploadFile.size / 1024).toFixed(1)} KB</div>
+                      <div style={{ fontWeight: 450, fontSize: "0.88rem", color: "var(--text-primary)" }}>{uploadFile.name}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>{(uploadFile.size / 1024).toFixed(1)} KB</div>
                     </div>
                   </div>
                   <button
                     onClick={() => setUploadFile(null)}
-                    style={{ background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer" }}
+                    style={{ background: "transparent", border: "none", color: "var(--text-tertiary)", cursor: "pointer" }}
                   >
-                    <X size={15} />
+                    <X size={15} strokeWidth={1.5} />
                   </button>
                 </div>
               )}
@@ -1319,10 +1303,10 @@ export default function WorkspaceDetailPage() {
             {/* Step 2: Description for AI */}
             <div style={{ marginBottom: "1.75rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "var(--color-obsidian)", color: "#fff", fontSize: "0.75rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#2E3032", color: "#FFFFFF", fontSize: "0.72rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   2
                 </span>
-                <span style={{ fontSize: "0.82rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)" }}>
+                <span style={{ fontSize: "0.8rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
                   Add Description for AI (Optional)
                 </span>
               </div>
@@ -1351,7 +1335,7 @@ export default function WorkspaceDetailPage() {
                 className="pill-btn pill-btn-solid"
               >
                 {uploading ? "Processing Document..." : "Upload & Save"}
-                <ArrowRight size={13} />
+                <ArrowRight size={13} strokeWidth={1.5} />
               </button>
             </div>
           </div>
@@ -1368,7 +1352,7 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(15, 23, 42, 0.45)",
+          background: "rgba(46, 48, 50, 0.4)",
           backdropFilter: "blur(14px)",
           display: "flex",
           alignItems: "center",
@@ -1383,7 +1367,7 @@ export default function WorkspaceDetailPage() {
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            background: "#ffffff",
+            background: "#FFFFFF",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
             transition: "max-width 0.25s ease",
@@ -1391,7 +1375,7 @@ export default function WorkspaceDetailPage() {
             {/* Header with Step Tracker */}
             <div style={{
               padding: "1.25rem clamp(1rem, 3vw, 2rem) 1rem clamp(1rem, 3vw, 2rem)",
-              borderBottom: "1px solid var(--glass-border-subtle)",
+              borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -1404,7 +1388,7 @@ export default function WorkspaceDetailPage() {
                     ? `STEP ${shareStep} OF 2: ${shareStep === 1 ? "SELECT FILES" : "POWER QUERY DATA TRANSFORMATION"}`
                     : "ABOX LINK CONFIGURATION"}
                 </div>
-                <h2 style={{ fontSize: "clamp(1.15rem, 2.5vw, 1.35rem)", fontWeight: 600, color: "var(--color-obsidian)" }}>
+                <h2 style={{ fontSize: "clamp(1.15rem, 2.5vw, 1.35rem)", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
                   {shareStep === 1
                     ? "Configure AI Link & File Scope"
                     : "Data & Column Transformation Studio"}
@@ -1413,20 +1397,10 @@ export default function WorkspaceDetailPage() {
 
               <button
                 onClick={() => setShareWizardOpen(false)}
-                style={{
-                  width: "32px",
-                  height: "32px",
-                  borderRadius: "50%",
-                  background: "var(--canvas-bg)",
-                  border: "1px solid var(--glass-border-subtle)",
-                  color: "var(--text-muted)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                }}
+                className="icon-circle-btn"
+                style={{ width: "32px", height: "32px" }}
               >
-                <X size={15} />
+                <X size={15} strokeWidth={1.5} />
               </button>
             </div>
 
@@ -1438,7 +1412,7 @@ export default function WorkspaceDetailPage() {
               {shareStep === 1 && (
                 <div>
                   <div style={{ marginBottom: "1.75rem" }}>
-                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--color-obsidian)" }}>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
                       1. Link Label / Purpose
                     </label>
                     <input
@@ -1448,30 +1422,30 @@ export default function WorkspaceDetailPage() {
                       value={shareName}
                       onChange={(e) => setShareName(e.target.value)}
                     />
-                    <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.35rem" }}>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.35rem" }}>
                       Give this link a clear name so you can track its activity in the audit trail.
                     </div>
                   </div>
 
                   <div style={{ marginBottom: "1.5rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-                      <label style={{ fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)" }}>
-                        2. Select Files to Include for this Link ({selectedFileIds.length}/{files.length})
+                      <label style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+                        2. Select Files to Include ({selectedFileIds.length}/{files.length})
                       </label>
 
                       <div style={{ display: "flex", gap: "0.5rem" }}>
                         <button
                           type="button"
                           onClick={() => setSelectedFileIds(files.map((f) => f.id))}
-                          style={{ fontSize: "0.75rem", background: "none", border: "none", color: "var(--accent-lime)", cursor: "pointer", fontWeight: 600 }}
+                          style={{ fontSize: "0.75rem", background: "none", border: "none", color: "var(--text-primary)", cursor: "pointer", fontWeight: 500 }}
                         >
                           Select All
                         </button>
-                        <span style={{ color: "var(--text-dim)" }}>·</span>
+                        <span style={{ color: "var(--text-tertiary)" }}>•</span>
                         <button
                           type="button"
                           onClick={() => setSelectedFileIds([])}
-                          style={{ fontSize: "0.75rem", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+                          style={{ fontSize: "0.75rem", background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer" }}
                         >
                           Deselect All
                         </button>
@@ -1481,16 +1455,16 @@ export default function WorkspaceDetailPage() {
                     <div style={{
                       maxHeight: "220px",
                       overflowY: "auto",
-                      background: "var(--canvas-bg)",
+                      background: "var(--bg-page)",
                       padding: "0.85rem",
                       borderRadius: "var(--radius-md)",
-                      border: "1px solid var(--glass-border-subtle)",
+                      border: "1px solid rgba(40, 40, 40, 0.05)",
                       display: "flex",
                       flexDirection: "column",
                       gap: "0.4rem",
                     }}>
                       {files.length === 0 ? (
-                        <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", textAlign: "center", padding: "1.5rem" }}>
+                        <div style={{ fontSize: "0.85rem", color: "var(--text-tertiary)", textAlign: "center", padding: "1.5rem" }}>
                           No documents uploaded yet. Upload a file first.
                         </div>
                       ) : (
@@ -1513,32 +1487,25 @@ export default function WorkspaceDetailPage() {
                                 justifyContent: "space-between",
                                 padding: "0.6rem 0.85rem",
                                 borderRadius: "var(--radius-sm)",
-                                background: isChecked ? "#ffffff" : "transparent",
-                                border: isChecked ? "1px solid var(--glass-border-subtle)" : "1px solid transparent",
+                                background: isChecked ? "#FFFFFF" : "transparent",
+                                border: isChecked ? "1px solid rgba(40, 40, 40, 0.05)" : "1px solid transparent",
                                 cursor: "pointer",
                                 transition: "all 0.15s ease",
                               }}
                             >
                               <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                                {isChecked ? <CheckSquare size={16} color="var(--accent-lime)" /> : <Square size={16} color="var(--text-dim)" />}
-                                <FileText size={15} color={isData ? "var(--accent-lime)" : "#64748b"} />
-                                <span style={{ fontSize: "0.88rem", fontWeight: isChecked ? 600 : 400, color: "var(--color-obsidian)" }}>
+                                {isChecked ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" />}
+                                <FileText size={15} strokeWidth={1.5} color={isData ? "#2E3032" : "#989B9D"} />
+                                <span style={{ fontSize: "0.88rem", fontWeight: isChecked ? 450 : 400, color: "var(--text-primary)" }}>
                                   {f.original_filename}
                                 </span>
                               </div>
 
                               <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                                <span style={{
-                                  fontSize: "0.68rem",
-                                  fontWeight: 600,
-                                  padding: "0.1rem 0.4rem",
-                                  borderRadius: "var(--radius-pill)",
-                                  background: isData ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
-                                  color: isData ? "var(--accent-lime)" : "var(--text-muted)",
-                                }}>
+                                <span className="badge-status" style={{ fontSize: "0.68rem", padding: "0.1rem 0.4rem" }}>
                                   {isData ? "DATA" : "DOC"}
                                 </span>
-                                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
+                                <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", fontFamily: "JetBrains Mono, monospace" }}>
                                   {(f.file_size / 1024).toFixed(0)} KB
                                 </span>
                               </div>
@@ -1552,7 +1519,7 @@ export default function WorkspaceDetailPage() {
                       <div style={{
                         marginTop: "1rem",
                         padding: "0.75rem 1rem",
-                        background: "rgba(0,0,0,0.03)",
+                        background: "rgba(0,0,0,0.02)",
                         borderRadius: "var(--radius-md)",
                         fontSize: "0.82rem",
                         color: "var(--text-secondary)",
@@ -1560,7 +1527,7 @@ export default function WorkspaceDetailPage() {
                         alignItems: "center",
                         gap: "0.5rem",
                       }}>
-                        <ShieldCheck size={16} color="var(--accent-lime)" />
+                        <ShieldCheck size={16} strokeWidth={1.5} color="#2E3032" />
                         <span>Selected files are documents (PDF/Word/Text). They will be served safely via standard MCP resources with no column transformation needed.</span>
                       </div>
                     )}
@@ -1569,14 +1536,14 @@ export default function WorkspaceDetailPage() {
               )}
 
               {/* ========================================================================= */}
-              {/* STEP 2: POWER QUERY TRANSFORMATION STUDIO (DYNAMIC FILE COLUMNS & ROWS)   */}
+              {/* STEP 2: POWER QUERY TRANSFORMATION STUDIO                                 */}
               {/* ========================================================================= */}
               {shareStep === 2 && hasDataFilesSelected && (
                 <div>
                   {/* File Selector Tabs for tabular data files only */}
                   <div style={{ marginBottom: "1.25rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
                     <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-                      <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", marginRight: "0.4rem" }}>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 450, color: "var(--text-secondary)", textTransform: "uppercase", marginRight: "0.4rem" }}>
                         Active Data File:
                       </span>
                       {selectedDataFiles.map((f) => (
@@ -1589,7 +1556,7 @@ export default function WorkspaceDetailPage() {
                           className={`pill-tab ${activeTransformFile?.id === f.id ? "active" : ""}`}
                           style={{ fontSize: "0.8rem", padding: "0.35rem 0.85rem", gap: "0.4rem", display: "flex", alignItems: "center" }}
                         >
-                          <Table size={13} color="var(--accent-lime)" />
+                          <Table size={13} strokeWidth={1.5} color="#2E3032" />
                           <span>{f.original_filename}</span>
                         </button>
                       ))}
@@ -1597,7 +1564,7 @@ export default function WorkspaceDetailPage() {
                   </div>
 
                   {loadingTransformFile ? (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "4rem 0", gap: "0.6rem", color: "var(--text-muted)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "4rem 0", gap: "0.6rem", color: "var(--text-secondary)" }}>
                       <Loader2 size={20} className="animate-spin" />
                       <span>Reading Excel / CSV table columns &amp; sample data...</span>
                     </div>
@@ -1611,17 +1578,17 @@ export default function WorkspaceDetailPage() {
                       {/* Left: Power Query Column List */}
                       <div>
                         <div style={{
-                          background: "var(--canvas-bg)",
+                          background: "var(--bg-page)",
                           padding: "clamp(1rem, 2.5vw, 1.25rem)",
                           borderRadius: "var(--radius-md)",
-                          border: "1px solid var(--glass-border-subtle)",
+                          border: "1px solid rgba(40, 40, 40, 0.04)",
                         }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
-                            <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                              <Columns size={14} color="var(--accent-lime)" />
+                            <div style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <Columns size={14} strokeWidth={1.5} color="#2E3032" />
                               <span>Detected Columns ({availableColumns.length})</span>
                             </div>
-                            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Click to Inspect</span>
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>Click to Inspect</span>
                           </div>
 
                           {/* Column Selection List */}
@@ -1638,12 +1605,11 @@ export default function WorkspaceDetailPage() {
                                     alignItems: "center",
                                     justifyContent: "space-between",
                                     padding: "0.6rem 0.75rem",
-                                    background: isSelected ? "#ffffff" : "rgba(255, 255, 255, 0.6)",
+                                    background: isSelected ? "#FFFFFF" : "rgba(255, 255, 255, 0.6)",
                                     borderRadius: "var(--radius-sm)",
-                                    border: isSelected ? "1.5px solid var(--accent-lime)" : "1px solid var(--glass-border-subtle)",
+                                    border: isSelected ? "1.5px solid #2E3032" : "1px solid rgba(40, 40, 40, 0.05)",
                                     cursor: "pointer",
                                     transition: "all 0.15s ease",
-                                    boxShadow: isSelected ? "0 2px 8px rgba(132, 204, 22, 0.12)" : "none",
                                   }}
                                 >
                                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
@@ -1651,11 +1617,11 @@ export default function WorkspaceDetailPage() {
                                       width: "20px",
                                       height: "20px",
                                       borderRadius: "4px",
-                                      background: isSelected ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
-                                      color: isSelected ? "var(--accent-lime)" : "var(--text-dim)",
+                                      background: isSelected ? "#2E3032" : "rgba(0,0,0,0.04)",
+                                      color: isSelected ? "#FFFFFF" : "var(--text-tertiary)",
                                       fontFamily: "JetBrains Mono, monospace",
                                       fontSize: "0.72rem",
-                                      fontWeight: 700,
+                                      fontWeight: 500,
                                       display: "flex",
                                       alignItems: "center",
                                       justifyContent: "center",
@@ -1664,23 +1630,22 @@ export default function WorkspaceDetailPage() {
                                       {col.letter}
                                     </span>
                                     <div style={{ minWidth: 0, overflow: "hidden" }}>
-                                      <div style={{ fontSize: "0.84rem", fontWeight: isSelected ? 700 : 500, color: "var(--color-obsidian)", fontFamily: "JetBrains Mono, monospace", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                                      <div style={{ fontSize: "0.84rem", fontWeight: isSelected ? 500 : 400, color: "var(--text-primary)", fontFamily: "JetBrains Mono, monospace", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                                         {col.name}
                                       </div>
-                                      <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                                      <div style={{ fontSize: "0.7rem", color: "var(--text-tertiary)" }}>
                                         {col.type}
                                       </div>
                                     </div>
                                   </div>
 
-                                  {/* Action Status Badge */}
                                   <span style={{
                                     fontSize: "0.7rem",
-                                    fontWeight: 600,
+                                    fontWeight: 450,
                                     padding: "0.15rem 0.5rem",
                                     borderRadius: "var(--radius-pill)",
-                                    background: action === "REMOVE" ? "var(--status-deny-bg)" : action === "MASK" ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
-                                    color: action === "REMOVE" ? "var(--status-deny)" : action === "MASK" ? "var(--accent-lime)" : "var(--text-secondary)",
+                                    background: action === "REMOVE" ? "var(--status-deny-bg)" : "rgba(0,0,0,0.04)",
+                                    color: action === "REMOVE" ? "var(--status-deny)" : "var(--text-secondary)",
                                     flexShrink: 0,
                                   }}>
                                     {action === "REMOVE" ? "Dropped" : action === "MASK" ? "Masked" : "Passed"}
@@ -1692,7 +1657,7 @@ export default function WorkspaceDetailPage() {
 
                           {/* Additional Redaction Input */}
                           <div>
-                            <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-muted)", marginBottom: "0.3rem", fontWeight: 500 }}>
+                            <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-secondary)", marginBottom: "0.3rem", fontWeight: 450 }}>
                               Custom columns to drop (comma-separated):
                             </label>
                             <input
@@ -1707,12 +1672,12 @@ export default function WorkspaceDetailPage() {
                         </div>
                       </div>
 
-                      {/* Right: Interactive Excel Spreadsheet & Live Transform Preview */}
+                      {/* Right: Interactive Spreadsheet & Live Transform Preview */}
                       <div>
                         <div style={{
-                          background: "var(--canvas-bg)",
+                          background: "var(--bg-page)",
                           borderRadius: "var(--radius-md)",
-                          border: "1px solid var(--glass-border-subtle)",
+                          border: "1px solid rgba(40, 40, 40, 0.04)",
                           overflow: "hidden",
                           display: "flex",
                           flexDirection: "column",
@@ -1720,8 +1685,8 @@ export default function WorkspaceDetailPage() {
                           {/* Active Column Transformation Toolbar */}
                           <div style={{
                             padding: "0.85rem 1.15rem",
-                            background: "#ffffff",
-                            borderBottom: "1px solid var(--glass-border-subtle)",
+                            background: "#FFFFFF",
+                            borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
@@ -1729,26 +1694,25 @@ export default function WorkspaceDetailPage() {
                             gap: "0.75rem",
                           }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                              <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                              <span style={{ fontSize: "0.75rem", fontWeight: 450, color: "var(--text-secondary)", textTransform: "uppercase" }}>
                                 Selected:
                               </span>
                               <span style={{
                                 fontFamily: "JetBrains Mono, monospace",
-                                fontWeight: 700,
+                                fontWeight: 500,
                                 fontSize: "0.88rem",
-                                color: "var(--color-obsidian)",
-                                background: "var(--accent-lime-bg)",
+                                color: "var(--text-primary)",
+                                background: "var(--bg-page)",
                                 padding: "0.15rem 0.5rem",
                                 borderRadius: "4px",
-                                border: "1px solid var(--accent-lime-border)",
                               }}>
                                 {selectedColumnName || "—"}
                               </span>
                             </div>
 
-                            {/* Transformation Action Buttons for Selected Column */}
+                            {/* Action Buttons */}
                             <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
-                              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginRight: "0.2rem" }}>Action:</span>
+                              <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", marginRight: "0.2rem" }}>Action:</span>
                               <button
                                 type="button"
                                 disabled={!selectedColumnName}
@@ -1758,10 +1722,10 @@ export default function WorkspaceDetailPage() {
                                   padding: "0.3rem 0.7rem",
                                   borderRadius: "var(--radius-pill)",
                                   border: "1px solid",
-                                  borderColor: (columnActions[selectedColumnName] || "KEEP") === "KEEP" ? "var(--color-obsidian)" : "var(--glass-border-subtle)",
-                                  background: (columnActions[selectedColumnName] || "KEEP") === "KEEP" ? "var(--color-obsidian)" : "#ffffff",
-                                  color: (columnActions[selectedColumnName] || "KEEP") === "KEEP" ? "#ffffff" : "var(--text-secondary)",
-                                  fontWeight: 600,
+                                  borderColor: (columnActions[selectedColumnName] || "KEEP") === "KEEP" ? "#2E3032" : "rgba(40, 40, 40, 0.06)",
+                                  background: (columnActions[selectedColumnName] || "KEEP") === "KEEP" ? "#2E3032" : "#FFFFFF",
+                                  color: (columnActions[selectedColumnName] || "KEEP") === "KEEP" ? "#FFFFFF" : "var(--text-secondary)",
+                                  fontWeight: 450,
                                   cursor: "pointer",
                                 }}
                               >
@@ -1777,14 +1741,14 @@ export default function WorkspaceDetailPage() {
                                   padding: "0.3rem 0.7rem",
                                   borderRadius: "var(--radius-pill)",
                                   border: "1px solid",
-                                  borderColor: columnActions[selectedColumnName] === "MASK" ? "var(--accent-lime)" : "var(--glass-border-subtle)",
-                                  background: columnActions[selectedColumnName] === "MASK" ? "var(--accent-lime-bg)" : "#ffffff",
-                                  color: columnActions[selectedColumnName] === "MASK" ? "var(--accent-lime)" : "var(--text-secondary)",
-                                  fontWeight: 600,
+                                  borderColor: columnActions[selectedColumnName] === "MASK" ? "#2E3032" : "rgba(40, 40, 40, 0.06)",
+                                  background: columnActions[selectedColumnName] === "MASK" ? "rgba(0,0,0,0.06)" : "#FFFFFF",
+                                  color: "var(--text-primary)",
+                                  fontWeight: 450,
                                   cursor: "pointer",
                                 }}
                               >
-                                ✦ Mask / Anonymize
+                                ✦ Mask Column
                               </button>
 
                               <button
@@ -1796,10 +1760,10 @@ export default function WorkspaceDetailPage() {
                                   padding: "0.3rem 0.7rem",
                                   borderRadius: "var(--radius-pill)",
                                   border: "1px solid",
-                                  borderColor: columnActions[selectedColumnName] === "REMOVE" ? "var(--status-deny)" : "var(--glass-border-subtle)",
-                                  background: columnActions[selectedColumnName] === "REMOVE" ? "var(--status-deny-bg)" : "#ffffff",
+                                  borderColor: columnActions[selectedColumnName] === "REMOVE" ? "var(--status-deny)" : "rgba(40, 40, 40, 0.06)",
+                                  background: columnActions[selectedColumnName] === "REMOVE" ? "var(--status-deny-bg)" : "#FFFFFF",
                                   color: columnActions[selectedColumnName] === "REMOVE" ? "var(--status-deny)" : "var(--text-secondary)",
-                                  fontWeight: 600,
+                                  fontWeight: 450,
                                   cursor: "pointer",
                                 }}
                               >
@@ -1808,12 +1772,12 @@ export default function WorkspaceDetailPage() {
                             </div>
                           </div>
 
-                          {/* Excel / Spreadsheet Grid Canvas */}
+                          {/* Excel Grid Canvas */}
                           <div style={{ overflowX: "auto", maxHeight: "320px" }}>
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", fontFamily: "JetBrains Mono, monospace" }}>
                               <thead>
-                                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                                  <th style={{ width: "35px", padding: "0.4rem", color: "var(--text-dim)", textAlign: "center", borderRight: "1px solid #e2e8f0", fontSize: "0.72rem" }}>
+                                <tr style={{ background: "#f8fafc", borderBottom: "1px solid rgba(40, 40, 40, 0.06)" }}>
+                                  <th style={{ width: "35px", padding: "0.4rem", color: "var(--text-tertiary)", textAlign: "center", borderRight: "1px solid rgba(40, 40, 40, 0.06)", fontSize: "0.72rem" }}>
                                     #
                                   </th>
                                   {availableColumns.map((col) => {
@@ -1826,18 +1790,18 @@ export default function WorkspaceDetailPage() {
                                         style={{
                                           padding: "0.55rem 0.75rem",
                                           textAlign: "left",
-                                          borderRight: "1px solid #e2e8f0",
-                                          background: isSelected ? "rgba(132, 204, 22, 0.08)" : action === "REMOVE" ? "rgba(220, 38, 38, 0.05)" : "inherit",
+                                          borderRight: "1px solid rgba(40, 40, 40, 0.06)",
+                                          background: isSelected ? "rgba(0, 0, 0, 0.03)" : "inherit",
                                           cursor: "pointer",
                                           userSelect: "none",
                                         }}
                                       >
                                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem" }}>
                                           <div>
-                                            <span style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginRight: "0.3rem" }}>{col.letter}</span>
+                                            <span style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", marginRight: "0.3rem" }}>{col.letter}</span>
                                             <span style={{
-                                              fontWeight: 600,
-                                              color: action === "REMOVE" ? "var(--status-deny)" : "var(--color-obsidian)",
+                                              fontWeight: 500,
+                                              color: action === "REMOVE" ? "var(--status-deny)" : "var(--text-primary)",
                                               textDecoration: action === "REMOVE" ? "line-through" : "none",
                                             }}>
                                               {col.name}
@@ -1845,11 +1809,11 @@ export default function WorkspaceDetailPage() {
                                           </div>
                                           <span style={{
                                             fontSize: "0.65rem",
-                                            fontWeight: 700,
+                                            fontWeight: 500,
                                             padding: "0.1rem 0.35rem",
                                             borderRadius: "3px",
-                                            background: action === "REMOVE" ? "var(--status-deny)" : action === "MASK" ? "var(--accent-lime)" : "#94a3b8",
-                                            color: "#ffffff",
+                                            background: action === "REMOVE" ? "var(--status-deny)" : "#2E3032",
+                                            color: "#FFFFFF",
                                           }}>
                                             {action === "REMOVE" ? "DROP" : action === "MASK" ? "MASK" : "KEEP"}
                                           </span>
@@ -1862,15 +1826,15 @@ export default function WorkspaceDetailPage() {
 
                               <tbody>
                                 {Array.from({ length: dynamicRowsCount || 3 }).map((_, rowIdx) => (
-                                  <tr key={rowIdx} style={{ borderBottom: "1px solid #f1f5f9", background: rowIdx % 2 === 0 ? "#ffffff" : "#fafafa" }}>
+                                  <tr key={rowIdx} style={{ borderBottom: "1px solid rgba(40, 40, 40, 0.04)", background: rowIdx % 2 === 0 ? "#FFFFFF" : "#FAFBFB" }}>
                                     <td style={{
                                       padding: "0.45rem",
                                       textAlign: "center",
-                                      color: "var(--text-dim)",
-                                      borderRight: "1px solid #e2e8f0",
+                                      color: "var(--text-tertiary)",
+                                      borderRight: "1px solid rgba(40, 40, 40, 0.06)",
                                       fontSize: "0.72rem",
-                                      background: "#f8fafc",
-                                      fontWeight: 600,
+                                      background: "#F8F9FA",
+                                      fontWeight: 500,
                                     }}>
                                       {rowIdx + 1}
                                     </td>
@@ -1899,15 +1863,15 @@ export default function WorkspaceDetailPage() {
                                           onClick={() => setSelectedColumnName(col.name)}
                                           style={{
                                             padding: "0.45rem 0.75rem",
-                                            borderRight: "1px solid #e2e8f0",
-                                            background: isSelected ? "rgba(132, 204, 22, 0.05)" : action === "REMOVE" ? "rgba(220, 38, 38, 0.03)" : "inherit",
-                                            color: action === "REMOVE" ? "#94a3b8" : action === "MASK" ? "var(--accent-lime)" : "var(--color-obsidian)",
+                                            borderRight: "1px solid rgba(40, 40, 40, 0.06)",
+                                            background: isSelected ? "rgba(0, 0, 0, 0.02)" : "inherit",
+                                            color: action === "REMOVE" ? "var(--text-tertiary)" : "var(--text-primary)",
                                             fontStyle: action === "REMOVE" ? "italic" : "normal",
-                                            fontWeight: action === "MASK" ? 600 : 400,
+                                            fontWeight: action === "MASK" ? 500 : 400,
                                             cursor: "pointer",
                                           }}
                                         >
-                                          {displayVal || <span style={{ color: "var(--text-dim)", fontStyle: "italic" }}>null</span>}
+                                          {displayVal || <span style={{ color: "var(--text-tertiary)", fontStyle: "italic" }}>null</span>}
                                         </td>
                                       );
                                     })}
@@ -1919,18 +1883,18 @@ export default function WorkspaceDetailPage() {
 
                           <div style={{
                             padding: "0.6rem 1.15rem",
-                            background: "#f8fafc",
-                            borderTop: "1px solid #e2e8f0",
+                            background: "#F8F9FA",
+                            borderTop: "1px solid rgba(40, 40, 40, 0.06)",
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
                             fontSize: "0.72rem",
-                            color: "var(--text-muted)",
+                            color: "var(--text-secondary)",
                             flexWrap: "wrap",
                             gap: "0.3rem",
                           }}>
                             <span>Real columns &amp; rows dynamically loaded from {activeTransformFile.original_filename}</span>
-                            <span style={{ color: "var(--accent-lime)", fontWeight: 600 }}>
+                            <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>
                               ✓ Live Workspace Isolated
                             </span>
                           </div>
@@ -1945,11 +1909,11 @@ export default function WorkspaceDetailPage() {
             {/* Modal Footer Controls */}
             <div style={{
               padding: "1rem clamp(1rem, 3vw, 2rem)",
-              borderTop: "1px solid var(--glass-border-subtle)",
+              borderTop: "1px solid rgba(40, 40, 40, 0.04)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              background: "var(--canvas-bg)",
+              background: "var(--bg-page)",
               flexWrap: "wrap",
               gap: "0.5rem",
             }}>
@@ -1960,7 +1924,7 @@ export default function WorkspaceDetailPage() {
                   className="pill-btn pill-btn-glass"
                   style={{ gap: "0.4rem" }}
                 >
-                  <ArrowLeft size={14} />
+                  <ArrowLeft size={14} strokeWidth={1.5} />
                   <span>Back to File Selection</span>
                 </button>
               ) : (
@@ -1980,8 +1944,8 @@ export default function WorkspaceDetailPage() {
                   onClick={() => setShareStep(2)}
                   className="pill-btn pill-btn-solid"
                 >
-                  <span>Next: Power Query Data Transformation</span>
-                  <ArrowRight size={14} />
+                  <span>Next: Power Query Transformation</span>
+                  <ArrowRight size={14} strokeWidth={1.5} />
                 </button>
               ) : (
                 <button
@@ -1990,7 +1954,7 @@ export default function WorkspaceDetailPage() {
                   onClick={handleGenerateShareLink}
                   className="pill-btn pill-btn-solid"
                 >
-                  <Key size={14} />
+                  <Key size={14} strokeWidth={1.5} />
                   <span>{generatingLink ? "Generating Link..." : "Generate ABOX MCP Link"}</span>
                 </button>
               )}
@@ -2000,7 +1964,7 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: VIEW EXTRACTED CONTENT (ONLY NON-PDF ASSETS)                      */}
+      {/* MODAL: VIEW EXTRACTED CONTENT (NON-PDF ONLY)                              */}
       {/* ========================================================================= */}
       {selectedFileContent && (
         <div style={{
@@ -2009,7 +1973,7 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(15, 23, 42, 0.35)",
+          background: "rgba(46, 48, 50, 0.35)",
           backdropFilter: "blur(12px)",
           display: "flex",
           alignItems: "center",
@@ -2025,33 +1989,26 @@ export default function WorkspaceDetailPage() {
             flexDirection: "column",
             padding: "clamp(1.5rem, 3vw, 2.25rem)",
             position: "relative",
-            background: "#ffffff",
+            background: "#FFFFFF",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
           }}>
             <button
               onClick={() => setSelectedFileContent(null)}
+              className="icon-circle-btn"
               style={{
                 position: "absolute",
                 top: "1.25rem",
                 right: "1.25rem",
-                width: "30px",
-                height: "30px",
-                borderRadius: "50%",
-                background: "var(--canvas-bg)",
-                border: "1px solid var(--glass-border-subtle)",
-                color: "var(--text-muted)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
+                width: "32px",
+                height: "32px",
               }}
             >
-              <X size={14} />
+              <X size={14} strokeWidth={1.5} />
             </button>
 
             <div className="slash-tag">PARSED CONTENT</div>
-            <h3 style={{ fontSize: "1.35rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
+            <h3 style={{ fontSize: "1.35rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
               {selectedFileName}
             </h3>
 
@@ -2066,13 +2023,13 @@ export default function WorkspaceDetailPage() {
               flex: 1,
               overflowY: "auto",
               padding: "1.1rem",
-              background: "var(--canvas-bg)",
-              border: "1px solid var(--glass-border-subtle)",
+              background: "var(--bg-page)",
+              border: "1px solid rgba(40, 40, 40, 0.04)",
               borderRadius: "var(--radius-md)",
               fontFamily: "JetBrains Mono, monospace",
               fontSize: "0.82rem",
               lineHeight: 1.65,
-              color: "var(--color-obsidian)",
+              color: "var(--text-primary)",
               whiteSpace: "pre-wrap",
               marginBottom: "1rem",
             }}>
@@ -2083,12 +2040,12 @@ export default function WorkspaceDetailPage() {
               <div style={{
                 maxHeight: "100px",
                 overflowY: "auto",
-                background: "var(--canvas-bg)",
+                background: "var(--bg-page)",
                 padding: "0.75rem",
                 borderRadius: "var(--radius-md)",
-                border: "1px solid var(--glass-border-subtle)",
+                border: "1px solid rgba(40, 40, 40, 0.04)",
               }}>
-                <div style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.35rem" }}>
+                <div style={{ fontSize: "0.75rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
                   Detected Entities in Document:
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
@@ -2105,7 +2062,7 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: ONE-TIME TOKEN REVEAL */}
+      {/* MODAL: ONE-TIME TOKEN REVEAL                                              */}
       {/* ========================================================================= */}
       {createdCredential && (
         <div style={{
@@ -2114,7 +2071,7 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(15, 23, 42, 0.35)",
+          background: "rgba(46, 48, 50, 0.35)",
           backdropFilter: "blur(12px)",
           display: "flex",
           alignItems: "center",
@@ -2126,7 +2083,7 @@ export default function WorkspaceDetailPage() {
             width: "100%",
             maxWidth: "620px",
             padding: "clamp(1.75rem, 4vw, 2.5rem) clamp(1.25rem, 3vw, 2.25rem)",
-            background: "#ffffff",
+            background: "#FFFFFF",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
             maxHeight: "92vh",
@@ -2134,7 +2091,7 @@ export default function WorkspaceDetailPage() {
           }}>
             <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
               <div className="slash-tag" style={{ justifyContent: "center" }}>ABOX MCP LINK READY</div>
-              <h3 style={{ fontSize: "1.45rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
+              <h3 style={{ fontSize: "1.45rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
                 Your Shareable MCP Token
               </h3>
               <p style={{
@@ -2144,7 +2101,7 @@ export default function WorkspaceDetailPage() {
                 padding: "0.4rem 0.9rem",
                 borderRadius: "var(--radius-pill)",
                 display: "inline-block",
-                border: "1px solid rgba(220, 38, 38, 0.2)",
+                border: "1px solid rgba(194, 65, 12, 0.15)",
               }}>
                 Copy this token now. It cannot be recovered after closing this window.
               </p>
@@ -2152,7 +2109,7 @@ export default function WorkspaceDetailPage() {
 
             {/* Claude.ai Web Remote Connector URL */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)", marginBottom: "0.35rem" }}>
+              <div style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", marginBottom: "0.35rem", letterSpacing: "0.04em" }}>
                 1. Claude.ai Web Remote Connector URL
               </div>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -2161,7 +2118,7 @@ export default function WorkspaceDetailPage() {
                   readOnly
                   value={`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp?token=${createdCredential.raw_token}`}
                   className="modern-input"
-                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", background: "var(--canvas-bg)", flex: "1 1 200px" }}
+                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", background: "var(--bg-page)", flex: "1 1 200px" }}
                 />
                 <button
                   onClick={() => {
@@ -2171,18 +2128,18 @@ export default function WorkspaceDetailPage() {
                   className="pill-btn pill-btn-solid"
                   style={{ padding: "0 1.15rem" }}
                 >
-                  <Copy size={14} />
+                  <Copy size={14} strokeWidth={1.5} />
                   <span>Copy URL</span>
                 </button>
               </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.3rem" }}>
                 Paste this into Claude.ai with <strong>Authentication: None</strong> to connect directly and securely.
               </div>
             </div>
 
             {/* Copyable Bearer Token */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
+              <div style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.35rem", letterSpacing: "0.04em" }}>
                 2. Bearer Authentication Token
               </div>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -2203,7 +2160,7 @@ export default function WorkspaceDetailPage() {
                   className="pill-btn pill-btn-glass"
                   style={{ padding: "0 1.15rem" }}
                 >
-                  {copiedToken ? <Check size={14} /> : <Copy size={14} />}
+                  {copiedToken ? <Check size={14} strokeWidth={1.5} /> : <Copy size={14} strokeWidth={1.5} />}
                   <span>{copiedToken ? "Copied" : "Copy"}</span>
                 </button>
               </div>
@@ -2211,17 +2168,17 @@ export default function WorkspaceDetailPage() {
 
             {/* Claude Desktop Config Snippet */}
             <div style={{ marginBottom: "1.75rem" }}>
-              <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
+              <div style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.35rem", letterSpacing: "0.04em" }}>
                 3. Claude Desktop / Cursor JSON Config
               </div>
               <div style={{
                 padding: "0.85rem 1.1rem",
-                background: "var(--color-obsidian)",
+                background: "#2E3032",
                 borderRadius: "var(--radius-md)",
                 fontFamily: "JetBrains Mono, monospace",
                 fontSize: "0.78rem",
                 overflowX: "auto",
-                color: "#84cc16",
+                color: "#FFE63C",
               }}>
                 <pre>{JSON.stringify({
                   mcpServers: {
