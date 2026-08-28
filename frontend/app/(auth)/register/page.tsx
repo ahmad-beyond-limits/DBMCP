@@ -46,58 +46,57 @@ export default function RegisterPage() {
       justifyContent: "center",
       minHeight: "calc(100vh - 160px)",
       padding: "2rem",
-      position: "relative",
     }}>
-      <div className="frosted-panel frosted-panel-highlight" style={{
+      <div className="frosted-panel" style={{
         width: "100%",
-        maxWidth: "460px",
-        padding: "3rem 2.5rem",
-        boxShadow: "0 24px 64px rgba(0, 0, 0, 0.6), 0 0 35px rgba(56, 189, 248, 0.15)",
+        maxWidth: "440px",
+        padding: "2.75rem 2.25rem",
+        boxShadow: "var(--shadow-card)",
         borderRadius: "var(--radius-xl)",
       }}>
-        <div style={{ textAlign: "center", marginBottom: "2.25rem" }}>
+        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div className="slash-tag" style={{ justifyContent: "center" }}>
-            WORKSPACE ACCESS
+            CREATE ACCOUNT
           </div>
-          <h1 className="font-editorial" style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>
-            Create Account
+          <h1 className="font-editorial" style={{ fontSize: "1.85rem", marginBottom: "0.4rem" }}>
+            Get Started
           </h1>
-          <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
-            Provision your isolated policy-enforced AI workspace
+          <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)" }}>
+            Create your user profile and initialize your first workspace
           </p>
         </div>
 
         {error && (
           <div style={{
             background: "var(--status-deny-bg)",
-            border: "1px solid rgba(244, 63, 94, 0.35)",
+            border: "1px solid #fecaca",
             color: "var(--status-deny)",
-            padding: "0.85rem 1.1rem",
+            padding: "0.75rem 1rem",
             borderRadius: "var(--radius-md)",
             fontSize: "0.85rem",
-            marginBottom: "1.75rem",
+            marginBottom: "1.5rem",
           }}>
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.35rem" }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
           <div>
-            <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
+            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
               Username
             </label>
             <input
               type="text"
               required
               className="modern-input"
-              placeholder="e.g. security_lead"
+              placeholder="e.g. alex"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
+            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
               Password
             </label>
             <input
@@ -111,7 +110,7 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
+            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
               Confirm Password
             </label>
             <input
@@ -127,12 +126,12 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="pill-btn pill-btn-cyan"
-            style={{ width: "100%", padding: "0.85rem", marginTop: "0.5rem", fontSize: "0.95rem" }}
+            className="pill-btn pill-btn-primary"
+            style={{ width: "100%", padding: "0.8rem", marginTop: "0.5rem" }}
           >
-            {loading ? "Provisioning..." : "Create Account & Get Started"}
+            {loading ? "Creating..." : "Create Account"}
             <div className="btn-arrow-circle">
-              <ArrowRight size={13} />
+              <ArrowRight size={12} />
             </div>
           </button>
         </form>
@@ -142,17 +141,17 @@ export default function RegisterPage() {
           alignItems: "center",
           justifyContent: "center",
           gap: "0.4rem",
-          marginTop: "2rem",
+          marginTop: "1.75rem",
           fontSize: "0.78rem",
           color: "var(--text-muted)",
         }}>
-          <ShieldCheck size={14} color="#10b981" />
-          <span>Bcrypt Password Hashing &amp; Isolated Tenant Schema</span>
+          <ShieldCheck size={14} color="#059669" />
+          <span>Bcrypt hashed credentials &amp; isolated schemas</span>
         </div>
 
-        <div style={{ textAlign: "center", marginTop: "1.25rem", fontSize: "0.88rem", color: "var(--text-secondary)" }}>
+        <div style={{ textAlign: "center", marginTop: "1.25rem", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
           Already have an account?{" "}
-          <Link href="/login" style={{ color: "#38bdf8", fontWeight: 600, textDecoration: "none" }}>
+          <Link href="/login" style={{ color: "var(--text-primary)", fontWeight: 700, textDecoration: "underline" }}>
             Sign in
           </Link>
         </div>
