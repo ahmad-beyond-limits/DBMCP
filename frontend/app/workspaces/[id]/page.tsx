@@ -1012,7 +1012,7 @@ export default function WorkspaceDetailPage() {
               fontSize: "0.8rem",
             }}>
               <span style={{ color: "var(--text-secondary)" }}>
-                MCP Endpoint: <strong style={{ color: "#0f172a" }}>{process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/mcp</strong>
+                MCP Endpoint: <strong style={{ color: "#0f172a" }}>{process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp</strong>
               </span>
               <span className="badge-status badge-status-allow">JSON-RPC 2.0</span>
             </div>
@@ -1661,7 +1661,7 @@ export default function WorkspaceDetailPage() {
                 <pre>{JSON.stringify({
                   mcpServers: {
                     [workspace.name.toLowerCase().replace(/\s+/g, "-")]: {
-                      url: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/mcp`,
+                      url: `${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp`,
                       headers: {
                         Authorization: `Bearer ${createdCredential.raw_token}`,
                       },

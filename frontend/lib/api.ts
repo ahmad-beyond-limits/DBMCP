@@ -9,7 +9,7 @@ import {
   WorkspaceMember,
 } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com";
 
 class ApiClient {
   private getHeaders(contentType: string | null = "application/json"): HeadersInit {
