@@ -33,7 +33,6 @@ import {
   ShieldCheck,
   AlertTriangle,
   Share2,
-  Sparkles,
   CheckSquare,
   Square,
   Lock,
@@ -120,7 +119,6 @@ export default function WorkspaceDetailPage() {
       setMCPCredentials(creds);
       setAuditLogs(logs);
       setMembers(mems);
-      // Default file selection in share wizard
       setSelectedFileIds(fList.map((f) => f.id));
     } catch (err: any) {
       notify("error", err.message || "Failed to load workspace");
@@ -142,7 +140,6 @@ export default function WorkspaceDetailPage() {
     try {
       const uploaded = await api.uploadFile(workspaceId, uploadFile);
       notify("success", `File '${uploadFile.name}' processed successfully.`);
-      // Update files state immediately
       setFiles((prev) => [uploaded, ...prev]);
       setUploadModalOpen(false);
       setUploadFile(null);
@@ -182,12 +179,9 @@ export default function WorkspaceDetailPage() {
 
     setGeneratingLink(true);
     try {
-      // 1. Create the MCP Token
       const created = await api.createMCPCredential(workspaceId, shareName.trim());
 
-      // 2. Set file-level restrictions if not sharing all files
       if (!shareAllFiles && selectedFileIds.length > 0) {
-        // Explicitly deny files not in selected list
         const excludedFiles = files.filter((f) => !selectedFileIds.includes(f.id));
         for (const file of excludedFiles) {
           try {
@@ -196,7 +190,6 @@ export default function WorkspaceDetailPage() {
         }
       }
 
-      // 3. Set privacy / anonymisation rules
       if (maskEmails) {
         try {
           await api.createAnonymisationRule(workspaceId, "email", null, "MASK");
@@ -221,7 +214,6 @@ export default function WorkspaceDetailPage() {
         }
       }
 
-      // Update state immediately
       setMCPCredentials((prev) => [
         {
           id: created.id,
@@ -359,7 +351,7 @@ export default function WorkspaceDetailPage() {
   }
 
   return (
-    <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "2.5rem 2rem 5rem 2rem" }}>
+    <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "2.5rem 1.5rem 5rem 1.5rem" }}>
       {/* Toast Notification */}
       {notification && (
         <div style={{
@@ -367,35 +359,35 @@ export default function WorkspaceDetailPage() {
           bottom: "2.5rem",
           right: "2.5rem",
           zIndex: 200,
-          background: notification.type === "success" ? "#0f172a" : "#dc2626",
+          background: notification.type === "success" ? "var(--color-obsidian)" : "#dc2626",
           color: "#ffffff",
           padding: "0.75rem 1.25rem",
           borderRadius: "var(--radius-pill)",
           boxShadow: "var(--shadow-lg)",
-          fontWeight: 600,
+          fontWeight: 500,
           fontSize: "0.85rem",
           display: "flex",
           alignItems: "center",
           gap: "0.5rem",
         }}>
-          {notification.type === "success" ? <ShieldCheck size={16} /> : <AlertTriangle size={16} />}
+          {notification.type === "success" ? <ShieldCheck size={16} color="#4ade80" /> : <AlertTriangle size={16} />}
           <span>{notification.text}</span>
         </div>
       )}
 
-      {/* Header Banner: Clean Typography & MAIN COLORFUL ACTION BUTTONS */}
+      {/* Header Banner: Clean Typography & MAIN ACTION BUTTONS */}
       <div style={{
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: "2rem",
-        paddingBottom: "1.75rem",
-        borderBottom: "1px solid var(--border-card)",
+        marginBottom: "2.5rem",
+        paddingBottom: "1.5rem",
+        borderBottom: "1px solid var(--glass-border-subtle)",
         flexWrap: "wrap",
-        gap: "1.5rem",
+        gap: "1.25rem",
       }}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.25rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.3rem" }}>
             <Link href="/dashboard" className="slash-tag" style={{ textDecoration: "none", margin: 0 }}>
               WORKSPACES
             </Link>
@@ -406,18 +398,17 @@ export default function WorkspaceDetailPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <h1 className="font-editorial" style={{ fontSize: "clamp(1.7rem, 2.5vw, 2.2rem)", letterSpacing: "-0.02em" }}>
+            <h1 className="font-hero" style={{ fontSize: "clamp(1.8rem, 3vw, 2.4rem)", letterSpacing: "-0.025em", color: "var(--color-obsidian)" }}>
               {workspace.name}
             </h1>
             <span className={`badge-status ${workspace.is_active ? "badge-status-allow" : "badge-status-deny"}`}>
-              {workspace.is_active ? "Active" : "Disabled"}
+              {workspace.is_active ? "Active Vault" : "Disabled"}
             </span>
           </div>
         </div>
 
-        {/* 🌟 THE TWO MAIN HIGHLIGHTED BUTTONS 🌟 */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", flexWrap: "wrap" }}>
-          {/* Button 1: Upload Document */}
+        {/* Action Buttons */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
           <button
             onClick={() => {
               setUploadFile(null);
@@ -425,57 +416,44 @@ export default function WorkspaceDetailPage() {
               setUploadStep(1);
               setUploadModalOpen(true);
             }}
-            className="pill-btn pill-btn-primary"
-            style={{
-              padding: "0.7rem 1.4rem",
-              fontSize: "0.92rem",
-              background: "#0f172a",
-              color: "#ffffff",
-              boxShadow: "0 4px 14px rgba(15, 23, 42, 0.2)",
-            }}
+            className="pill-btn pill-btn-glass"
+            style={{ padding: "0.65rem 1.25rem", fontSize: "0.88rem" }}
           >
-            <Upload size={16} />
+            <Upload size={15} />
             <span>Upload Document</span>
           </button>
 
-          {/* Button 2: Share MCP Link */}
           <button
             onClick={() => {
               setSelectedFileIds(files.map((f) => f.id));
               setShareStep(1);
               setShareWizardOpen(true);
             }}
-            className="pill-btn pill-btn-blue"
-            style={{
-              padding: "0.7rem 1.4rem",
-              fontSize: "0.92rem",
-              background: "#2563eb",
-              color: "#ffffff",
-              boxShadow: "0 4px 16px rgba(37, 99, 235, 0.28)",
-            }}
+            className="pill-btn pill-btn-solid"
+            style={{ padding: "0.65rem 1.25rem", fontSize: "0.88rem" }}
           >
-            <Share2 size={16} />
+            <Share2 size={15} />
             <span>Share MCP Link</span>
           </button>
         </div>
       </div>
 
-      {/* Simplified, Plain-Language Navigation Tabs */}
+      {/* Tabs */}
       <div style={{ marginBottom: "2rem", overflowX: "auto", paddingBottom: "0.5rem" }}>
         <div className="pill-tabs-bar" style={{ display: "flex", flexWrap: "nowrap" }}>
           {[
-            { id: "documents", label: `Documents (${files.length})`, icon: <FileText size={15} /> },
-            { id: "links", label: `AI Links (${mcpCredentials.length})`, icon: <Key size={15} /> },
-            { id: "privacy", label: `Privacy Rules (${policies.resource_policies.length + policies.anonymisation_rules.length})`, icon: <Shield size={15} /> },
-            { id: "activity", label: `Activity Trail (${auditLogs.length})`, icon: <ScrollText size={15} /> },
-            { id: "playground", label: "Test Console", icon: <Terminal size={15} /> },
-            { id: "settings", label: "Settings", icon: <Settings size={15} /> },
+            { id: "documents", label: `Documents (${files.length})`, icon: <FileText size={14} /> },
+            { id: "links", label: `AI Links (${mcpCredentials.length})`, icon: <Key size={14} /> },
+            { id: "privacy", label: `Privacy Rules (${policies.resource_policies.length + policies.anonymisation_rules.length})`, icon: <Shield size={14} /> },
+            { id: "activity", label: `Activity Trail (${auditLogs.length})`, icon: <ScrollText size={14} /> },
+            { id: "playground", label: "Test Console", icon: <Terminal size={14} /> },
+            { id: "settings", label: "Settings", icon: <Settings size={14} /> },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               className={`pill-tab ${activeTab === tab.id ? "active" : ""}`}
-              style={{ display: "flex", alignItems: "center", gap: "0.45rem", whiteSpace: "nowrap" }}
+              style={{ display: "flex", alignItems: "center", gap: "0.4rem", whiteSpace: "nowrap" }}
             >
               {tab.icon}
               <span>{tab.label}</span>
@@ -485,34 +463,35 @@ export default function WorkspaceDetailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: DOCUMENTS (DEFAULT & CLEAN) */}
+      {/* TAB 1: DOCUMENTS */}
       {/* ========================================================================= */}
       {activeTab === "documents" && (
         <div>
           {files.length === 0 ? (
-            <div className="frosted-panel" style={{ textAlign: "center", padding: "4.5rem 2rem" }}>
+            <div className="frosted-panel" style={{ textAlign: "center", padding: "5rem 2rem" }}>
               <div style={{
                 width: "56px",
                 height: "56px",
                 borderRadius: "14px",
-                background: "#f1f5f9",
+                background: "var(--accent-lime-bg)",
+                border: "1px solid var(--accent-lime-border)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 margin: "0 auto 1.25rem auto",
-                color: "#0f172a",
+                color: "var(--accent-lime)",
               }}>
-                <FileText size={28} />
+                <FileText size={26} />
               </div>
-              <h3 style={{ fontSize: "1.3rem", fontWeight: 700, marginBottom: "0.4rem" }}>
+              <h3 style={{ fontSize: "1.3rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
                 No documents uploaded yet
               </h3>
-              <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", maxWidth: "460px", margin: "0 auto 1.75rem auto", lineHeight: 1.5 }}>
-                Upload PDF reports, CSV data tables, or text files. AI models can safely query them using your privacy rules.
+              <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", maxWidth: "440px", margin: "0 auto 1.75rem auto", lineHeight: 1.6 }}>
+                Upload PDF reports, CSV data tables, or text files. AI models can safely query them under policy control.
               </p>
               <button
                 onClick={() => setUploadModalOpen(true)}
-                className="pill-btn pill-btn-primary"
+                className="pill-btn pill-btn-solid"
               >
                 <Upload size={15} />
                 Upload Your First Document
@@ -534,18 +513,18 @@ export default function WorkspaceDetailPage() {
                 <tbody>
                   {files.map((file) => (
                     <tr key={file.id}>
-                      <td style={{ fontWeight: 600, color: "#0f172a" }}>
+                      <td style={{ fontWeight: 500, color: "var(--color-obsidian)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                          <FileText size={16} color="#2563eb" />
+                          <FileText size={16} color="var(--accent-lime)" />
                           <span>{file.original_filename}</span>
                         </div>
                       </td>
                       <td>
-                        <span className="badge-status" style={{ background: "#f1f5f9", color: "var(--text-secondary)" }}>
+                        <span className="badge-status" style={{ background: "rgba(0,0,0,0.04)", color: "var(--text-secondary)" }}>
                           {file.file_type}
                         </span>
                       </td>
-                      <td style={{ color: "var(--text-secondary)", fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem" }}>
+                      <td style={{ color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem" }}>
                         {(file.file_size / 1024).toFixed(1)} KB
                       </td>
                       <td>
@@ -553,23 +532,23 @@ export default function WorkspaceDetailPage() {
                           {file.status === "READY" ? "Ready for AI" : file.status}
                         </span>
                       </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>
+                      <td style={{ color: "var(--text-dim)", fontSize: "0.82rem" }}>
                         {new Date(file.created_at).toLocaleDateString()}
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                        <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
                           <button
                             onClick={() => handleViewContent(file)}
-                            className="pill-btn pill-btn-dark"
-                            style={{ padding: "0.35rem 0.85rem", fontSize: "0.78rem" }}
+                            className="pill-btn pill-btn-glass"
+                            style={{ padding: "0.3rem 0.8rem", fontSize: "0.78rem" }}
                           >
-                            View Extracted Content
+                            View Content
                           </button>
                           {workspace.role === "OWNER" && (
                             <button
                               onClick={() => handleDeleteFile(file.id)}
-                              className="pill-btn pill-btn-dark"
-                              style={{ padding: "0.35rem 0.65rem", color: "var(--status-deny)" }}
+                              className="pill-btn pill-btn-glass"
+                              style={{ padding: "0.3rem 0.6rem", color: "var(--status-deny)" }}
                               title="Delete file"
                             >
                               <Trash2 size={13} />
@@ -587,19 +566,19 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: AI LINKS (MULTI-MCP SHARING LINKS) */}
+      {/* TAB 2: AI LINKS */}
       {/* ========================================================================= */}
       {activeTab === "links" && (
         <div>
-          <div className="frosted-panel" style={{ padding: "2rem", marginBottom: "2rem" }}>
+          <div className="frosted-panel" style={{ padding: "2rem", marginBottom: "1.75rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
               <div>
                 <div className="slash-tag">AI CONNECTIONS</div>
-                <h3 className="font-editorial" style={{ fontSize: "1.35rem", marginBottom: "0.35rem" }}>
+                <h3 style={{ fontSize: "1.3rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
                   Active MCP Sharing Links
                 </h3>
-                <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", maxWidth: "660px", lineHeight: 1.5 }}>
-                  You can create as many links as you want. Each link can have access to specific documents and custom privacy rules.
+                <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", maxWidth: "600px", lineHeight: 1.5 }}>
+                  Create as many distinct MCP links as you need. Each link has dedicated document permissions and custom data masking policies.
                 </p>
               </div>
               <button
@@ -608,7 +587,7 @@ export default function WorkspaceDetailPage() {
                   setShareStep(1);
                   setShareWizardOpen(true);
                 }}
-                className="pill-btn pill-btn-blue"
+                className="pill-btn pill-btn-solid"
               >
                 <Plus size={15} />
                 Create New MCP Link
@@ -630,23 +609,23 @@ export default function WorkspaceDetailPage() {
               <tbody>
                 {mcpCredentials.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: "center", padding: "3.5rem", color: "var(--text-muted)" }}>
+                    <td colSpan={5} style={{ textAlign: "center", padding: "4rem", color: "var(--text-dim)" }}>
                       No links created yet. Click &quot;Create New MCP Link&quot; above to connect Claude Desktop or an AI agent.
                     </td>
                   </tr>
                 ) : (
                   mcpCredentials.map((cred) => (
                     <tr key={cred.id}>
-                      <td style={{ fontWeight: 600, color: "#0f172a" }}>
+                      <td style={{ fontWeight: 500, color: "var(--color-obsidian)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <Key size={15} color="#2563eb" />
+                          <Key size={15} color="var(--accent-lime)" />
                           <span>{cred.name}</span>
                         </div>
                       </td>
-                      <td style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", color: "#2563eb" }}>
+                      <td style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", color: "var(--accent-lime)" }}>
                         {cred.credential_prefix}...
                       </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>
+                      <td style={{ color: "var(--text-dim)", fontSize: "0.82rem" }}>
                         {new Date(cred.created_at).toLocaleDateString()}
                       </td>
                       <td>
@@ -659,15 +638,15 @@ export default function WorkspaceDetailPage() {
                           <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
                             <button
                               onClick={() => handleRotateMCP(cred.id)}
-                              className="pill-btn pill-btn-dark"
-                              style={{ padding: "0.3rem 0.75rem", fontSize: "0.75rem" }}
+                              className="pill-btn pill-btn-glass"
+                              style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem" }}
                             >
                               Rotate Key
                             </button>
                             <button
                               onClick={() => handleRevokeMCP(cred.id)}
-                              className="pill-btn pill-btn-dark"
-                              style={{ padding: "0.3rem 0.75rem", fontSize: "0.75rem", color: "var(--status-deny)" }}
+                              className="pill-btn pill-btn-glass"
+                              style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem", color: "var(--status-deny)" }}
                             >
                               Revoke
                             </button>
@@ -687,20 +666,20 @@ export default function WorkspaceDetailPage() {
       {/* TAB 3: PRIVACY RULES & POLICIES */}
       {/* ========================================================================= */}
       {activeTab === "privacy" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: "2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "1.75rem" }}>
           {/* Anonymisation Rules */}
           <div className="frosted-panel" style={{ padding: "2rem" }}>
             <div className="slash-tag">DATA MASKING</div>
-            <h3 className="font-editorial" style={{ fontSize: "1.25rem", marginBottom: "0.35rem" }}>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
               Active Anonymisation Rules
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
-              These rules mask sensitive data before AI models receive query results.
+            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
+              These rules mask sensitive PII before AI models receive query results.
             </p>
 
             <div>
               {policies.anonymisation_rules.length === 0 ? (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic", padding: "1rem 0" }}>
+                <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", fontStyle: "italic", padding: "1rem 0" }}>
                   No active masking rules.
                 </div>
               ) : (
@@ -711,13 +690,13 @@ export default function WorkspaceDetailPage() {
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "0.75rem 0",
-                      borderBottom: "1px solid var(--border-subtle)",
+                      padding: "0.85rem 0",
+                      borderBottom: "1px solid var(--glass-border-subtle)",
                     }}
                   >
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{rule.entity_type}</div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      <div style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-obsidian)" }}>{rule.entity_type}</div>
+                      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
                         {rule.field_name ? `Field: ${rule.field_name}` : "All occurrences"}
                       </div>
                     </div>
@@ -733,16 +712,16 @@ export default function WorkspaceDetailPage() {
           {/* Document Access Restrictions */}
           <div className="frosted-panel" style={{ padding: "2rem" }}>
             <div className="slash-tag">DOCUMENT ACCESS</div>
-            <h3 className="font-editorial" style={{ fontSize: "1.25rem", marginBottom: "0.35rem" }}>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
               File Permissions
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
               Restrictions placed on individual files or workspace resources.
             </p>
 
             <div>
               {policies.resource_policies.length === 0 ? (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic", padding: "1rem 0" }}>
+                <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", fontStyle: "italic", padding: "1rem 0" }}>
                   All uploaded files are accessible to authorized AI tokens.
                 </div>
               ) : (
@@ -755,11 +734,11 @@ export default function WorkspaceDetailPage() {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        padding: "0.75rem 0",
-                        borderBottom: "1px solid var(--border-subtle)",
+                        padding: "0.85rem 0",
+                        borderBottom: "1px solid var(--glass-border-subtle)",
                       }}
                     >
-                      <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                      <div style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-obsidian)" }}>
                         {targetFile ? targetFile.original_filename : "All Files (Default)"}
                       </div>
                       <span className={`badge-status ${p.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
@@ -780,8 +759,8 @@ export default function WorkspaceDetailPage() {
       {activeTab === "activity" && (
         <div className="frosted-panel" style={{ overflow: "hidden" }}>
           <div style={{
-            padding: "1.5rem 2rem",
-            borderBottom: "1px solid var(--border-card)",
+            padding: "1.5rem 1.75rem",
+            borderBottom: "1px solid var(--glass-border-subtle)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -790,12 +769,12 @@ export default function WorkspaceDetailPage() {
           }}>
             <div>
               <div className="slash-tag">AUDIT TRAIL</div>
-              <h3 className="font-editorial" style={{ fontSize: "1.25rem" }}>Activity &amp; Query Log</h3>
-              <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--color-obsidian)" }}>Activity &amp; Query Log</h3>
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
                 Every tool call and data request is logged securely without exposing private secrets.
               </p>
             </div>
-            <button onClick={loadWorkspaceData} className="pill-btn pill-btn-dark" style={{ padding: "0.4rem 0.9rem", fontSize: "0.8rem" }}>
+            <button onClick={loadWorkspaceData} className="pill-btn pill-btn-glass" style={{ padding: "0.4rem 0.9rem", fontSize: "0.8rem" }}>
               <RefreshCw size={13} />
               Refresh
             </button>
@@ -814,21 +793,21 @@ export default function WorkspaceDetailPage() {
             <tbody>
               {auditLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: "center", padding: "3.5rem", color: "var(--text-muted)" }}>
+                  <td colSpan={5} style={{ textAlign: "center", padding: "4rem", color: "var(--text-dim)" }}>
                     No activity recorded yet.
                   </td>
                 </tr>
               ) : (
                 auditLogs.map((log) => (
                   <tr key={log.id}>
-                    <td style={{ color: "var(--text-muted)", whiteSpace: "nowrap", fontFamily: "JetBrains Mono, monospace", fontSize: "0.78rem" }}>
+                    <td style={{ color: "var(--text-dim)", whiteSpace: "nowrap", fontFamily: "JetBrains Mono, monospace", fontSize: "0.78rem" }}>
                       {new Date(log.timestamp).toLocaleTimeString()} · {new Date(log.timestamp).toLocaleDateString()}
                     </td>
-                    <td style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 600, fontSize: "0.85rem" }}>
+                    <td style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 500, fontSize: "0.85rem", color: "var(--accent-lime)" }}>
                       {log.operation}
                     </td>
                     <td>
-                      <span className="badge-status" style={{ background: "#f1f5f9", color: "var(--text-secondary)" }}>
+                      <span className="badge-status" style={{ background: "rgba(0,0,0,0.04)", color: "var(--text-secondary)" }}>
                         {log.actor_type}
                       </span>
                     </td>
@@ -837,7 +816,7 @@ export default function WorkspaceDetailPage() {
                         {log.decision}
                       </span>
                     </td>
-                    <td style={{ color: "var(--text-secondary)", maxWidth: "320px", fontSize: "0.82rem" }}>
+                    <td style={{ color: "var(--text-muted)", maxWidth: "320px", fontSize: "0.82rem" }}>
                       {log.reason || "—"}
                     </td>
                   </tr>
@@ -854,17 +833,17 @@ export default function WorkspaceDetailPage() {
       {activeTab === "playground" && (
         <div className="frosted-panel" style={{ padding: "2rem" }}>
           <div className="slash-tag">DEVELOPER CONSOLE</div>
-          <h3 className="font-editorial" style={{ fontSize: "1.35rem", marginBottom: "0.35rem" }}>
+          <h3 style={{ fontSize: "1.3rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
             MCP Tool Test Console
           </h3>
-          <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem" }}>
+          <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.75rem" }}>
             Test live JSON-RPC requests directly against your MCP gateway.
           </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "1.75rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1.75rem" }}>
             <div>
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
                   Bearer MCP Token
                 </label>
                 <input
@@ -877,8 +856,8 @@ export default function WorkspaceDetailPage() {
                 />
               </div>
 
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
                   Tool Name
                 </label>
                 <select
@@ -910,13 +889,13 @@ export default function WorkspaceDetailPage() {
                 </select>
               </div>
 
-              <div style={{ marginBottom: "1.25rem" }}>
-                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
                   Arguments (JSON)
                 </label>
                 <textarea
                   className="modern-input"
-                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", height: "130px", resize: "vertical" }}
+                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", height: "120px", resize: "vertical" }}
                   value={playgroundArgs}
                   onChange={(e) => setPlaygroundArgs(e.target.value)}
                 />
@@ -925,7 +904,7 @@ export default function WorkspaceDetailPage() {
               <button
                 onClick={handleExecutePlayground}
                 disabled={playgroundLoading}
-                className="pill-btn pill-btn-primary"
+                className="pill-btn pill-btn-solid"
                 style={{ width: "100%", padding: "0.75rem" }}
               >
                 <Terminal size={15} />
@@ -933,31 +912,38 @@ export default function WorkspaceDetailPage() {
               </button>
             </div>
 
-            <div className="browser-window" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-              <div className="browser-header">
-                <div className="browser-dots">
-                  <div className="browser-dot dot-red" />
-                  <div className="browser-dot dot-yellow" />
-                  <div className="browser-dot dot-green" />
-                </div>
-                <div style={{ fontSize: "0.72rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-muted)" }}>
-                  response.json
-                </div>
+            <div style={{
+              borderRadius: "var(--radius-lg)",
+              border: "1px solid var(--glass-border-subtle)",
+              background: "var(--color-obsidian)",
+              color: "#ffffff",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}>
+              <div style={{
+                padding: "0.75rem 1.25rem",
+                background: "rgba(255, 255, 255, 0.05)",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                fontSize: "0.75rem",
+                fontFamily: "JetBrains Mono, monospace",
+                color: "var(--text-muted)",
+              }}>
+                response.json
               </div>
 
               <div style={{
                 flex: 1,
-                padding: "1rem 1.25rem",
-                background: "#ffffff",
+                padding: "1.25rem",
                 fontFamily: "JetBrains Mono, monospace",
-                fontSize: "0.8rem",
+                fontSize: "0.82rem",
                 overflowY: "auto",
-                maxHeight: "360px",
+                maxHeight: "340px",
               }}>
                 {playgroundResult ? (
-                  <pre style={{ color: "#0f172a" }}>{JSON.stringify(playgroundResult, null, 2)}</pre>
+                  <pre style={{ color: "#84cc16" }}>{JSON.stringify(playgroundResult, null, 2)}</pre>
                 ) : (
-                  <div style={{ color: "var(--text-muted)", fontStyle: "italic", paddingTop: "2rem", textAlign: "center" }}>
+                  <div style={{ color: "var(--text-dim)", fontStyle: "italic", paddingTop: "2rem", textAlign: "center" }}>
                     Results from the MCP gateway will appear here.
                   </div>
                 )}
@@ -971,14 +957,14 @@ export default function WorkspaceDetailPage() {
       {/* TAB 6: SETTINGS */}
       {/* ========================================================================= */}
       {activeTab === "settings" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "1.75rem" }}>
           {/* Members */}
           <div className="frosted-panel" style={{ padding: "2rem" }}>
-            <div className="slash-tag">TEAM MEMBERS</div>
-            <h3 className="font-editorial" style={{ fontSize: "1.25rem", marginBottom: "0.35rem" }}>
+            <div className="slash-tag">TEAM ACCESS</div>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
               Workspace Access
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.5rem" }}>
               Share this workspace with colleagues by username.
             </p>
 
@@ -1001,7 +987,7 @@ export default function WorkspaceDetailPage() {
                   <option value="MEMBER">MEMBER</option>
                   <option value="OWNER">OWNER</option>
                 </select>
-                <button type="submit" className="pill-btn pill-btn-primary" style={{ padding: "0.5rem 1.1rem" }}>
+                <button type="submit" className="pill-btn pill-btn-solid" style={{ padding: "0.5rem 1.1rem" }}>
                   Add
                 </button>
               </form>
@@ -1015,20 +1001,20 @@ export default function WorkspaceDetailPage() {
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    padding: "0.8rem 0",
-                    borderBottom: "1px solid var(--border-subtle)",
+                    padding: "0.85rem 0",
+                    borderBottom: "1px solid var(--glass-border-subtle)",
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{m.username || m.user_id}</div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Joined {new Date(m.created_at).toLocaleDateString()}</div>
+                    <div style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-obsidian)" }}>{m.username || m.user_id}</div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Joined {new Date(m.created_at).toLocaleDateString()}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <span className="badge-status" style={{ background: "#f1f5f9", color: "var(--text-secondary)" }}>{m.role}</span>
+                    <span className="badge-status" style={{ background: "rgba(0,0,0,0.04)", color: "var(--text-secondary)" }}>{m.role}</span>
                     {workspace.role === "OWNER" && m.user_id !== workspace.owner_id && (
                       <button
                         onClick={() => handleRemoveMember(m.id)}
-                        style={{ color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer" }}
+                        style={{ color: "var(--text-dim)", background: "transparent", border: "none", cursor: "pointer" }}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -1040,20 +1026,20 @@ export default function WorkspaceDetailPage() {
           </div>
 
           {/* Danger Zone */}
-          <div className="frosted-panel" style={{ padding: "2rem", border: "1px solid #fecaca" }}>
+          <div className="frosted-panel" style={{ padding: "2rem", border: "1px solid rgba(220, 38, 38, 0.25)", background: "var(--status-deny-bg)" }}>
             <div className="slash-tag" style={{ color: "var(--status-deny)" }}>DANGER ZONE</div>
-            <h3 className="font-editorial" style={{ fontSize: "1.25rem", color: "var(--status-deny)", marginBottom: "0.35rem" }}>
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--status-deny)", marginBottom: "0.3rem" }}>
               Delete Workspace
             </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
+            <p style={{ fontSize: "0.88rem", color: "#991b1b", marginBottom: "1.5rem" }}>
               Permanently delete this workspace and all associated files.
             </p>
 
             {workspace.role === "OWNER" && (
               <button
                 onClick={handleDeleteWorkspace}
-                className="pill-btn pill-btn-dark"
-                style={{ color: "var(--status-deny)", borderColor: "#fecaca" }}
+                className="pill-btn pill-btn-glass"
+                style={{ color: "var(--status-deny)", borderColor: "rgba(220, 38, 38, 0.3)" }}
               >
                 <Trash2 size={14} />
                 Delete Workspace Permanently
@@ -1064,7 +1050,7 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* ✨ SIMPLIFIED 3-STEP UPLOAD MODAL ✨ */}
+      {/* 3-STEP UPLOAD MODAL */}
       {/* ========================================================================= */}
       {uploadModalOpen && (
         <div style={{
@@ -1073,8 +1059,8 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(15, 23, 42, 0.5)",
-          backdropFilter: "blur(6px)",
+          background: "rgba(15, 23, 42, 0.35)",
+          backdropFilter: "blur(12px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1086,6 +1072,7 @@ export default function WorkspaceDetailPage() {
             maxWidth: "520px",
             padding: "2.5rem 2.25rem",
             position: "relative",
+            background: "#ffffff",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
           }}>
@@ -1095,36 +1082,36 @@ export default function WorkspaceDetailPage() {
                 position: "absolute",
                 top: "1.25rem",
                 right: "1.25rem",
-                width: "28px",
-                height: "28px",
+                width: "30px",
+                height: "30px",
                 borderRadius: "50%",
-                background: "#f1f5f9",
-                border: "none",
-                color: "var(--text-secondary)",
+                background: "var(--canvas-bg)",
+                border: "1px solid var(--glass-border-subtle)",
+                color: "var(--text-muted)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
               }}
             >
-              <X size={15} />
+              <X size={14} />
             </button>
 
             <div className="slash-tag">EASY UPLOAD</div>
-            <h2 className="font-editorial" style={{ fontSize: "1.6rem", marginBottom: "0.4rem" }}>
+            <h2 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
               Upload Document to Workspace
             </h2>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
               Follow 3 simple steps to add files for your AI agents to query.
             </p>
 
             {/* Step 1: File selection */}
             <div style={{ marginBottom: "1.5rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                <span style={{ width: "22px", height: "22px", borderRadius: "50%", background: "#0f172a", color: "#fff", fontSize: "0.75rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "var(--color-obsidian)", color: "#fff", fontSize: "0.75rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   1
                 </span>
-                <span style={{ fontSize: "0.85rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-primary)" }}>
+                <span style={{ fontSize: "0.82rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)" }}>
                   Choose Your File
                 </span>
               </div>
@@ -1136,17 +1123,17 @@ export default function WorkspaceDetailPage() {
                   alignItems: "center",
                   justifyContent: "center",
                   padding: "2rem",
-                  border: "2px dashed var(--border-card)",
+                  border: "2px dashed var(--glass-border-subtle)",
                   borderRadius: "var(--radius-md)",
-                  background: "#f8fafc",
+                  background: "var(--canvas-bg)",
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                 }}>
-                  <Upload size={24} color="#2563eb" style={{ marginBottom: "0.5rem" }} />
-                  <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "#0f172a" }}>
+                  <Upload size={24} color="var(--accent-lime)" style={{ marginBottom: "0.5rem" }} />
+                  <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--color-obsidian)" }}>
                     Click to browse or drag file here
                   </span>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                  <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.25rem" }}>
                     PDF, CSV, TXT, DOCX, JSON (up to 50MB)
                   </span>
                   <input
@@ -1165,35 +1152,35 @@ export default function WorkspaceDetailPage() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "0.85rem 1rem",
-                  background: "#f1f5f9",
+                  padding: "0.85rem 1.1rem",
+                  background: "var(--canvas-bg)",
                   borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-card)",
+                  border: "1px solid var(--glass-border-subtle)",
                 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    <FileText size={18} color="#2563eb" />
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                    <FileText size={18} color="var(--accent-lime)" />
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "#0f172a" }}>{uploadFile.name}</div>
+                      <div style={{ fontWeight: 500, fontSize: "0.88rem", color: "var(--color-obsidian)" }}>{uploadFile.name}</div>
                       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{(uploadFile.size / 1024).toFixed(1)} KB</div>
                     </div>
                   </div>
                   <button
                     onClick={() => setUploadFile(null)}
-                    style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+                    style={{ background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer" }}
                   >
-                    <X size={16} />
+                    <X size={15} />
                   </button>
                 </div>
               )}
             </div>
 
             {/* Step 2: Description for AI */}
-            <div style={{ marginBottom: "2rem" }}>
+            <div style={{ marginBottom: "1.75rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                <span style={{ width: "22px", height: "22px", borderRadius: "50%", background: "#0f172a", color: "#fff", fontSize: "0.75rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "var(--color-obsidian)", color: "#fff", fontSize: "0.75rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   2
                 </span>
-                <span style={{ fontSize: "0.85rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-primary)" }}>
+                <span style={{ fontSize: "0.82rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)" }}>
                   Add Description for AI (Optional)
                 </span>
               </div>
@@ -1206,12 +1193,12 @@ export default function WorkspaceDetailPage() {
               />
             </div>
 
-            {/* Step 3: Upload Action */}
+            {/* Step 3: Action */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
               <button
                 type="button"
                 onClick={() => setUploadModalOpen(false)}
-                className="pill-btn pill-btn-dark"
+                className="pill-btn pill-btn-glass"
               >
                 Cancel
               </button>
@@ -1219,12 +1206,10 @@ export default function WorkspaceDetailPage() {
                 type="button"
                 disabled={!uploadFile || uploading}
                 onClick={handleExecuteUpload}
-                className="pill-btn pill-btn-primary"
+                className="pill-btn pill-btn-solid"
               >
                 {uploading ? "Processing Document..." : "Upload & Save"}
-                <div className="btn-arrow-circle">
-                  <ArrowRight size={12} />
-                </div>
+                <ArrowRight size={13} />
               </button>
             </div>
           </div>
@@ -1232,7 +1217,7 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* ✨ MULTI-LINK "SHARE MCP LINK" WIZARD ✨ */}
+      {/* MULTI-LINK "SHARE MCP LINK" WIZARD */}
       {/* ========================================================================= */}
       {shareWizardOpen && (
         <div style={{
@@ -1241,8 +1226,8 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(15, 23, 42, 0.55)",
-          backdropFilter: "blur(6px)",
+          background: "rgba(15, 23, 42, 0.35)",
+          backdropFilter: "blur(12px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1256,6 +1241,7 @@ export default function WorkspaceDetailPage() {
             overflowY: "auto",
             padding: "2.5rem 2.25rem",
             position: "relative",
+            background: "#ffffff",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
           }}>
@@ -1265,32 +1251,32 @@ export default function WorkspaceDetailPage() {
                 position: "absolute",
                 top: "1.25rem",
                 right: "1.25rem",
-                width: "28px",
-                height: "28px",
+                width: "30px",
+                height: "30px",
                 borderRadius: "50%",
-                background: "#f1f5f9",
-                border: "none",
-                color: "var(--text-secondary)",
+                background: "var(--canvas-bg)",
+                border: "1px solid var(--glass-border-subtle)",
+                color: "var(--text-muted)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
               }}
             >
-              <X size={15} />
+              <X size={14} />
             </button>
 
             <div className="slash-tag">MCP LINK GENERATOR</div>
-            <h2 className="font-editorial" style={{ fontSize: "1.6rem", marginBottom: "0.35rem" }}>
+            <h2 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
               Create Tailored MCP Link
             </h2>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
               Configure exactly which files and data this AI link can access.
             </p>
 
             {/* Wizard Step 1: Name */}
             <div style={{ marginBottom: "1.5rem" }}>
-              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-primary)" }}>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
                 1. Link Label / Purpose
               </label>
               <input
@@ -1304,7 +1290,7 @@ export default function WorkspaceDetailPage() {
 
             {/* Wizard Step 2: Choose which files */}
             <div style={{ marginBottom: "1.75rem" }}>
-              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-primary)" }}>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
                 2. Which files can this AI access?
               </label>
 
@@ -1334,13 +1320,13 @@ export default function WorkspaceDetailPage() {
                 <div style={{
                   maxHeight: "140px",
                   overflowY: "auto",
-                  background: "#f8fafc",
+                  background: "var(--canvas-bg)",
                   padding: "0.75rem",
                   borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-card)",
+                  border: "1px solid var(--glass-border-subtle)",
                 }}>
                   {files.length === 0 ? (
-                    <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>No files uploaded yet.</div>
+                    <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>No files uploaded yet.</div>
                   ) : (
                     files.map((f) => {
                       const isChecked = selectedFileIds.includes(f.id);
@@ -1358,13 +1344,13 @@ export default function WorkspaceDetailPage() {
                             display: "flex",
                             alignItems: "center",
                             gap: "0.6rem",
-                            padding: "0.4rem 0",
+                            padding: "0.35rem 0",
                             cursor: "pointer",
                             fontSize: "0.85rem",
-                            color: "#0f172a",
+                            color: "var(--color-obsidian)",
                           }}
                         >
-                          {isChecked ? <CheckSquare size={16} color="#2563eb" /> : <Square size={16} color="#94a3b8" />}
+                          {isChecked ? <CheckSquare size={16} color="var(--accent-lime)" /> : <Square size={16} color="var(--text-dim)" />}
                           <span style={{ fontWeight: isChecked ? 600 : 400 }}>{f.original_filename}</span>
                         </div>
                       );
@@ -1376,44 +1362,44 @@ export default function WorkspaceDetailPage() {
 
             {/* Wizard Step 3: Privacy & Data Masking */}
             <div style={{ marginBottom: "2rem" }}>
-              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.6rem", color: "var(--text-primary)" }}>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.6rem", color: "var(--color-obsidian)" }}>
                 3. Privacy &amp; Data Masking for this Link
               </label>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1rem" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", cursor: "pointer" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", marginBottom: "1rem" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
                   <input
                     type="checkbox"
                     checked={maskEmails}
                     onChange={(e) => setMaskEmails(e.target.checked)}
-                    style={{ accentColor: "#2563eb", width: "16px", height: "16px" }}
+                    style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
                   />
                   <span>Mask Email Addresses (e.g. <code>j***@example.com</code>)</span>
                 </label>
 
-                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", cursor: "pointer" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
                   <input
                     type="checkbox"
                     checked={maskNames}
                     onChange={(e) => setMaskNames(e.target.checked)}
-                    style={{ accentColor: "#2563eb", width: "16px", height: "16px" }}
+                    style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
                   />
                   <span>Pseudonymize Person Names (e.g. <code>Person_001</code>)</span>
                 </label>
 
-                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", cursor: "pointer" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
                   <input
                     type="checkbox"
                     checked={maskSSN}
                     onChange={(e) => setMaskSSN(e.target.checked)}
-                    style={{ accentColor: "#2563eb", width: "16px", height: "16px" }}
+                    style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
                   />
                   <span>Mask Social Security Numbers (SSN)</span>
                 </label>
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.3rem", fontWeight: 600 }}>
+                <label style={{ display: "block", fontSize: "0.78rem", color: "var(--text-muted)", marginBottom: "0.35rem", fontWeight: 500 }}>
                   Hide specific columns (comma-separated):
                 </label>
                 <input
@@ -1422,7 +1408,7 @@ export default function WorkspaceDetailPage() {
                   placeholder="e.g. salary, credit_card, ssn"
                   value={customColumnsToHide}
                   onChange={(e) => setCustomColumnsToHide(e.target.value)}
-                  style={{ fontSize: "0.82rem" }}
+                  style={{ fontSize: "0.85rem" }}
                 />
               </div>
             </div>
@@ -1432,7 +1418,7 @@ export default function WorkspaceDetailPage() {
               <button
                 type="button"
                 onClick={() => setShareWizardOpen(false)}
-                className="pill-btn pill-btn-dark"
+                className="pill-btn pill-btn-glass"
               >
                 Cancel
               </button>
@@ -1440,7 +1426,7 @@ export default function WorkspaceDetailPage() {
                 type="button"
                 disabled={generatingLink || !shareName.trim()}
                 onClick={handleGenerateShareLink}
-                className="pill-btn pill-btn-blue"
+                className="pill-btn pill-btn-solid"
               >
                 <Key size={14} />
                 <span>{generatingLink ? "Creating Link..." : "Generate Shareable Link"}</span>
@@ -1460,8 +1446,8 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(15, 23, 42, 0.45)",
-          backdropFilter: "blur(4px)",
+          background: "rgba(15, 23, 42, 0.35)",
+          backdropFilter: "blur(12px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1474,8 +1460,9 @@ export default function WorkspaceDetailPage() {
             maxHeight: "85vh",
             display: "flex",
             flexDirection: "column",
-            padding: "2rem",
+            padding: "2.25rem",
             position: "relative",
+            background: "#ffffff",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
           }}>
@@ -1485,23 +1472,23 @@ export default function WorkspaceDetailPage() {
                 position: "absolute",
                 top: "1.25rem",
                 right: "1.25rem",
-                width: "28px",
-                height: "28px",
+                width: "30px",
+                height: "30px",
                 borderRadius: "50%",
-                background: "#f1f5f9",
-                border: "none",
-                color: "var(--text-secondary)",
+                background: "var(--canvas-bg)",
+                border: "1px solid var(--glass-border-subtle)",
+                color: "var(--text-muted)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
               }}
             >
-              <X size={15} />
+              <X size={14} />
             </button>
 
             <div className="slash-tag">PARSED CONTENT</div>
-            <h3 className="font-editorial" style={{ fontSize: "1.35rem", marginBottom: "0.35rem" }}>
+            <h3 style={{ fontSize: "1.35rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
               {selectedFileName}
             </h3>
 
@@ -1515,30 +1502,30 @@ export default function WorkspaceDetailPage() {
             <div style={{
               flex: 1,
               overflowY: "auto",
-              padding: "1rem 1.25rem",
-              background: "#f8fafc",
-              border: "1px solid var(--border-card)",
+              padding: "1.1rem",
+              background: "var(--canvas-bg)",
+              border: "1px solid var(--glass-border-subtle)",
               borderRadius: "var(--radius-md)",
               fontFamily: "JetBrains Mono, monospace",
-              fontSize: "0.8rem",
-              lineHeight: 1.6,
-              color: "#0f172a",
+              fontSize: "0.82rem",
+              lineHeight: 1.65,
+              color: "var(--color-obsidian)",
               whiteSpace: "pre-wrap",
-              marginBottom: "1.25rem",
+              marginBottom: "1rem",
             }}>
               {selectedFileContent.plain_text}
             </div>
 
             {selectedFileContent.detected_entities && selectedFileContent.detected_entities.length > 0 && (
               <div style={{
-                maxHeight: "120px",
+                maxHeight: "100px",
                 overflowY: "auto",
-                background: "#ffffff",
+                background: "var(--canvas-bg)",
                 padding: "0.75rem",
                 borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-card)",
+                border: "1px solid var(--glass-border-subtle)",
               }}>
-                <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.4rem" }}>
+                <div style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.35rem" }}>
                   Detected Entities in Document:
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
@@ -1564,8 +1551,8 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(15, 23, 42, 0.55)",
-          backdropFilter: "blur(6px)",
+          background: "rgba(15, 23, 42, 0.35)",
+          backdropFilter: "blur(12px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1574,33 +1561,34 @@ export default function WorkspaceDetailPage() {
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
-            maxWidth: "640px",
-            padding: "2.75rem 2.25rem",
+            maxWidth: "620px",
+            padding: "2.5rem 2.25rem",
+            background: "#ffffff",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
           }}>
             <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
               <div className="slash-tag" style={{ justifyContent: "center" }}>MCP LINK READY</div>
-              <h3 className="font-editorial" style={{ fontSize: "1.6rem", marginBottom: "0.4rem" }}>
+              <h3 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
                 Your Shareable MCP Token
               </h3>
               <p style={{
                 fontSize: "0.82rem",
                 color: "var(--status-deny)",
                 background: "var(--status-deny-bg)",
-                padding: "0.5rem 0.85rem",
+                padding: "0.4rem 0.9rem",
                 borderRadius: "var(--radius-pill)",
                 display: "inline-block",
-                border: "1px solid #fecaca",
+                border: "1px solid rgba(220, 38, 38, 0.2)",
               }}>
                 Copy this token now. It cannot be recovered after closing this window.
               </p>
             </div>
 
-            {/* Claude.ai Web Remote Connector Direct URL */}
+            {/* Claude.ai Web Remote Connector URL */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "#2563eb", marginBottom: "0.4rem" }}>
-                1. Claude.ai Web Remote Connector URL (Includes Token)
+              <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)", marginBottom: "0.35rem" }}>
+                1. Claude.ai Web Remote Connector URL
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <input
@@ -1608,28 +1596,28 @@ export default function WorkspaceDetailPage() {
                   readOnly
                   value={`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp?token=${createdCredential.raw_token}`}
                   className="modern-input"
-                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", borderColor: "#bfdbfe", background: "#f0f7ff" }}
+                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", background: "var(--canvas-bg)" }}
                 />
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp?token=${createdCredential.raw_token}`);
                     notify("success", "Claude.ai Connector URL copied!");
                   }}
-                  className="pill-btn pill-btn-blue"
+                  className="pill-btn pill-btn-solid"
                   style={{ padding: "0 1.15rem" }}
                 >
-                  <Copy size={15} />
-                  <span>Copy for Claude.ai</span>
+                  <Copy size={14} />
+                  <span>Copy URL</span>
                 </button>
               </div>
-              <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                Paste this into Claude.ai with <strong>Authentication: None</strong> to connect directly and securely!
+              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
+                Paste this into Claude.ai with <strong>Authentication: None</strong> to connect directly and securely.
               </div>
             </div>
 
             {/* Copyable Bearer Token */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
+              <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
                 2. Bearer Authentication Token
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -1647,29 +1635,28 @@ export default function WorkspaceDetailPage() {
                     notify("success", "Token copied to clipboard.");
                     setTimeout(() => setCopiedToken(false), 2000);
                   }}
-                  className="pill-btn pill-btn-dark"
+                  className="pill-btn pill-btn-glass"
                   style={{ padding: "0 1.15rem" }}
                 >
-                  {copiedToken ? <Check size={15} /> : <Copy size={15} />}
-                  <span>{copiedToken ? "Copied" : "Copy Token"}</span>
+                  {copiedToken ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedToken ? "Copied" : "Copy"}</span>
                 </button>
               </div>
             </div>
 
             {/* Claude Desktop Config Snippet */}
             <div style={{ marginBottom: "1.75rem" }}>
-              <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
+              <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
                 3. Claude Desktop / Cursor JSON Config
               </div>
               <div style={{
-                padding: "0.9rem 1.15rem",
-                background: "#f8fafc",
-                border: "1px solid var(--border-card)",
+                padding: "0.85rem 1.1rem",
+                background: "var(--color-obsidian)",
                 borderRadius: "var(--radius-md)",
                 fontFamily: "JetBrains Mono, monospace",
                 fontSize: "0.78rem",
                 overflowX: "auto",
-                color: "#0f172a",
+                color: "#84cc16",
               }}>
                 <pre>{JSON.stringify({
                   mcpServers: {
@@ -1686,8 +1673,8 @@ export default function WorkspaceDetailPage() {
 
             <button
               onClick={() => setCreatedCredential(null)}
-              className="pill-btn pill-btn-primary"
-              style={{ width: "100%", padding: "0.8rem" }}
+              className="pill-btn pill-btn-solid"
+              style={{ width: "100%", padding: "0.75rem" }}
             >
               Done, I Have Saved This Token
             </button>

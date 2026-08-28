@@ -43,19 +43,20 @@ export default function LoginPage() {
     }}>
       <div className="frosted-panel" style={{
         width: "100%",
-        maxWidth: "440px",
+        maxWidth: "420px",
         padding: "2.75rem 2.25rem",
-        boxShadow: "var(--shadow-card)",
+        boxShadow: "var(--shadow-lg)",
         borderRadius: "var(--radius-xl)",
+        background: "#ffffff",
       }}>
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div className="slash-tag" style={{ justifyContent: "center" }}>
             ACCOUNT LOGIN
           </div>
-          <h1 className="font-editorial" style={{ fontSize: "1.85rem", marginBottom: "0.4rem" }}>
+          <h1 className="font-hero" style={{ fontSize: "1.85rem", marginBottom: "0.3rem", color: "#0f172a" }}>
             Sign In
           </h1>
-          <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)" }}>
+          <p style={{ fontSize: "0.88rem", color: "#64748b" }}>
             Access your workspaces and MCP credentials
           </p>
         </div>
@@ -63,7 +64,7 @@ export default function LoginPage() {
         {error && (
           <div style={{
             background: "var(--status-deny-bg)",
-            border: "1px solid #fecaca",
+            border: "1px solid var(--status-deny-border)",
             color: "var(--status-deny)",
             padding: "0.75rem 1rem",
             borderRadius: "var(--radius-md)",
@@ -76,7 +77,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
           <div>
-            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
+            <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: "0.45rem", color: "#475569" }}>
               Username
             </label>
             <input
@@ -90,7 +91,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
+            <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: "0.45rem", color: "#475569" }}>
               Password
             </label>
             <input
@@ -106,13 +107,11 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="pill-btn pill-btn-primary"
+            className="pill-btn pill-btn-solid"
             style={{ width: "100%", padding: "0.8rem", marginTop: "0.5rem" }}
           >
             {loading ? "Verifying..." : "Sign In"}
-            <div className="btn-arrow-circle">
-              <ArrowRight size={12} />
-            </div>
+            <ArrowRight size={13} />
           </button>
         </form>
 
@@ -123,15 +122,15 @@ export default function LoginPage() {
           gap: "0.4rem",
           marginTop: "1.75rem",
           fontSize: "0.78rem",
-          color: "var(--text-muted)",
+          color: "#64748b",
         }}>
-          <ShieldCheck size={14} color="#059669" />
+          <ShieldCheck size={14} color="#16a34a" />
           <span>Secure authentication with JWT</span>
         </div>
 
-        <div style={{ textAlign: "center", marginTop: "1.25rem", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+        <div style={{ textAlign: "center", marginTop: "1.25rem", fontSize: "0.85rem", color: "#64748b" }}>
           Don&apos;t have an account?{" "}
-          <Link href="/register" style={{ color: "var(--text-primary)", fontWeight: 700, textDecoration: "underline" }}>
+          <Link href="/register" style={{ color: "#0f172a", fontWeight: 600, textDecoration: "underline" }}>
             Register
           </Link>
         </div>

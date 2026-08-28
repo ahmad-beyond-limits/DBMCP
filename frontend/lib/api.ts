@@ -87,6 +87,13 @@ class ApiClient {
     return data;
   }
 
+  getToken(): string | null {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("dbmcp_access_token");
+    }
+    return null;
+  }
+
   logout() {
     if (typeof window !== "undefined") {
       localStorage.removeItem("dbmcp_access_token");

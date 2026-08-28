@@ -5,7 +5,17 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { User, Workspace } from "@/lib/types";
-import { FolderGit2, Plus, ArrowRight, ArrowUpRight, X, Shield, FileText, Key, LogOut } from "lucide-react";
+import {
+  FolderGit2,
+  Plus,
+  ArrowRight,
+  ArrowUpRight,
+  X,
+  Shield,
+  FileText,
+  Key,
+  Search,
+} from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -69,7 +79,6 @@ export default function DashboardPage() {
   });
 
   const totalFiles = workspaces.reduce((acc, ws) => acc + (ws.files_count || 0), 0);
-  const totalPolicies = workspaces.reduce((acc, ws) => acc + (ws.policies_count || 0), 0);
   const totalKeys = workspaces.reduce((acc, ws) => acc + (ws.credentials_count || 0), 0);
 
   if (loading) {
@@ -81,97 +90,160 @@ export default function DashboardPage() {
   }
 
   return (
-    <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "3rem 2rem 5rem 2rem" }}>
+    <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "2.5rem 1.5rem 5rem 1.5rem" }}>
       {/* Top Banner with Clean Greeting & Actions */}
       <div style={{
         display: "flex",
         justifyContent: "space-between",
         alignItems: "flex-end",
         marginBottom: "2.5rem",
-        paddingBottom: "1.75rem",
-        borderBottom: "1px solid var(--border-card)",
+        paddingBottom: "1.5rem",
+        borderBottom: "1px solid var(--glass-border-subtle)",
         flexWrap: "wrap",
         gap: "1.25rem",
       }}>
         <div>
           <div className="slash-tag">WORKSPACES DIRECTORY</div>
-          <h1 className="font-editorial" style={{ fontSize: "clamp(1.8rem, 3vw, 2.4rem)", letterSpacing: "-0.02em", marginBottom: "0.25rem" }}>
+          <h1 className="font-hero" style={{ fontSize: "clamp(1.8rem, 3.2vw, 2.5rem)", letterSpacing: "-0.025em", marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
             Data Workspaces
           </h1>
           <p style={{ fontSize: "0.92rem", color: "var(--text-secondary)" }}>
-            Signed in as <strong style={{ color: "#0f172a" }}>{user?.username}</strong>. Each workspace has isolated documents, policies, and MCP sharing links.
+            Signed in as <strong style={{ color: "var(--color-obsidian)" }}>{user?.username}</strong>. Each workspace has isolated documents, policies, and MCP sharing links.
           </p>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="pill-btn pill-btn-primary"
-            style={{ padding: "0.65rem 1.35rem" }}
+            className="pill-btn pill-btn-solid"
+            style={{ padding: "0.65rem 1.4rem" }}
           >
-            <Plus size={15} />
-            Create Workspace
+            <Plus size={16} />
+            <span>Create Workspace</span>
           </button>
         </div>
       </div>
 
-      {/* Radiant Metric Overview Cards (Inspired by Reference Images 2, 3, 4) */}
+      {/* 3 Consistent Frosted Glass Metric Cards */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-        gap: "1.25rem",
+        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+        gap: "1.5rem",
         marginBottom: "2.5rem",
       }}>
-        <div className="frosted-panel" style={{ padding: "1.5rem 1.75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Workspaces
-            </span>
-            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <FolderGit2 size={15} color="#0f172a" />
+        {/* Card 1: Total Workspaces */}
+        <div className="frosted-panel" style={{ padding: "1.85rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.75rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+              <div style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                background: "var(--accent-lime-bg)",
+                border: "1px solid var(--accent-lime-border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--accent-lime)",
+              }}>
+                <FolderGit2 size={16} />
+              </div>
+              <div>
+                <div style={{ fontSize: "0.72rem", color: "var(--accent-lime)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.06em" }}>
+                  DATA VAULTS
+                </div>
+                <div style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--color-obsidian)" }}>Active Workspaces</div>
+              </div>
+            </div>
+            <div className="circle-action-btn">
+              <ArrowUpRight size={15} />
             </div>
           </div>
-          <div className="font-editorial" style={{ fontSize: "2.2rem", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{workspaces.length}</div>
+
+          <div style={{ fontSize: "2.5rem", fontWeight: 700, lineHeight: 1, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
+            {workspaces.length}
+          </div>
+          <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+            Isolated environments configured
+          </div>
         </div>
 
-        <div className="frosted-panel" style={{ padding: "1.5rem 1.75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Uploaded Files
-            </span>
-            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#ecfdf5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <FileText size={15} color="#059669" />
+        {/* Card 2: Protected Documents */}
+        <div className="frosted-panel" style={{ padding: "1.85rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.75rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+              <div style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                background: "var(--accent-lime-bg)",
+                border: "1px solid var(--accent-lime-border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--accent-lime)",
+              }}>
+                <FileText size={16} />
+              </div>
+              <div>
+                <div style={{ fontSize: "0.72rem", color: "var(--accent-lime)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.06em" }}>
+                  DOCUMENT STORE
+                </div>
+                <div style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--color-obsidian)" }}>Protected Files</div>
+              </div>
+            </div>
+            <div className="circle-action-btn">
+              <ArrowUpRight size={15} />
             </div>
           </div>
-          <div className="font-editorial" style={{ fontSize: "2.2rem", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{totalFiles}</div>
+
+          <div style={{ fontSize: "2.5rem", fontWeight: 700, lineHeight: 1, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
+            {totalFiles}
+          </div>
+          <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+            Indexed for AI retrieval
+          </div>
         </div>
 
-        <div className="frosted-panel" style={{ padding: "1.5rem 1.75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Active Rules
-            </span>
-            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#fffbeb", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Shield size={15} color="#d97706" />
+        {/* Card 3: Active AI Links */}
+        <div className="frosted-panel" style={{ padding: "1.85rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.75rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+              <div style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                background: "var(--accent-lime-bg)",
+                border: "1px solid var(--accent-lime-border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--accent-lime)",
+              }}>
+                <Key size={16} />
+              </div>
+              <div>
+                <div style={{ fontSize: "0.72rem", color: "var(--accent-lime)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.06em" }}>
+                  AI CONNECTORS
+                </div>
+                <div style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--color-obsidian)" }}>Active MCP Links</div>
+              </div>
+            </div>
+            <div className="circle-action-btn">
+              <ArrowUpRight size={15} />
             </div>
           </div>
-          <div className="font-editorial" style={{ fontSize: "2.2rem", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{totalPolicies}</div>
-        </div>
 
-        <div className="frosted-panel" style={{ padding: "1.5rem 1.75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Live MCP Links
-            </span>
-            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Key size={15} color="#2563eb" />
-            </div>
+          <div style={{ fontSize: "2.5rem", fontWeight: 700, lineHeight: 1, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
+            {totalKeys}
           </div>
-          <div className="font-editorial" style={{ fontSize: "2.2rem", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{totalKeys}</div>
+          <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+            Live tokens for Claude &amp; Cursor
+          </div>
         </div>
       </div>
 
-      {/* Filter Tabs & Search Bar */}
+      {/* Filter and Search Bar */}
       <div style={{
         display: "flex",
         justifyContent: "space-between",
@@ -185,164 +257,125 @@ export default function DashboardPage() {
             onClick={() => setFilter("all")}
             className={`pill-tab ${filter === "all" ? "active" : ""}`}
           >
-            All ({workspaces.length})
+            All Workspaces ({workspaces.length})
           </button>
           <button
             onClick={() => setFilter("owner")}
             className={`pill-tab ${filter === "owner" ? "active" : ""}`}
           >
-            Personal
+            Owned by Me
           </button>
           <button
             onClick={() => setFilter("member")}
             className={`pill-tab ${filter === "member" ? "active" : ""}`}
           >
-            Shared
+            Shared with Me
           </button>
         </div>
 
-        <div style={{ width: "100%", maxWidth: "300px" }}>
+        <div style={{ position: "relative", minWidth: "260px" }}>
+          <Search size={15} color="var(--text-dim)" style={{ position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)" }} />
           <input
             type="text"
-            className="modern-input"
             placeholder="Search workspaces..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ padding: "0.5rem 0.9rem", fontSize: "0.85rem" }}
+            className="modern-input"
+            style={{ paddingLeft: "2.5rem", borderRadius: "var(--radius-pill)", fontSize: "0.85rem" }}
           />
         </div>
       </div>
 
       {/* Workspaces Grid */}
       {filteredWorkspaces.length === 0 ? (
-        <div className="frosted-panel" style={{ textAlign: "center", padding: "4.5rem 2rem" }}>
+        <div className="frosted-panel" style={{ textAlign: "center", padding: "5rem 2rem" }}>
           <div style={{
-            width: "48px",
-            height: "48px",
-            borderRadius: "12px",
-            background: "#f1f5f9",
+            width: "56px",
+            height: "56px",
+            borderRadius: "14px",
+            background: "var(--accent-lime-bg)",
+            border: "1px solid var(--accent-lime-border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             margin: "0 auto 1.25rem auto",
-            color: "#475569",
+            color: "var(--accent-lime)",
           }}>
-            <FolderGit2 size={24} />
+            <FolderGit2 size={26} />
           </div>
-          <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.4rem" }}>
-            {searchQuery ? "No matching workspaces" : "No workspaces yet"}
-          </h2>
-          <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", maxWidth: "440px", margin: "0 auto 1.75rem auto", lineHeight: 1.5 }}>
-            Create a workspace to start uploading documents, configuring permissions, and connecting AI models.
+          <h3 style={{ fontSize: "1.3rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
+            No workspaces found
+          </h3>
+          <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", maxWidth: "440px", margin: "0 auto 1.75rem auto", lineHeight: 1.6 }}>
+            {searchQuery ? "No workspaces match your search criteria." : "Create your first workspace to start uploading documents and sharing MCP links with AI."}
           </p>
-          <button onClick={() => setShowCreateModal(true)} className="pill-btn pill-btn-primary">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="pill-btn pill-btn-solid"
+          >
             <Plus size={15} />
-            Create Workspace
+            Create Your First Workspace
           </button>
         </div>
       ) : (
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
           gap: "1.5rem",
         }}>
           {filteredWorkspaces.map((ws) => (
             <div
               key={ws.id}
               onClick={() => router.push(`/workspaces/${ws.id}`)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === "Enter") router.push(`/workspaces/${ws.id}`); }}
               className="frosted-panel"
               style={{
-                height: "100%",
-                padding: "1.75rem",
+                padding: "1.85rem",
+                cursor: "pointer",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
-                cursor: "pointer",
-                position: "relative",
-                transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "#2563eb";
-                e.currentTarget.style.boxShadow = "0 12px 32px -6px rgba(37, 99, 235, 0.14)";
-                e.currentTarget.style.transform = "translateY(-2px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "var(--border-card)";
-                e.currentTarget.style.boxShadow = "var(--shadow-sm)";
-                e.currentTarget.style.transform = "translateY(0)";
+                minHeight: "200px",
               }}
             >
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-                  <h3 style={{ fontSize: "1.25rem", fontWeight: 700, color: "#0f172a" }}>
-                    {ws.name}
-                  </h3>
-                  <div className="circle-action-btn" style={{ width: "30px", height: "30px" }}>
-                    <ArrowUpRight size={14} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                  <span className={`badge-status ${ws.is_active ? "badge-status-allow" : "badge-status-deny"}`}>
+                    {ws.is_active ? "Active Vault" : "Disabled"}
+                  </span>
+                  <div className="circle-action-btn">
+                    <ArrowUpRight size={15} />
                   </div>
                 </div>
 
-                <div style={{
-                  fontSize: "0.75rem",
-                  color: "var(--text-muted)",
-                  fontFamily: "JetBrains Mono, monospace",
-                  marginBottom: "1.5rem",
-                }}>
-                  ID: {ws.id.substring(0, 18)}...
+                <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
+                  {ws.name}
+                </h3>
+                <div style={{ fontSize: "0.78rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-dim)", marginBottom: "1.5rem" }}>
+                  ID: {ws.id.substring(0, 16)}...
                 </div>
               </div>
 
-              <div>
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(3, 1fr)",
-                  gap: "0.75rem",
-                  padding: "0.75rem",
-                  background: "#f8fafc",
-                  borderRadius: "var(--radius-md)",
-                  textAlign: "center",
-                  marginBottom: "1.25rem",
-                  border: "1px solid var(--border-subtle)",
-                }}>
-                  <div>
-                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>{ws.files_count}</div>
-                    <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Files</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>{ws.policies_count}</div>
-                    <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Policies</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>{ws.credentials_count}</div>
-                    <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Keys</div>
-                  </div>
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingTop: "1.1rem",
+                borderTop: "1px solid var(--glass-border-subtle)",
+                fontSize: "0.82rem",
+                color: "var(--text-muted)",
+              }}>
+                <div style={{ display: "flex", gap: "1rem" }}>
+                  <span><strong style={{ color: "var(--color-obsidian)" }}>{ws.files_count || 0}</strong> Files</span>
+                  <span><strong style={{ color: "var(--color-obsidian)" }}>{ws.credentials_count || 0}</strong> MCP Links</span>
                 </div>
-
-                <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontSize: "0.82rem",
-                  color: "var(--text-muted)",
-                  paddingTop: "0.75rem",
-                  borderTop: "1px solid var(--border-subtle)",
+                <span style={{
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  color: ws.role === "OWNER" ? "var(--accent-lime)" : "var(--text-secondary)",
                 }}>
-                  <span className={`badge-status ${ws.role === "OWNER" ? "badge-status-allow" : "badge-status-transform"}`}>
-                    {ws.role}
-                  </span>
-                  <span style={{
-                    color: "#2563eb",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.35rem",
-                  }}>
-                    Manage <ArrowRight size={13} />
-                  </span>
-                </div>
+                  {ws.role}
+                </span>
               </div>
             </div>
           ))}
@@ -357,20 +390,20 @@ export default function DashboardPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(15, 23, 42, 0.45)",
-          backdropFilter: "blur(6px)",
-          WebkitBackdropFilter: "blur(6px)",
+          background: "rgba(15, 23, 42, 0.35)",
+          backdropFilter: "blur(12px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          zIndex: 100,
+          zIndex: 150,
           padding: "1.5rem",
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
-            maxWidth: "480px",
+            maxWidth: "460px",
             padding: "2.5rem 2.25rem",
             position: "relative",
+            background: "#ffffff",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
           }}>
@@ -380,33 +413,33 @@ export default function DashboardPage() {
                 position: "absolute",
                 top: "1.25rem",
                 right: "1.25rem",
-                width: "28px",
-                height: "28px",
+                width: "30px",
+                height: "30px",
                 borderRadius: "50%",
-                background: "#f1f5f9",
-                border: "none",
-                color: "var(--text-secondary)",
+                background: "var(--canvas-bg)",
+                border: "1px solid var(--glass-border-subtle)",
+                color: "var(--text-muted)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
               }}
             >
-              <X size={15} />
+              <X size={14} />
             </button>
 
-            <div className="slash-tag">NEW WORKSPACE</div>
-            <h2 className="font-editorial" style={{ fontSize: "1.6rem", marginBottom: "0.4rem" }}>
+            <div className="slash-tag">NEW VAULT</div>
+            <h2 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
               Create Workspace
             </h2>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem" }}>
-              Workspaces are cryptographically isolated environments for your files, policies, and MCP keys.
+            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
+              Set up a secure, isolated vault for your enterprise documents and AI agents.
             </p>
 
             {error && (
               <div style={{
                 background: "var(--status-deny-bg)",
-                border: "1px solid #fecaca",
+                border: "1px solid rgba(220, 38, 38, 0.2)",
                 color: "var(--status-deny)",
                 padding: "0.75rem 1rem",
                 borderRadius: "var(--radius-md)",
@@ -419,14 +452,14 @@ export default function DashboardPage() {
 
             <form onSubmit={handleCreateWorkspace}>
               <div style={{ marginBottom: "1.75rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--color-obsidian)" }}>
                   Workspace Name
                 </label>
                 <input
                   type="text"
                   required
                   className="modern-input"
-                  placeholder="e.g. Sales Intelligence or Legal Vault"
+                  placeholder="e.g. Finance Vault or HR Policies"
                   value={newWorkspaceName}
                   onChange={(e) => setNewWorkspaceName(e.target.value)}
                   autoFocus
@@ -437,19 +470,17 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="pill-btn pill-btn-dark"
+                  className="pill-btn pill-btn-glass"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={creating}
-                  className="pill-btn pill-btn-primary"
+                  disabled={creating || !newWorkspaceName.trim()}
+                  className="pill-btn pill-btn-solid"
                 >
-                  {creating ? "Creating..." : "Create Workspace"}
-                  <div className="btn-arrow-circle">
-                    <ArrowRight size={12} />
-                  </div>
+                  {creating ? "Creating..." : "Initialize Workspace"}
+                  <ArrowRight size={14} />
                 </button>
               </div>
             </form>

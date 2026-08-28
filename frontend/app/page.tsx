@@ -9,235 +9,144 @@ import {
   Lock,
   ArrowRight,
   ArrowUpRight,
-  Sparkles,
   Terminal,
   Activity,
   CheckCircle2,
-  Database,
-  Cpu,
-  Layers,
+  Check,
 } from "lucide-react";
 
 export default function LandingPage() {
   const { checkAndNavigate } = useGateway();
 
   return (
-    <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "3rem 2rem 6rem 2rem" }}>
+    <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "3rem 1.5rem 6rem 1.5rem" }}>
       {/* ========================================================================= */}
-      {/* 1. HERO SECTION (Swiss Editorial Style from Reference Image 1) */}
+      {/* 1. HERO BANNER WITH TD BANK STYLE RADIANT GLASS CARD                      */}
       {/* ========================================================================= */}
-      <section style={{ marginBottom: "4.5rem" }}>
+      <section style={{
+        position: "relative",
+        borderRadius: "var(--radius-xl)",
+        overflow: "hidden",
+        padding: "clamp(2.5rem, 5vw, 4rem) clamp(1.5rem, 4vw, 3.5rem)",
+        background: "rgba(255, 255, 255, 0.7)",
+        backdropFilter: "blur(36px) saturate(180%)",
+        WebkitBackdropFilter: "blur(36px) saturate(180%)",
+        border: "1px solid var(--glass-border)",
+        boxShadow: "var(--shadow-glass)",
+        marginBottom: "2.5rem",
+      }}>
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: "2.5rem",
-          alignItems: "flex-end",
-          marginBottom: "3rem",
+          gap: "3rem",
+          alignItems: "center",
         }}>
+          {/* Headline & CTA */}
           <div>
-            <div className="slash-tag">ZERO-TRUST MCP DATA GATEWAY</div>
-            <h1 className="font-editorial" style={{
-              fontSize: "clamp(2.4rem, 5vw, 4rem)",
-              lineHeight: 1.05,
-              fontWeight: 800,
-              letterSpacing: "-0.035em",
-              color: "#0f172a",
-            }}>
-              Bridge Your Enterprise Data to AI Agents Securely
-            </h1>
-          </div>
+            <div className="slash-tag">POLICY-ENFORCED AI DATA WORKSPACE</div>
 
-          <div style={{ maxWidth: "480px" }}>
+            <h1 className="font-hero" style={{
+              fontSize: "clamp(2.4rem, 4.5vw, 3.6rem)",
+              lineHeight: 1.12,
+              fontWeight: 600,
+              color: "var(--color-obsidian)",
+              marginBottom: "1.25rem",
+            }}>
+              The Power of Enterprise Data in Every AI Agent
+            </h1>
+
             <p style={{
-              fontSize: "1.05rem",
+              fontSize: "1rem",
               lineHeight: 1.6,
               color: "var(--text-secondary)",
-              marginBottom: "1.75rem",
+              maxWidth: "460px",
+              marginBottom: "2rem",
             }}>
-              Connect Claude, Cursor, and custom LLMs to PDFs, CSVs, and internal documents with granular access policies, real-time PII anonymisation, and cryptographic audit trails.
+              Connect Claude, Cursor, and custom LLMs to your private files with granular access control, automated PII masking, and full auditability.
             </p>
 
-            <div style={{ display: "flex", gap: "0.85rem", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
               <button
                 onClick={() => checkAndNavigate("/register")}
-                className="pill-btn pill-btn-primary"
-                style={{ padding: "0.75rem 1.6rem", fontSize: "0.95rem" }}
+                className="pill-btn pill-btn-solid"
+                style={{ padding: "0.75rem 1.8rem" }}
               >
-                Create Free Workspace
-                <div className="btn-arrow-circle">
-                  <ArrowRight size={12} />
-                </div>
+                <span>Explore Now</span>
+                <ArrowUpRight size={15} />
               </button>
 
               <button
                 onClick={() => checkAndNavigate("/dashboard")}
-                className="pill-btn pill-btn-dark"
-                style={{ padding: "0.75rem 1.4rem", fontSize: "0.95rem" }}
+                className="pill-btn pill-btn-glass"
+                style={{ padding: "0.75rem 1.4rem" }}
               >
                 Open Console
               </button>
             </div>
           </div>
-        </div>
 
-        {/* ========================================================================= */}
-        {/* 2. RADIANT GLASS PREVIEW CANVAS (Fintech/Glass Cards from Images 2, 3, 4) */}
-        {/* ========================================================================= */}
-        <div className="browser-window" style={{ padding: "1.75rem", background: "#f8fafc" }}>
-          <div className="browser-header" style={{ marginBottom: "1.5rem", borderRadius: "var(--radius-sm)" }}>
-            <div className="browser-dots">
-              <div className="browser-dot dot-red" />
-              <div className="browser-dot dot-yellow" />
-              <div className="browser-dot dot-green" />
-            </div>
-            <div className="browser-address-bar">
-              🔒 https://gateway.dbmcp.io/workspaces/enterprise-vault/mcp
-            </div>
-          </div>
-
-          {/* Grid of Radiant Glass Cards */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: "1.5rem",
-          }}>
-            {/* Card 1: Lime Glass (Active Documents & Protection) */}
-            <div className="glass-card-lime">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2.5rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <div style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "50%",
-                    background: "rgba(255, 255, 255, 0.2)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    <FileText size={16} />
+          {/* Right: The Exact TD Bank Style Radiant Card from Reference */}
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <div className="glass-card-radiant" style={{
+              width: "100%",
+              maxWidth: "380px",
+              padding: "2rem",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.25rem" }}>
+                    <span style={{ fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.08em", color: "#d9f99d" }}>
+                      DBMCP GATEWAY VAULT
+                    </span>
+                    <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#a3e635" }} />
                   </div>
-                  <div>
-                    <div style={{ fontSize: "0.75rem", opacity: 0.8, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>
-                      DOCUMENTS VAULT
-                    </div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 700 }}>Financial &amp; Customer Records</div>
+                  <div style={{ fontSize: "1.2rem", fontWeight: 600, color: "#ffffff" }}>
+                    Active Workspace
                   </div>
                 </div>
 
-                <div className="circle-action-btn circle-action-btn-light">
-                  <ArrowUpRight size={16} />
+                <div className="circle-action-btn circle-action-btn-dark">
+                  <ArrowUpRight size={15} />
                 </div>
               </div>
 
-              <div>
-                <div style={{ fontSize: "0.8rem", opacity: 0.85, marginBottom: "0.2rem" }}>Active Encrypted Files</div>
-                <div className="font-editorial" style={{ fontSize: "2.4rem", fontWeight: 800, lineHeight: 1, marginBottom: "1.25rem" }}>
-                  14 Files
+              {/* Contained Stat Capsule */}
+              <div style={{
+                background: "rgba(0, 0, 0, 0.25)",
+                backdropFilter: "blur(16px)",
+                padding: "1.25rem",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid rgba(255, 255, 255, 0.15)",
+                marginBottom: "1.5rem",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.4rem" }}>
+                  <span style={{ fontSize: "0.78rem", color: "#cbd5e1" }}>Protected Documents</span>
+                  <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.75rem", color: "#a3e635", fontWeight: 600 }}>
+                    AES-256-GCM
+                  </span>
                 </div>
+                <div style={{ fontSize: "2.2rem", fontWeight: 700, lineHeight: 1, color: "#ffffff" }}>
+                  14 Files Active
+                </div>
+              </div>
 
-                {/* Timeline / scanning dots */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.75rem", borderTop: "1px solid rgba(255, 255, 255, 0.2)" }}>
+              {/* Progress & Micro-dots Timeline */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                   <div className="dots-meter">
                     <div className="dots-meter-dot active" />
                     <div className="dots-meter-dot active" />
                     <div className="dots-meter-dot active" />
-                    <div className="dots-meter-dot" />
-                    <div className="dots-meter-dot" />
+                    <div className="dots-meter-dot active" />
                   </div>
-                  <div style={{ fontSize: "0.75rem", fontWeight: 600, opacity: 0.9 }}>
-                    PII Masking Active
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 2: Amber Glass (Live MCP Connections) */}
-            <div className="glass-card-amber">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2.5rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <div style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "50%",
-                    background: "rgba(255, 255, 255, 0.2)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    <Key size={16} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "0.75rem", opacity: 0.8, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>
-                      AI AGENT BRIDGES
-                    </div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 700 }}>Claude &amp; Cursor Connectors</div>
-                  </div>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#d9f99d" }}>
+                    99.8% PII Masked
+                  </span>
                 </div>
 
-                <div className="circle-action-btn circle-action-btn-light">
-                  <ArrowUpRight size={16} />
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: "0.8rem", opacity: 0.85, marginBottom: "0.2rem" }}>Total Queries Streamed</div>
-                <div className="font-editorial" style={{ fontSize: "2.4rem", fontWeight: 800, lineHeight: 1, marginBottom: "1.25rem" }}>
-                  56,420
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.75rem", borderTop: "1px solid rgba(255, 255, 255, 0.2)" }}>
-                  <div style={{ fontSize: "0.75rem", fontWeight: 600 }}>
-                    Protocol: JSON-RPC 2.0
-                  </div>
-                  <div style={{ fontSize: "0.75rem", fontWeight: 600, opacity: 0.9 }}>
-                    0 Policy Violations
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 3: Dark Obsidian Glass (Policy Engine) */}
-            <div className="glass-card-dark">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2.5rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <div style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "50%",
-                    background: "rgba(255, 255, 255, 0.15)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    <Shield size={16} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "0.75rem", opacity: 0.7, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>
-                      ZERO-TRUST POLICY
-                    </div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 700 }}>Dynamic Anonymisation</div>
-                  </div>
-                </div>
-
-                <div className="circle-action-btn circle-action-btn-light">
-                  <ArrowUpRight size={16} />
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: "0.8rem", opacity: 0.75, marginBottom: "0.2rem" }}>Real-time Leakage Prevention</div>
-                <div className="font-editorial" style={{ fontSize: "2.4rem", fontWeight: 800, lineHeight: 1, marginBottom: "1.25rem" }}>
-                  100% Pass
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.75rem", borderTop: "1px solid rgba(255, 255, 255, 0.15)" }}>
-                  <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#a7f3d0" }}>
-                    AES-256-GCM
-                  </div>
-                  <div style={{ fontSize: "0.75rem", fontWeight: 600, opacity: 0.8 }}>
-                    Immutable Audit Log
-                  </div>
-                </div>
+                <span style={{ fontSize: "0.72rem", fontFamily: "JetBrains Mono, monospace", color: "rgba(255, 255, 255, 0.7)" }}>
+                  MCP v2024-11-05
+                </span>
               </div>
             </div>
           </div>
@@ -245,128 +154,129 @@ export default function LandingPage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* 3. FOUR PILLARS SECTION (Swiss Grid Layout from Reference Image 1) */}
+      {/* 2. THREE CONSISTENT FROSTED GLASS FEATURE CARDS                           */}
       {/* ========================================================================= */}
-      <section style={{
-        paddingTop: "3rem",
-        borderTop: "1px solid var(--border-card)",
-        marginBottom: "4.5rem",
-      }}>
-        <div style={{ marginBottom: "2.5rem" }}>
-          <div className="slash-tag">CORE CAPABILITIES</div>
-          <h2 className="font-editorial" style={{ fontSize: "2rem", letterSpacing: "-0.02em" }}>
-            Engineered for Strict Enterprise Privacy
-          </h2>
-        </div>
-
+      <section style={{ marginBottom: "2.5rem" }}>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-          gap: "2rem",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: "1.5rem",
         }}>
-          {[
-            {
-              num: "01",
-              title: "Multi-Link MCP Sharing",
-              desc: "Create multiple distinct MCP links for different AI models. Each link has its own file access permissions and data privacy policies.",
-              icon: <Key size={20} color="#2563eb" />,
-            },
-            {
-              num: "02",
-              title: "Real-Time Data Masking",
-              desc: "Automatically detect and mask emails, person names, and SSNs. Remove or transform sensitive dataset columns before the AI receives results.",
-              icon: <Shield size={20} color="#059669" />,
-            },
-            {
-              num: "03",
-              title: "Forensic Audit Trail",
-              desc: "Every resource read, semantic search, and dataset query is permanently logged with timestamps, caller identity, and policy decisions.",
-              icon: <Activity size={20} color="#d97706" />,
-            },
-            {
-              num: "04",
-              title: "Native MCP Protocol",
-              desc: "Full standard JSON-RPC 2.0 compatibility for Claude Desktop, Cursor, and custom MCP clients over Streamable HTTP and SSE.",
-              icon: <Terminal size={20} color="#0f172a" />,
-            },
-          ].map((feature, idx) => (
-            <div
-              key={idx}
-              className="frosted-panel"
-              style={{
-                padding: "2rem 1.75rem",
+          {/* Feature 1 */}
+          <div className="frosted-panel" style={{ padding: "2rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+              <div style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "var(--radius-sm)",
+                background: "rgba(132, 204, 22, 0.12)",
+                border: "1px solid rgba(132, 204, 22, 0.3)",
                 display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-              }}
-            >
-              <div>
-                <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "1.5rem",
-                }}>
-                  <div style={{
-                    width: "40px",
-                    height: "40px",
-                    borderRadius: "10px",
-                    background: "#f1f5f9",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    {feature.icon}
-                  </div>
-                  <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.85rem", color: "var(--text-dim)", fontWeight: 700 }}>
-                    /{feature.num}
-                  </span>
-                </div>
-
-                <h3 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "0.6rem" }}>
-                  {feature.title}
-                </h3>
-                <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.55 }}>
-                  {feature.desc}
-                </p>
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--accent-lime)",
+              }}>
+                <Key size={18} />
               </div>
+              <span style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-muted)" }}>01</span>
             </div>
-          ))}
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
+              Multi-Link MCP Sharing
+            </h3>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Create multiple distinct MCP links for different AI models. Each link has its own file access permissions and data privacy policies.
+            </p>
+          </div>
+
+          {/* Feature 2 */}
+          <div className="frosted-panel" style={{ padding: "2rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+              <div style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "var(--radius-sm)",
+                background: "rgba(132, 204, 22, 0.12)",
+                border: "1px solid rgba(132, 204, 22, 0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--accent-lime)",
+              }}>
+                <Shield size={18} />
+              </div>
+              <span style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-muted)" }}>02</span>
+            </div>
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
+              Real-Time Data Masking
+            </h3>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Automatically detect and mask emails, names, and SSNs. Remove or transform sensitive dataset columns before the AI receives results.
+            </p>
+          </div>
+
+          {/* Feature 3 */}
+          <div className="frosted-panel" style={{ padding: "2rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+              <div style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "var(--radius-sm)",
+                background: "rgba(132, 204, 22, 0.12)",
+                border: "1px solid rgba(132, 204, 22, 0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--accent-lime)",
+              }}>
+                <Activity size={18} />
+              </div>
+              <span style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-muted)" }}>03</span>
+            </div>
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
+              Forensic Audit Trail
+            </h3>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Every resource read, semantic search, and dataset query is permanently logged with timestamps, caller identity, and policy decisions.
+            </p>
+          </div>
         </div>
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. CALL TO ACTION BANNER */}
+      {/* 3. CLEAN OBSIDIAN CTA CARD                                                */}
       {/* ========================================================================= */}
-      <section className="glass-card-dark" style={{
-        padding: "3.5rem clamp(2rem, 5vw, 4rem)",
+      <section style={{
+        padding: "3rem clamp(1.5rem, 4vw, 3.5rem)",
         borderRadius: "var(--radius-xl)",
+        background: "var(--color-obsidian)",
+        color: "#ffffff",
+        boxShadow: "var(--shadow-lg)",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
         flexWrap: "wrap",
         gap: "2rem",
       }}>
-        <div style={{ maxWidth: "600px" }}>
-          <div style={{ fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "#60a5fa", fontWeight: 700, marginBottom: "0.5rem" }}>
-            GET STARTED IN SECONDS
+        <div style={{ maxWidth: "560px" }}>
+          <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "#a3e635", fontWeight: 600, marginBottom: "0.4rem" }}>
+            INSTANT CLOUD SETUP
           </div>
-          <h2 className="font-editorial" style={{ fontSize: "clamp(1.8rem, 3vw, 2.5rem)", color: "#ffffff", marginBottom: "0.75rem" }}>
+          <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", fontWeight: 600, color: "#ffffff", marginBottom: "0.6rem" }}>
             Ready to give your AI agents safe data access?
           </h2>
-          <p style={{ color: "rgba(255, 255, 255, 0.75)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+          <p style={{ color: "#94a3b8", fontSize: "0.92rem", lineHeight: 1.5 }}>
             Create an isolated workspace, upload documents, and generate custom MCP links for Claude or Cursor in under 60 seconds.
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "1rem" }}>
+        <div>
           <button
             onClick={() => checkAndNavigate("/register")}
-            className="pill-btn pill-btn-blue"
-            style={{ padding: "0.85rem 1.75rem", fontSize: "0.95rem" }}
+            className="pill-btn"
+            style={{ background: "#ffffff", color: "var(--color-obsidian)", fontWeight: 600, padding: "0.8rem 1.8rem" }}
           >
-            Create Free Account
-            <ArrowRight size={14} />
+            <span>Create Free Workspace</span>
+            <ArrowRight size={15} />
           </button>
         </div>
       </section>
