@@ -225,29 +225,59 @@ async def revoke_mcp_credential(
 # ==============================================================================
 
 async def get_mcp_context(
+    request: Request,
     authorization: Optional[str] = Header(None),
     x_mcp_token: Optional[str] = Header(None),
+    token: Optional[str] = None,
+    key: Optional[str] = None,
+    api_key: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ) -> AuthenticatedMCPContext:
-    """Extracts and validates private MCP token. Derives workspace context."""
-    token = None
+    """Extracts and validates private MCP token from Authorization header, custom header, or URL query param."""
+    raw_token = None
     if authorization:
         parts = authorization.split()
         if len(parts) == 2 and parts[0].lower() == "bearer":
-            token = parts[1]
+            raw_token = parts[1]
         else:
-            token = authorization
+            raw_token = authorization
     elif x_mcp_token:
-        token = x_mcp_token
+        raw_token = x_mcp_token
+    elif token:
+        raw_token = token
+    elif key:
+        raw_token = key
+    elif api_key:
+        raw_token = api_key
+    elif "token" in request.query_params:
+        raw_token = request.query_params["token"]
+    elif "key" in request.query_params:
+        raw_token = request.query_params["key"]
 
-    if not token:
+    if not raw_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing MCP authorization credentials",
+            detail="Missing MCP authorization credentials. Provide via 'Authorization: Bearer <token>' header or '?token=<token>' query parameter.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return await MCPAuthService.validate_credential(db, token)
+    return await MCPAuthService.validate_credential(db, raw_token)
+
+
+@router.get("/mcp")
+async def get_mcp_info(
+    request: Request,
+    token: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Probes MCP server info and protocol compatibility for Claude and remote clients."""
+    return {
+        "status": "ready",
+        "protocol": "MCP JSON-RPC 2.0",
+        "transport": "Streamable HTTP",
+        "endpoint": "/mcp",
+        "description": "DBMCP Policy-Enforced Remote MCP Server",
+    }
 
 
 @router.post(

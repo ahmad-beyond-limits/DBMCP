@@ -1597,30 +1597,33 @@ export default function WorkspaceDetailPage() {
               </p>
             </div>
 
-            {/* Copyable MCP HTTP Endpoint */}
+            {/* Claude.ai Web Remote Connector Direct URL */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-                1. MCP Server HTTP URL
+              <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "#2563eb", marginBottom: "0.4rem" }}>
+                1. Claude.ai Web Remote Connector URL (Includes Token)
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <input
                   type="text"
                   readOnly
-                  value={`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp`}
+                  value={`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp?token=${createdCredential.raw_token}`}
                   className="modern-input"
-                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem" }}
+                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", borderColor: "#bfdbfe", background: "#f0f7ff" }}
                 />
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp`);
-                    notify("success", "MCP URL copied to clipboard.");
+                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp?token=${createdCredential.raw_token}`);
+                    notify("success", "Claude.ai Connector URL copied!");
                   }}
-                  className="pill-btn pill-btn-dark"
+                  className="pill-btn pill-btn-blue"
                   style={{ padding: "0 1.15rem" }}
                 >
                   <Copy size={15} />
-                  <span>Copy URL</span>
+                  <span>Copy for Claude.ai</span>
                 </button>
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                Paste this into Claude.ai with <strong>Authentication: None</strong> to connect directly and securely!
               </div>
             </div>
 
@@ -1644,7 +1647,7 @@ export default function WorkspaceDetailPage() {
                     notify("success", "Token copied to clipboard.");
                     setTimeout(() => setCopiedToken(false), 2000);
                   }}
-                  className="pill-btn pill-btn-primary"
+                  className="pill-btn pill-btn-dark"
                   style={{ padding: "0 1.15rem" }}
                 >
                   {copiedToken ? <Check size={15} /> : <Copy size={15} />}
