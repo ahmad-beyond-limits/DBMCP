@@ -13,6 +13,27 @@ import {
   Workspace,
   WorkspaceMember,
 } from "@/lib/types";
+import {
+  FolderGit2,
+  FileText,
+  Shield,
+  EyeOff,
+  Key,
+  ScrollText,
+  Terminal,
+  Settings,
+  Upload,
+  Plus,
+  Trash2,
+  RefreshCw,
+  Copy,
+  Check,
+  X,
+  ArrowRight,
+  ExternalLink,
+  ShieldCheck,
+  AlertTriangle,
+} from "lucide-react";
 
 export default function WorkspaceDetailPage() {
   const params = useParams();
@@ -37,6 +58,7 @@ export default function WorkspaceDetailPage() {
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [copiedToken, setCopiedToken] = useState(false);
 
   // Modals & Action States
   const [selectedFileContent, setSelectedFileContent] = useState<ExtractedContent | null>(null);
@@ -216,37 +238,38 @@ export default function WorkspaceDetailPage() {
   const handleCreateMCPCredential = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const created = await api.createMCPCredential(workspaceId, newMCPName.trim());
+      const created = await api.createMCPCredential(workspaceId, newMCPName);
       setCreatedCredential(created);
       setNewMCPModal(false);
-      const updatedCreds = await api.getMCPCredentials(workspaceId);
-      setMCPCredentials(updatedCreds);
-      notify("success", "High-entropy MCP credential generated!");
+      setNewMCPName("Claude Assistant");
+      setPlaygroundToken(created.raw_token);
+      const updated = await api.getMCPCredentials(workspaceId);
+      setMCPCredentials(updated);
     } catch (err: any) {
       notify("error", err.message);
     }
   };
 
-  const handleRotateMCP = async (credId: string) => {
-    if (!confirm("Rotating will immediately invalidate the existing token. Continue?")) return;
+  const handleRotateMCP = async (credentialId: string) => {
+    if (!confirm("Rotating will immediately invalidate the current token and generate a new one. Continue?")) return;
     try {
-      const rotated = await api.rotateMCPCredential(workspaceId, credId);
+      const rotated = await api.rotateMCPCredential(workspaceId, credentialId);
       setCreatedCredential(rotated);
-      const updatedCreds = await api.getMCPCredentials(workspaceId);
-      setMCPCredentials(updatedCreds);
-      notify("success", "Credential rotated successfully!");
+      setPlaygroundToken(rotated.raw_token);
+      const updated = await api.getMCPCredentials(workspaceId);
+      setMCPCredentials(updated);
     } catch (err: any) {
       notify("error", err.message);
     }
   };
 
-  const handleRevokeMCP = async (credId: string) => {
-    if (!confirm("Revoking will immediately deny all MCP requests using this token. Continue?")) return;
+  const handleRevokeMCP = async (credentialId: string) => {
+    if (!confirm("Revoking will immediately disable this token. Continue?")) return;
     try {
-      await api.revokeMCPCredential(workspaceId, credId);
+      await api.revokeMCPCredential(workspaceId, credentialId);
       notify("success", "Credential revoked");
-      const updatedCreds = await api.getMCPCredentials(workspaceId);
-      setMCPCredentials(updatedCreds);
+      const updated = await api.getMCPCredentials(workspaceId);
+      setMCPCredentials(updated);
     } catch (err: any) {
       notify("error", err.message);
     }
@@ -254,24 +277,23 @@ export default function WorkspaceDetailPage() {
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMemberUsername.trim()) return;
     try {
       await api.addMember(workspaceId, newMemberUsername.trim(), newMemberRole);
       notify("success", `User '${newMemberUsername}' added as ${newMemberRole}`);
       setNewMemberUsername("");
-      const updatedMembers = await api.getMembers(workspaceId);
-      setMembers(updatedMembers);
+      const updated = await api.getMembers(workspaceId);
+      setMembers(updated);
     } catch (err: any) {
       notify("error", err.message);
     }
   };
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm("Remove this member from the workspace?")) return;
     try {
       await api.removeMember(workspaceId, memberId);
       notify("success", "Member removed");
-      setMembers(members.filter((m) => m.id !== memberId));
+      const updated = await api.getMembers(workspaceId);
+      setMembers(updated);
     } catch (err: any) {
       notify("error", err.message);
     }
@@ -316,7 +338,6 @@ export default function WorkspaceDetailPage() {
         });
       }
       setPlaygroundResult(res);
-      // Refresh audit logs after playground call
       const updatedLogs = await api.getAuditLogs(workspaceId, 50);
       setAuditLogs(updatedLogs);
     } catch (err: any) {
@@ -329,97 +350,111 @@ export default function WorkspaceDetailPage() {
 
   if (loading || !workspace) {
     return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
-        <div style={{ color: "var(--text-secondary)" }}>Loading workspace security boundary...</div>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "65vh" }}>
+        <div className="callout-pin" style={{ position: "static", animation: "none" }}>
+          <span className="pin-icon-circle">+</span>
+          <span>Loading Workspace Security Boundary...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: "1300px", margin: "0 auto", padding: "2rem" }}>
-      {/* Notifications Toast */}
+    <div style={{ maxWidth: "1320px", margin: "0 auto", padding: "2.5rem 2rem 5rem 2rem" }}>
+      {/* Toast Notification */}
       {notification && (
         <div style={{
           position: "fixed",
-          bottom: "2rem",
-          right: "2rem",
+          bottom: "2.5rem",
+          right: "2.5rem",
           zIndex: 200,
-          background: notification.type === "success" ? "var(--status-allow-bg)" : "var(--status-deny-bg)",
-          border: `1px solid ${notification.type === "success" ? "rgba(16, 185, 129, 0.4)" : "rgba(244, 63, 94, 0.4)"}`,
-          color: notification.type === "success" ? "var(--status-allow)" : "var(--status-deny)",
-          padding: "0.85rem 1.25rem",
-          borderRadius: "var(--radius-md)",
-          boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
+          background: notification.type === "success" ? "rgba(16, 185, 129, 0.95)" : "rgba(244, 63, 94, 0.95)",
+          color: "#ffffff",
+          padding: "0.85rem 1.4rem",
+          borderRadius: "var(--radius-pill)",
+          boxShadow: "0 16px 36px rgba(0, 0, 0, 0.5)",
           fontWeight: 600,
-          fontSize: "0.9rem",
+          fontSize: "0.88rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          backdropFilter: "blur(12px)",
         }}>
-          {notification.text}
+          {notification.type === "success" ? <ShieldCheck size={16} /> : <AlertTriangle size={16} />}
+          <span>{notification.text}</span>
         </div>
       )}
 
-      {/* Header Breadcrumb & Status */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <Link href="/dashboard" style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
-            ← Workspaces
-          </Link>
-          <span style={{ color: "var(--border-card)" }}>/</span>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
-            {workspace.name}
-          </h1>
-          <span className={`badge ${workspace.is_active ? "badge-allow" : "badge-deny"}`}>
-            {workspace.is_active ? "Active" : "Inactive"}
-          </span>
-          <span className="badge badge-neutral">{workspace.role}</span>
+      {/* Header Breadcrumbs & Quick Actions (Reference 2 Editorial Style) */}
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-end",
+        marginBottom: "2rem",
+        paddingBottom: "1.5rem",
+        borderBottom: "1px solid var(--border-subtle)",
+        flexWrap: "wrap",
+        gap: "1.5rem",
+      }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+            <Link href="/dashboard" className="slash-tag" style={{ textDecoration: "none", margin: 0 }}>
+              WORKSPACES
+            </Link>
+            <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>/</span>
+            <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontFamily: "JetBrains Mono, monospace" }}>
+              {workspace.id.substring(0, 12)}...
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+            <h1 className="font-editorial" style={{ fontSize: "clamp(1.8rem, 3vw, 2.5rem)", letterSpacing: "-0.02em" }}>
+              {workspace.name}
+            </h1>
+            <span className={`badge-status ${workspace.is_active ? "badge-status-allow" : "badge-status-deny"}`}>
+              {workspace.is_active ? "Active Gateway" : "Suspended"}
+            </span>
+            <span className="badge-status badge-status-transform">{workspace.role}</span>
+          </div>
         </div>
 
-        <div style={{ display: "flex", gap: "0.75rem" }}>
-          <button onClick={() => setNewMCPModal(true)} className="btn-primary" style={{ padding: "0.5rem 1rem", fontSize: "0.85rem" }}>
-            🔑 Generate MCP Key
-          </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          {workspace.role === "OWNER" && (
+            <button onClick={() => setNewMCPModal(true)} className="pill-btn pill-btn-cyan">
+              <Key size={15} />
+              Generate MCP Key
+              <div className="btn-arrow-circle">
+                <ArrowRight size={12} />
+              </div>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div style={{
-        display: "flex",
-        gap: "0.5rem",
-        borderBottom: "1px solid var(--border-subtle)",
-        marginBottom: "2rem",
-        overflowX: "auto",
-        paddingBottom: "0.25rem",
-      }}>
-        {[
-          { id: "overview", label: "Overview", icon: "📊" },
-          { id: "files", label: `Files (${files.length})`, icon: "📁" },
-          { id: "policies", label: "Policies", icon: "🛡️" },
-          { id: "anonymisation", label: "Anonymisation", icon: "🎭" },
-          { id: "mcp", label: `MCP Access (${mcpCredentials.length})`, icon: "⚡" },
-          { id: "audit", label: `Audit Logs (${auditLogs.length})`, icon: "📜" },
-          { id: "playground", label: "Playground", icon: "🧪" },
-          { id: "settings", label: "Settings", icon: "⚙️" },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            style={{
-              padding: "0.65rem 1.15rem",
-              borderRadius: "var(--radius-sm)",
-              fontSize: "0.9rem",
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              background: activeTab === tab.id ? "rgba(99, 102, 241, 0.15)" : "transparent",
-              color: activeTab === tab.id ? "#fff" : "var(--text-secondary)",
-              borderBottom: activeTab === tab.id ? "2px solid var(--accent-primary)" : "2px solid transparent",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <span>{tab.icon}</span>
-            <span>{tab.label}</span>
-          </button>
-        ))}
+      {/* Modern 8-Tab Navigation Bar (Reference 1 Category Pills) */}
+      <div style={{ marginBottom: "2.5rem", overflowX: "auto", paddingBottom: "0.5rem" }}>
+        <div className="pill-tabs-bar" style={{ display: "flex", flexWrap: "nowrap" }}>
+          {[
+            { id: "overview", label: "Overview", icon: <FolderGit2 size={14} /> },
+            { id: "files", label: `Files (${files.length})`, icon: <FileText size={14} /> },
+            { id: "policies", label: `Policies (${policies.resource_policies.length + policies.operation_policies.length})`, icon: <Shield size={14} /> },
+            { id: "anonymisation", label: `Anonymisation (${policies.anonymisation_rules.length})`, icon: <EyeOff size={14} /> },
+            { id: "mcp", label: `MCP Access (${mcpCredentials.length})`, icon: <Key size={14} /> },
+            { id: "audit", label: `Audit Trail (${auditLogs.length})`, icon: <ScrollText size={14} /> },
+            { id: "playground", label: "Playground", icon: <Terminal size={14} /> },
+            { id: "settings", label: "Settings", icon: <Settings size={14} /> },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`pill-tab ${activeTab === tab.id ? "active" : ""}`}
+              style={{ display: "flex", alignItems: "center", gap: "0.45rem", whiteSpace: "nowrap" }}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ========================================================================= */}
@@ -427,51 +462,110 @@ export default function WorkspaceDetailPage() {
       {/* ========================================================================= */}
       {activeTab === "overview" && (
         <div>
-          {/* Quick Metrics */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
-            <div className="glass-card">
-              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Files in Vault</div>
-              <div style={{ fontSize: "2rem", fontWeight: 800, marginTop: "0.25rem" }}>{files.length}</div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>Extracted & isolated</div>
-            </div>
-
-            <div className="glass-card">
-              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Resource Rules</div>
-              <div style={{ fontSize: "2rem", fontWeight: 800, color: "#818cf8", marginTop: "0.25rem" }}>
-                {policies.resource_policies.length}
+          {/* Quick Metrics (Reference 2 Grid) */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1.25rem", marginBottom: "2.5rem" }}>
+            <div className="frosted-panel" style={{ padding: "1.75rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Isolated Documents
+                </span>
+                <FileText size={18} color="#38bdf8" />
               </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>Per-resource access gates</div>
+              <div style={{ fontSize: "2.2rem", fontWeight: 800 }}>{files.length}</div>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>Extracted &amp; PII-scanned</div>
             </div>
 
-            <div className="glass-card">
-              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Anonymisation Rules</div>
-              <div style={{ fontSize: "2rem", fontWeight: 800, color: "#f59e0b", marginTop: "0.25rem" }}>
-                {policies.anonymisation_rules.length}
+            <div className="frosted-panel" style={{ padding: "1.75rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Resource Policies
+                </span>
+                <Shield size={18} color="#818cf8" />
               </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>Active field/entity transforms</div>
+              <div style={{ fontSize: "2.2rem", fontWeight: 800, color: "#818cf8" }}>{policies.resource_policies.length}</div>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>Per-resource access gates</div>
             </div>
 
-            <div className="glass-card">
-              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Active MCP Keys</div>
-              <div style={{ fontSize: "2rem", fontWeight: 800, color: "#34d399", marginTop: "0.25rem" }}>
+            <div className="frosted-panel" style={{ padding: "1.75rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Anonymisation Rules
+                </span>
+                <EyeOff size={18} color="#fbbf24" />
+              </div>
+              <div style={{ fontSize: "2.2rem", fontWeight: 800, color: "#fbbf24" }}>{policies.anonymisation_rules.length}</div>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>Active field/entity transforms</div>
+            </div>
+
+            <div className="frosted-panel" style={{ padding: "1.75rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Active MCP Tokens
+                </span>
+                <Key size={18} color="#10b981" />
+              </div>
+              <div style={{ fontSize: "2.2rem", fontWeight: 800, color: "#10b981" }}>
                 {mcpCredentials.filter((c) => c.is_active).length}
               </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>High-entropy credentials</div>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>Live bearer credentials</div>
             </div>
           </div>
 
-          {/* Security Principle Callout */}
-          <div className="glass-panel" style={{ padding: "2rem", marginBottom: "2rem" }}>
-            <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.75rem" }}>
-              🛡️ Workspace Security Boundary Invariant
-            </h3>
-            <p style={{ fontSize: "0.95rem", color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: "1rem" }}>
-              Every request arriving through the Model Context Protocol (MCP) is mapped exclusively to this workspace ID.
-              The AI model never receives direct database or storage credentials. Every tool call is authenticated, evaluated
-              against your explicit policies, passed through the anonymisation engine, and logged.
-            </p>
-            <div className="code-box">
-              AI Model → MCP Gateway → Token Auth → Workspace Resolution ({workspace.id}) → Policy Engine → Anonymisation Engine → Output
+          {/* Security Boundary Showcase with Interactive Callout Pins (Reference 1 & 2) */}
+          <div className="browser-window" style={{ marginBottom: "2.5rem" }}>
+            <div className="browser-header">
+              <div className="browser-dots">
+                <div className="browser-dot dot-red" />
+                <div className="browser-dot dot-yellow" />
+                <div className="browser-dot dot-green" />
+              </div>
+              <div className="browser-url-bar">
+                <span>mcp://workspace/{workspace.id.substring(0, 16)}</span>
+              </div>
+              <div className="browser-actions">
+                <Shield size={14} color="#38bdf8" />
+              </div>
+            </div>
+
+            <div style={{
+              padding: "3.5rem 2.5rem",
+              position: "relative",
+              background: "radial-gradient(ellipse at center, rgba(14, 28, 54, 0.6) 0%, rgba(7, 10, 17, 0.95) 85%)",
+            }}>
+              {/* Callout Pins */}
+              <div className="callout-pin" style={{ top: "25px", left: "4%" }}>
+                <span className="pin-icon-circle">+</span>
+                <span>Zero DB/Storage Exposure</span>
+              </div>
+
+              <div className="callout-pin" style={{ top: "25px", right: "4%", animationDelay: "1.2s" }}>
+                <span className="pin-icon-circle">+</span>
+                <span>Context-Derived Tenant</span>
+              </div>
+
+              <div style={{ maxWidth: "700px", margin: "0 auto", textAlign: "center", position: "relative", zIndex: 5 }}>
+                <div className="slash-tag" style={{ justifyContent: "center" }}>SECURITY BOUNDARY INVARIANT</div>
+                <h3 className="font-editorial" style={{ fontSize: "1.75rem", marginBottom: "1rem" }}>
+                  Strict Tenant Isolation Enforced
+                </h3>
+                <p style={{ fontSize: "0.95rem", color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: "1.5rem" }}>
+                  Every request arriving via the Model Context Protocol (MCP) resolves workspace identity internally from your bearer credential.
+                  No model or user can access cross-workspace data. Policies evaluate with strict precedence:
+                  <strong style={{ color: "var(--status-deny)", marginLeft: "0.3rem" }}>Explicit DENY &gt; ALLOW</strong>.
+                </p>
+                <div style={{
+                  padding: "0.9rem 1.25rem",
+                  background: "rgba(10, 15, 27, 0.85)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--radius-md)",
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: "0.8rem",
+                  color: "#38bdf8",
+                  display: "inline-block",
+                }}>
+                  Claude / Agent ➔ Bearer Token ➔ PolicyEngine ➔ AnonymisationEngine ➔ Sanitized MCP Response
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -482,18 +576,32 @@ export default function WorkspaceDetailPage() {
       {/* ========================================================================= */}
       {activeTab === "files" && (
         <div>
-          {/* Upload Area */}
-          <div className="glass-panel" style={{ padding: "2rem", marginBottom: "2rem", textAlign: "center" }}>
-            <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>📤</div>
-            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "0.5rem" }}>
+          {/* Upload Dropzone (Reference 2 Clean Frame) */}
+          <div className="frosted-panel" style={{ padding: "3rem 2rem", marginBottom: "2.5rem", textAlign: "center" }}>
+            <div style={{
+              width: "56px",
+              height: "56px",
+              borderRadius: "50%",
+              background: "rgba(56, 189, 248, 0.1)",
+              border: "1px solid rgba(56, 189, 248, 0.3)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 1.25rem auto",
+              color: "#38bdf8",
+            }}>
+              <Upload size={24} />
+            </div>
+            <h3 className="font-editorial" style={{ fontSize: "1.4rem", marginBottom: "0.5rem" }}>
               Upload Workspace Document or Dataset
             </h3>
-            <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
-              Supported formats: PDF, DOCX, TXT, CSV, JSON (up to 50MB). Files are processed and scanned for PII immediately upon upload.
+            <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", maxWidth: "560px", margin: "0 auto 1.75rem auto", lineHeight: 1.5 }}>
+              Supported: PDF, DOCX, TXT, CSV, JSON (up to 50MB). Files are parsed, indexed, and scanned for PII immediately.
             </p>
 
-            <label className="btn-primary" style={{ cursor: "pointer" }}>
-              {uploading ? "Extracting & Storing..." : "Choose File to Upload"}
+            <label className="pill-btn pill-btn-primary" style={{ cursor: "pointer" }}>
+              <Upload size={16} />
+              <span>{uploading ? "Extracting & Storing..." : "Select File to Upload"}</span>
               <input
                 type="file"
                 disabled={uploading}
@@ -505,57 +613,63 @@ export default function WorkspaceDetailPage() {
           </div>
 
           {/* Files Table */}
-          <div className="glass-panel" style={{ overflow: "hidden" }}>
-            <table className="custom-table">
+          <div className="frosted-panel" style={{ overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.9rem" }}>
               <thead>
-                <tr>
-                  <th>Filename</th>
-                  <th>Type</th>
-                  <th>Size</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
+                <tr style={{ background: "rgba(10, 16, 28, 0.8)", borderBottom: "1px solid var(--border-subtle)" }}>
+                  <th style={{ padding: "1rem 1.5rem", fontWeight: 700, color: "var(--text-secondary)" }}>Filename</th>
+                  <th style={{ padding: "1rem 1.5rem", fontWeight: 700, color: "var(--text-secondary)" }}>Type</th>
+                  <th style={{ padding: "1rem 1.5rem", fontWeight: 700, color: "var(--text-secondary)" }}>Size</th>
+                  <th style={{ padding: "1rem 1.5rem", fontWeight: 700, color: "var(--text-secondary)" }}>Status</th>
+                  <th style={{ padding: "1rem 1.5rem", fontWeight: 700, color: "var(--text-secondary)" }}>Created</th>
+                  <th style={{ padding: "1rem 1.5rem", fontWeight: 700, color: "var(--text-secondary)", textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {files.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
-                      No files uploaded to this workspace yet.
+                    <td colSpan={6} style={{ textAlign: "center", padding: "4rem", color: "var(--text-muted)" }}>
+                      No documents uploaded to this workspace yet.
                     </td>
                   </tr>
                 ) : (
                   files.map((file) => (
-                    <tr key={file.id}>
-                      <td style={{ fontWeight: 600 }}>{file.original_filename}</td>
-                      <td>
-                        <span className="badge badge-neutral">{file.file_type}</span>
+                    <tr key={file.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                      <td style={{ padding: "1.1rem 1.5rem", fontWeight: 600, color: "#f8fafc" }}>
+                        {file.original_filename}
                       </td>
-                      <td>{(file.file_size / 1024).toFixed(1)} KB</td>
-                      <td>
-                        <span className={`badge ${file.status === "READY" ? "badge-allow" : file.status === "FAILED" ? "badge-deny" : "badge-transform"}`}>
+                      <td style={{ padding: "1.1rem 1.5rem" }}>
+                        <span className="badge-status" style={{ background: "rgba(255, 255, 255, 0.06)", border: "1px solid var(--border-subtle)" }}>
+                          {file.file_type}
+                        </span>
+                      </td>
+                      <td style={{ padding: "1.1rem 1.5rem", color: "var(--text-secondary)", fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem" }}>
+                        {(file.file_size / 1024).toFixed(1)} KB
+                      </td>
+                      <td style={{ padding: "1.1rem 1.5rem" }}>
+                        <span className={`badge-status ${file.status === "READY" ? "badge-status-allow" : file.status === "FAILED" ? "badge-status-deny" : "badge-status-transform"}`}>
                           {file.status}
                         </span>
                       </td>
-                      <td style={{ color: "var(--text-muted)" }}>
-                        {new Date(file.created_at).toLocaleString()}
+                      <td style={{ padding: "1.1rem 1.5rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                        {new Date(file.created_at).toLocaleDateString()}
                       </td>
-                      <td>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <td style={{ padding: "1.1rem 1.5rem", textAlign: "right" }}>
+                        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
                           <button
                             onClick={() => handleViewContent(file)}
-                            className="btn-secondary"
-                            style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }}
+                            className="pill-btn pill-btn-dark"
+                            style={{ padding: "0.35rem 0.85rem", fontSize: "0.78rem" }}
                           >
-                            View Extracted
+                            Extracted Text
                           </button>
                           {workspace.role === "OWNER" && (
                             <button
                               onClick={() => handleDeleteFile(file.id)}
-                              className="btn-danger"
-                              style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }}
+                              className="pill-btn pill-btn-dark"
+                              style={{ padding: "0.35rem 0.65rem", color: "var(--status-deny)" }}
                             >
-                              Delete
+                              <Trash2 size={13} />
                             </button>
                           )}
                         </div>
@@ -573,22 +687,31 @@ export default function WorkspaceDetailPage() {
       {/* TAB 3: POLICIES */}
       {/* ========================================================================= */}
       {activeTab === "policies" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: "2rem" }}>
           {/* Resource Access Policies */}
-          <div className="glass-panel" style={{ padding: "1.75rem" }}>
-            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "0.5rem" }}>
+          <div className="frosted-panel" style={{ padding: "2rem" }}>
+            <div className="slash-tag">RESOURCE GATES</div>
+            <h3 className="font-editorial" style={{ fontSize: "1.35rem", marginBottom: "0.4rem" }}>
               Resource Access Policies
             </h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
               Control read permissions on individual files or set workspace-wide defaults. Explicit DENY overrides ALLOW.
             </p>
 
             {workspace.role === "OWNER" && (
-              <div style={{ background: "rgba(10, 14, 23, 0.6)", padding: "1rem", borderRadius: "var(--radius-md)", marginBottom: "1.5rem" }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.75rem" }}>Add Resource Policy</div>
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <div style={{
+                background: "rgba(10, 16, 28, 0.7)",
+                padding: "1.25rem",
+                borderRadius: "var(--radius-md)",
+                marginBottom: "1.75rem",
+                border: "1px solid var(--border-subtle)",
+              }}>
+                <div style={{ fontSize: "0.82rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.75rem", color: "var(--text-muted)" }}>
+                  Add Resource Rule
+                </div>
+                <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
                   <select
-                    className="form-input"
+                    className="modern-input"
                     style={{ flex: 1, minWidth: "160px" }}
                     value={newResourceFileId}
                     onChange={(e) => setNewResourceFileId(e.target.value)}
@@ -600,7 +723,7 @@ export default function WorkspaceDetailPage() {
                   </select>
 
                   <select
-                    className="form-input"
+                    className="modern-input"
                     style={{ width: "110px" }}
                     value={newResourceDecision}
                     onChange={(e) => setNewResourceDecision(e.target.value)}
@@ -609,7 +732,7 @@ export default function WorkspaceDetailPage() {
                     <option value="DENY">DENY</option>
                   </select>
 
-                  <button onClick={handleCreateResourcePolicy} className="btn-primary" style={{ padding: "0.5rem 1rem" }}>
+                  <button onClick={handleCreateResourcePolicy} className="pill-btn pill-btn-cyan" style={{ padding: "0.55rem 1.1rem" }}>
                     Save
                   </button>
                 </div>
@@ -618,7 +741,7 @@ export default function WorkspaceDetailPage() {
 
             <div>
               {policies.resource_policies.length === 0 ? (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+                <div style={{ fontSize: "0.88rem", color: "var(--text-muted)", fontStyle: "italic", padding: "1rem 0" }}>
                   No custom resource policies configured. Default workspace rules apply.
                 </div>
               ) : (
@@ -631,26 +754,26 @@ export default function WorkspaceDetailPage() {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        padding: "0.75rem",
+                        padding: "0.9rem 0",
                         borderBottom: "1px solid var(--border-subtle)",
                       }}
                     >
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                        <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "#f8fafc" }}>
                           {targetFile ? targetFile.original_filename : "All Resources (Workspace Default)"}
                         </div>
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Operation: {p.operation}</div>
+                        <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>Operation: {p.operation}</div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                        <span className={`badge ${p.decision === "ALLOW" ? "badge-allow" : "badge-deny"}`}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                        <span className={`badge-status ${p.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
                           {p.decision}
                         </span>
                         {workspace.role === "OWNER" && (
                           <button
                             onClick={() => handleDeleteResourcePolicy(p.id)}
-                            style={{ color: "var(--status-deny)", fontSize: "0.8rem" }}
+                            style={{ color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer" }}
                           >
-                            ✕
+                            <X size={16} />
                           </button>
                         )}
                       </div>
@@ -662,20 +785,29 @@ export default function WorkspaceDetailPage() {
           </div>
 
           {/* Operation Permissions */}
-          <div className="glass-panel" style={{ padding: "1.75rem" }}>
-            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "0.5rem" }}>
+          <div className="frosted-panel" style={{ padding: "2rem" }}>
+            <div className="slash-tag">OPERATION GATES</div>
+            <h3 className="font-editorial" style={{ fontSize: "1.35rem", marginBottom: "0.4rem" }}>
               Operation Policies
             </h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
               Control which MCP operations can be executed by connected models.
             </p>
 
             {workspace.role === "OWNER" && (
-              <div style={{ background: "rgba(10, 14, 23, 0.6)", padding: "1rem", borderRadius: "var(--radius-md)", marginBottom: "1.5rem" }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.75rem" }}>Configure Operation</div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div style={{
+                background: "rgba(10, 16, 28, 0.7)",
+                padding: "1.25rem",
+                borderRadius: "var(--radius-md)",
+                marginBottom: "1.75rem",
+                border: "1px solid var(--border-subtle)",
+              }}>
+                <div style={{ fontSize: "0.82rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.75rem", color: "var(--text-muted)" }}>
+                  Configure Operation Rule
+                </div>
+                <div style={{ display: "flex", gap: "0.6rem" }}>
                   <select
-                    className="form-input"
+                    className="modern-input"
                     style={{ flex: 1 }}
                     value={newOpName}
                     onChange={(e) => setNewOpName(e.target.value)}
@@ -690,7 +822,7 @@ export default function WorkspaceDetailPage() {
                   </select>
 
                   <select
-                    className="form-input"
+                    className="modern-input"
                     style={{ width: "110px" }}
                     value={newOpDecision}
                     onChange={(e) => setNewOpDecision(e.target.value)}
@@ -699,7 +831,7 @@ export default function WorkspaceDetailPage() {
                     <option value="DENY">DENY</option>
                   </select>
 
-                  <button onClick={handleCreateOperationPolicy} className="btn-primary" style={{ padding: "0.5rem 1rem" }}>
+                  <button onClick={handleCreateOperationPolicy} className="pill-btn pill-btn-cyan" style={{ padding: "0.55rem 1.1rem" }}>
                     Save
                   </button>
                 </div>
@@ -708,8 +840,8 @@ export default function WorkspaceDetailPage() {
 
             <div>
               {policies.operation_policies.length === 0 ? (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic" }}>
-                  Standard read operations allowed by default.
+                <div style={{ fontSize: "0.88rem", color: "var(--text-muted)", fontStyle: "italic", padding: "1rem 0" }}>
+                  Standard read operations permitted by default.
                 </div>
               ) : (
                 policies.operation_policies.map((op) => (
@@ -719,23 +851,23 @@ export default function WorkspaceDetailPage() {
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "0.75rem",
+                      padding: "0.9rem 0",
                       borderBottom: "1px solid var(--border-subtle)",
                     }}
                   >
-                    <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.9rem", fontWeight: 600 }}>
+                    <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.9rem", fontWeight: 600, color: "#f8fafc" }}>
                       {op.operation}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      <span className={`badge ${op.decision === "ALLOW" ? "badge-allow" : "badge-deny"}`}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                      <span className={`badge-status ${op.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
                         {op.decision}
                       </span>
                       {workspace.role === "OWNER" && (
                         <button
                           onClick={() => handleDeleteOperationPolicy(op.id)}
-                          style={{ color: "var(--status-deny)", fontSize: "0.8rem" }}
+                          style={{ color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer" }}
                         >
-                          ✕
+                          <X size={16} />
                         </button>
                       )}
                     </div>
@@ -752,24 +884,33 @@ export default function WorkspaceDetailPage() {
       {/* ========================================================================= */}
       {activeTab === "anonymisation" && (
         <div>
-          <div className="glass-panel" style={{ padding: "2rem", marginBottom: "2rem" }}>
-            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "0.5rem" }}>
-              Configure Entity & Field Transformation Rules
+          <div className="frosted-panel" style={{ padding: "2.5rem", marginBottom: "2rem" }}>
+            <div className="slash-tag">READ-TIME TRANSFORMATION</div>
+            <h3 className="font-editorial" style={{ fontSize: "1.4rem", marginBottom: "0.5rem" }}>
+              Configure Entity &amp; Field Transformation Rules
             </h3>
-            <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
-              Define how PII entities or specific CSV/JSON columns are transformed at read time. Original documents remain intact.
+            <p style={{ fontSize: "0.92rem", color: "var(--text-secondary)", marginBottom: "2rem", lineHeight: 1.6, maxWidth: "700px" }}>
+              Transform PII entities or specific CSV/JSON columns at query time. Raw source documents in storage remain unmodified.
             </p>
 
             {workspace.role === "OWNER" && (
-              <div style={{ background: "rgba(10, 14, 23, 0.6)", padding: "1.25rem", borderRadius: "var(--radius-md)", marginBottom: "2rem" }}>
-                <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "0.75rem" }}>New Anonymisation Rule</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "0.75rem", alignItems: "center" }}>
+              <div style={{
+                background: "rgba(10, 16, 28, 0.7)",
+                padding: "1.5rem",
+                borderRadius: "var(--radius-lg)",
+                marginBottom: "2.5rem",
+                border: "1px solid var(--border-subtle)",
+              }}>
+                <div style={{ fontSize: "0.85rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "1rem", color: "var(--text-muted)" }}>
+                  New Transformation Rule
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", alignItems: "flex-end" }}>
                   <div>
-                    <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-                      Entity Type / Category
+                    <label style={{ display: "block", fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "0.4rem", fontWeight: 600 }}>
+                      Entity Type / Scope
                     </label>
                     <select
-                      className="form-input"
+                      className="modern-input"
                       value={newAnonEntity}
                       onChange={(e) => setNewAnonEntity(e.target.value)}
                     >
@@ -783,12 +924,12 @@ export default function WorkspaceDetailPage() {
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-                      Column / Field Name (optional)
+                    <label style={{ display: "block", fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "0.4rem", fontWeight: 600 }}>
+                      Column Name (optional)
                     </label>
                     <input
                       type="text"
-                      className="form-input"
+                      className="modern-input"
                       placeholder="e.g. salary or client_ssn"
                       value={newAnonFieldName}
                       onChange={(e) => setNewAnonFieldName(e.target.value)}
@@ -796,75 +937,77 @@ export default function WorkspaceDetailPage() {
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-                      Transformation
+                    <label style={{ display: "block", fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "0.4rem", fontWeight: 600 }}>
+                      Transformation Mode
                     </label>
                     <select
-                      className="form-input"
+                      className="modern-input"
                       value={newAnonTrans}
                       onChange={(e) => setNewAnonTrans(e.target.value)}
                     >
-                      <option value="MASK">MASK (e.g. j***@example.com)</option>
-                      <option value="PSEUDONYMIZE">PSEUDONYMIZE (e.g. Person_001)</option>
+                      <option value="MASK">MASK (j***@example.com)</option>
+                      <option value="PSEUDONYMIZE">PSEUDONYMIZE (Person_001)</option>
                       <option value="REDACT">REDACT ([REDACTED])</option>
-                      <option value="REMOVE">REMOVE (Strip from content)</option>
+                      <option value="REMOVE">REMOVE (Strip from output)</option>
                       <option value="DENY">DENY (Strict Field Exclusion)</option>
                     </select>
                   </div>
 
-                  <button
-                    onClick={handleCreateAnonymisationRule}
-                    className="btn-primary"
-                    style={{ height: "42px", marginTop: "1rem" }}
-                  >
-                    Add Rule
-                  </button>
+                  <div>
+                    <button
+                      onClick={handleCreateAnonymisationRule}
+                      className="pill-btn pill-btn-cyan"
+                      style={{ width: "100%", padding: "0.75rem" }}
+                    >
+                      <Plus size={15} />
+                      Add Rule
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Existing Rules Table */}
-            <table className="custom-table">
+            {/* Rules Table */}
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.9rem" }}>
               <thead>
-                <tr>
-                  <th>Target Entity</th>
-                  <th>Target Field / Column</th>
-                  <th>Transformation Mode</th>
-                  <th>Created</th>
-                  <th>Action</th>
+                <tr style={{ background: "rgba(10, 16, 28, 0.8)", borderBottom: "1px solid var(--border-subtle)" }}>
+                  <th style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)" }}>Target Entity</th>
+                  <th style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)" }}>Target Field</th>
+                  <th style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)" }}>Transformation Mode</th>
+                  <th style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)" }}>Created</th>
+                  <th style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)", textAlign: "right" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {policies.anonymisation_rules.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>
-                      No custom anonymisation rules active.
+                    <td colSpan={5} style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
+                      No custom anonymisation rules active. Standard PII will be passed or masked per default policy.
                     </td>
                   </tr>
                 ) : (
                   policies.anonymisation_rules.map((rule) => (
-                    <tr key={rule.id}>
-                      <td style={{ fontWeight: 600 }}>{rule.entity_type}</td>
-                      <td>{rule.field_name || <span style={{ color: "var(--text-muted)" }}>All text entities</span>}</td>
-                      <td>
-                        <span className={`badge ${
-                          rule.transformation === "ALLOW" ? "badge-allow" :
-                          rule.transformation === "DENY" ? "badge-deny" : "badge-transform"
-                        }`}>
+                    <tr key={rule.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                      <td style={{ padding: "1rem 1.25rem", fontWeight: 600, color: "#f8fafc" }}>{rule.entity_type}</td>
+                      <td style={{ padding: "1rem 1.25rem", color: "var(--text-secondary)", fontFamily: "JetBrains Mono, monospace", fontSize: "0.85rem" }}>
+                        {rule.field_name || "All text entities"}
+                      </td>
+                      <td style={{ padding: "1rem 1.25rem" }}>
+                        <span className={`badge-status ${rule.transformation === "ALLOW" ? "badge-status-allow" : rule.transformation === "DENY" ? "badge-status-deny" : "badge-status-transform"}`}>
                           {rule.transformation}
                         </span>
                       </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
+                      <td style={{ padding: "1rem 1.25rem", color: "var(--text-muted)", fontSize: "0.82rem" }}>
                         {new Date(rule.created_at).toLocaleDateString()}
                       </td>
-                      <td>
+                      <td style={{ padding: "1rem 1.25rem", textAlign: "right" }}>
                         {workspace.role === "OWNER" && (
                           <button
                             onClick={() => handleDeleteAnonymisationRule(rule.id)}
-                            className="btn-danger"
-                            style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                            className="pill-btn pill-btn-dark"
+                            style={{ padding: "0.3rem 0.6rem", color: "var(--status-deny)" }}
                           >
-                            Delete
+                            <Trash2 size={13} />
                           </button>
                         )}
                       </td>
@@ -882,88 +1025,96 @@ export default function WorkspaceDetailPage() {
       {/* ========================================================================= */}
       {activeTab === "mcp" && (
         <div>
-          {/* Header Banner */}
-          <div className="glass-panel" style={{ padding: "2rem", marginBottom: "2rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+          <div className="frosted-panel" style={{ padding: "2.5rem", marginBottom: "2.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
               <div>
-                <h3 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>
-                  Private Model Context Protocol (MCP) Credentials
+                <div className="slash-tag">CLIENT PROTOCOL ACCESS</div>
+                <h3 className="font-editorial" style={{ fontSize: "1.4rem", marginBottom: "0.5rem" }}>
+                  Model Context Protocol (MCP) Credentials
                 </h3>
-                <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", maxWidth: "700px" }}>
-                  Generate private, high-entropy tokens to connect AI models (such as Claude Desktop or custom agents)
-                  to this workspace. The database stores only a cryptographic HMAC hash of the token.
+                <p style={{ fontSize: "0.92rem", color: "var(--text-secondary)", maxWidth: "680px", lineHeight: 1.6 }}>
+                  Generate high-entropy tokens to connect AI models (Claude Desktop, Cursor, or custom agents) to this workspace.
+                  The database stores only a cryptographic HMAC hash of the token.
                 </p>
               </div>
               {workspace.role === "OWNER" && (
-                <button onClick={() => setNewMCPModal(true)} className="btn-primary">
-                  + Create New Token
+                <button onClick={() => setNewMCPModal(true)} className="pill-btn pill-btn-cyan">
+                  <Plus size={15} />
+                  Create New Token
                 </button>
               )}
             </div>
 
-            <div className="code-box" style={{ marginBottom: "1rem" }}>
-              MCP Gateway Endpoint: {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/mcp
+            <div style={{
+              padding: "1rem 1.25rem",
+              background: "rgba(10, 16, 28, 0.7)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-md)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontFamily: "JetBrains Mono, monospace",
+              fontSize: "0.82rem",
+            }}>
+              <span style={{ color: "var(--text-secondary)" }}>
+                MCP Gateway Endpoint: <strong style={{ color: "#38bdf8" }}>{process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/mcp</strong>
+              </span>
+              <span className="badge-status badge-status-allow">JSON-RPC 2.0</span>
             </div>
           </div>
 
           {/* Credentials Table */}
-          <div className="glass-panel" style={{ overflow: "hidden" }}>
-            <table className="custom-table">
+          <div className="frosted-panel" style={{ overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.9rem" }}>
               <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Prefix Identifier</th>
-                  <th>Created</th>
-                  <th>Expires</th>
-                  <th>Last Used</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                <tr style={{ background: "rgba(10, 16, 28, 0.8)", borderBottom: "1px solid var(--border-subtle)" }}>
+                  <th style={{ padding: "1rem 1.25rem", color: "var(--text-secondary)" }}>Label</th>
+                  <th style={{ padding: "1rem 1.25rem", color: "var(--text-secondary)" }}>Prefix Identifier</th>
+                  <th style={{ padding: "1rem 1.25rem", color: "var(--text-secondary)" }}>Created</th>
+                  <th style={{ padding: "1rem 1.25rem", color: "var(--text-secondary)" }}>Expires</th>
+                  <th style={{ padding: "1rem 1.25rem", color: "var(--text-secondary)" }}>Status</th>
+                  <th style={{ padding: "1rem 1.25rem", color: "var(--text-secondary)", textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {mcpCredentials.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "4rem", color: "var(--text-muted)" }}>
                       No MCP credentials generated yet. Click &quot;Create New Token&quot; to connect Claude or an AI client.
                     </td>
                   </tr>
                 ) : (
                   mcpCredentials.map((cred) => (
-                    <tr key={cred.id}>
-                      <td style={{ fontWeight: 600 }}>{cred.name}</td>
-                      <td>
-                        <span style={{ fontFamily: "JetBrains Mono, monospace", color: "#a5b4fc" }}>
-                          {cred.credential_prefix}...
-                        </span>
+                    <tr key={cred.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                      <td style={{ padding: "1.1rem 1.25rem", fontWeight: 600, color: "#f8fafc" }}>{cred.name}</td>
+                      <td style={{ padding: "1.1rem 1.25rem", fontFamily: "JetBrains Mono, monospace", color: "#38bdf8", fontSize: "0.85rem" }}>
+                        {cred.credential_prefix}...
                       </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                      <td style={{ padding: "1.1rem 1.25rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
                         {new Date(cred.created_at).toLocaleDateString()}
                       </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                      <td style={{ padding: "1.1rem 1.25rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
                         {cred.expires_at ? new Date(cred.expires_at).toLocaleDateString() : "Never"}
                       </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                        {cred.last_used_at ? new Date(cred.last_used_at).toLocaleString() : "Never"}
-                      </td>
-                      <td>
-                        <span className={`badge ${cred.is_active ? "badge-allow" : "badge-deny"}`}>
+                      <td style={{ padding: "1.1rem 1.25rem" }}>
+                        <span className={`badge-status ${cred.revoked_at ? "badge-status-deny" : cred.is_active ? "badge-status-allow" : "badge-status-transform"}`}>
                           {cred.revoked_at ? "Revoked" : cred.is_active ? "Active" : "Expired"}
                         </span>
                       </td>
-                      <td>
+                      <td style={{ padding: "1.1rem 1.25rem", textAlign: "right" }}>
                         {workspace.role === "OWNER" && cred.is_active && (
-                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
                             <button
                               onClick={() => handleRotateMCP(cred.id)}
-                              className="btn-secondary"
-                              style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }}
+                              className="pill-btn pill-btn-dark"
+                              style={{ padding: "0.35rem 0.85rem", fontSize: "0.78rem" }}
                             >
                               Rotate
                             </button>
                             <button
                               onClick={() => handleRevokeMCP(cred.id)}
-                              className="btn-danger"
-                              style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }}
+                              className="pill-btn pill-btn-dark"
+                              style={{ padding: "0.35rem 0.85rem", fontSize: "0.78rem", color: "var(--status-deny)" }}
                             >
                               Revoke
                             </button>
@@ -983,62 +1134,67 @@ export default function WorkspaceDetailPage() {
       {/* TAB 6: AUDIT LOGS */}
       {/* ========================================================================= */}
       {activeTab === "audit" && (
-        <div className="glass-panel" style={{ overflow: "hidden" }}>
-          <div style={{ padding: "1.5rem", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="frosted-panel" style={{ overflow: "hidden" }}>
+          <div style={{
+            padding: "1.75rem 2rem",
+            borderBottom: "1px solid var(--border-subtle)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "1rem",
+          }}>
             <div>
-              <h3 style={{ fontSize: "1.15rem", fontWeight: 700 }}>Security Audit Event Trail</h3>
-              <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                Immutable log of authentication, authorization, and data read events. Secrets and raw documents are never logged.
+              <div className="slash-tag">IMMUTABLE TRAIL</div>
+              <h3 className="font-editorial" style={{ fontSize: "1.35rem" }}>Security Audit Event Log</h3>
+              <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
+                Cryptographically audited events. Raw secrets and raw document contents are stripped prior to persistence.
               </p>
             </div>
-            <button onClick={loadWorkspaceData} className="btn-secondary" style={{ fontSize: "0.85rem" }}>
-              🔄 Refresh Logs
+            <button onClick={loadWorkspaceData} className="pill-btn pill-btn-dark" style={{ padding: "0.45rem 1rem", fontSize: "0.82rem" }}>
+              <RefreshCw size={13} />
+              Refresh Events
             </button>
           </div>
 
-          <table className="custom-table">
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.85rem" }}>
             <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>Operation</th>
-                <th>Actor</th>
-                <th>Decision</th>
-                <th>Reason</th>
-                <th>Details</th>
+              <tr style={{ background: "rgba(10, 16, 28, 0.8)", borderBottom: "1px solid var(--border-subtle)" }}>
+                <th style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)" }}>Timestamp</th>
+                <th style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)" }}>Operation</th>
+                <th style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)" }}>Actor</th>
+                <th style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)" }}>Decision</th>
+                <th style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)" }}>Reason</th>
               </tr>
             </thead>
             <tbody>
               {auditLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
-                    No audit records recorded yet.
+                  <td colSpan={5} style={{ textAlign: "center", padding: "4rem", color: "var(--text-muted)" }}>
+                    No audit records registered yet.
                   </td>
                 </tr>
               ) : (
                 auditLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td style={{ color: "var(--text-muted)", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
-                      {new Date(log.timestamp).toLocaleString()}
+                  <tr key={log.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                    <td style={{ padding: "0.9rem 1.25rem", color: "var(--text-muted)", whiteSpace: "nowrap", fontFamily: "JetBrains Mono, monospace", fontSize: "0.78rem" }}>
+                      {new Date(log.timestamp).toLocaleTimeString()} · {new Date(log.timestamp).toLocaleDateString()}
                     </td>
-                    <td style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.85rem", fontWeight: 600 }}>
+                    <td style={{ padding: "0.9rem 1.25rem", fontFamily: "JetBrains Mono, monospace", fontWeight: 600, color: "#f8fafc" }}>
                       {log.operation}
                     </td>
-                    <td>
-                      <span className="badge badge-neutral">{log.actor_type}</span>
+                    <td style={{ padding: "0.9rem 1.25rem" }}>
+                      <span className="badge-status" style={{ background: "rgba(255, 255, 255, 0.05)", border: "1px solid var(--border-subtle)" }}>
+                        {log.actor_type}
+                      </span>
                     </td>
-                    <td>
-                      <span className={`badge ${
-                        log.decision === "ALLOW" ? "badge-allow" :
-                        log.decision === "DENY" ? "badge-deny" : "badge-transform"
-                      }`}>
+                    <td style={{ padding: "0.9rem 1.25rem" }}>
+                      <span className={`badge-status ${log.decision === "ALLOW" ? "badge-status-allow" : log.decision === "DENY" ? "badge-status-deny" : "badge-status-transform"}`}>
                         {log.decision}
                       </span>
                     </td>
-                    <td style={{ fontSize: "0.85rem", color: "var(--text-secondary)", maxWidth: "250px" }}>
+                    <td style={{ padding: "0.9rem 1.25rem", color: "var(--text-secondary)", maxWidth: "300px" }}>
                       {log.reason || "—"}
-                    </td>
-                    <td style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-muted)" }}>
-                      {log.request_metadata ? JSON.stringify(log.request_metadata) : "—"}
                     </td>
                   </tr>
                 ))
@@ -1049,42 +1205,41 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 7: PLAYGROUND */}
+      {/* TAB 7: PLAYGROUND (Interactive MCP Terminal) */}
       {/* ========================================================================= */}
       {activeTab === "playground" && (
-        <div className="glass-panel" style={{ padding: "2rem" }}>
-          <h3 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>
-            🧪 Interactive MCP Tool Test Console
+        <div className="frosted-panel" style={{ padding: "2.5rem" }}>
+          <div className="slash-tag">INTERACTIVE TESTER</div>
+          <h3 className="font-editorial" style={{ fontSize: "1.4rem", marginBottom: "0.5rem" }}>
+            MCP JSON-RPC 2.0 Terminal
           </h3>
-          <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
-            Test MCP JSON-RPC tool calls live using a valid MCP credential. Watch policies, field denials, and anonymisation in action.
+          <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "2rem" }}>
+            Directly invoke read-only MCP tools with your generated bearer token and inspect real-time policy filtering.
           </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "2rem" }}>
             {/* Request Builder */}
             <div>
               <div style={{ marginBottom: "1.25rem" }}>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
                   Bearer MCP Token
                 </label>
                 <input
                   type="text"
-                  className="form-input"
+                  className="modern-input"
                   placeholder="mcp_live_..."
                   value={playgroundToken}
                   onChange={(e) => setPlaygroundToken(e.target.value)}
+                  style={{ fontFamily: "JetBrains Mono, monospace" }}
                 />
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                  Paste a token generated from the MCP Access tab.
-                </span>
               </div>
 
               <div style={{ marginBottom: "1.25rem" }}>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
-                  Tool / Method
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
+                  Tool Name
                 </label>
                 <select
-                  className="form-input"
+                  className="modern-input"
                   value={playgroundTool}
                   onChange={(e) => {
                     setPlaygroundTool(e.target.value);
@@ -1108,17 +1263,17 @@ export default function WorkspaceDetailPage() {
                   <option value="read_resource">read_resource</option>
                   <option value="get_dataset_schema">get_dataset_schema</option>
                   <option value="query_dataset">query_dataset</option>
-                  <option value="tools/list">tools/list (MCP Protocol)</option>
+                  <option value="tools/list">tools/list (Protocol Schema)</option>
                 </select>
               </div>
 
               <div style={{ marginBottom: "1.5rem" }}>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
                   Arguments (JSON)
                 </label>
                 <textarea
-                  className="form-input"
-                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.85rem", height: "140px" }}
+                  className="modern-input"
+                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.85rem", height: "140px", resize: "vertical" }}
                   value={playgroundArgs}
                   onChange={(e) => setPlaygroundArgs(e.target.value)}
                 />
@@ -1127,25 +1282,45 @@ export default function WorkspaceDetailPage() {
               <button
                 onClick={handleExecutePlayground}
                 disabled={playgroundLoading}
-                className="btn-primary"
-                style={{ width: "100%", padding: "0.8rem" }}
+                className="pill-btn pill-btn-cyan"
+                style={{ width: "100%", padding: "0.85rem" }}
               >
-                {playgroundLoading ? "Executing Protocol Request..." : "Run MCP Request →"}
+                <Terminal size={16} />
+                {playgroundLoading ? "Executing Protocol Call..." : "Execute MCP Request"}
+                <div className="btn-arrow-circle">
+                  <ArrowRight size={12} />
+                </div>
               </button>
             </div>
 
-            {/* Response Viewer */}
-            <div>
-              <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
-                JSON-RPC 2.0 Response
+            {/* Response Viewer (Terminal Frame) */}
+            <div className="browser-window" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+              <div className="browser-header">
+                <div className="browser-dots">
+                  <div className="browser-dot dot-red" />
+                  <div className="browser-dot dot-yellow" />
+                  <div className="browser-dot dot-green" />
+                </div>
+                <div style={{ fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-muted)" }}>
+                  output.json
+                </div>
               </div>
-              <div className="code-box" style={{ height: "350px", overflowY: "auto" }}>
+
+              <div style={{
+                flex: 1,
+                padding: "1.25rem",
+                background: "rgba(8, 12, 22, 0.95)",
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "0.82rem",
+                overflowY: "auto",
+                maxHeight: "380px",
+              }}>
                 {playgroundResult ? (
-                  <pre>{JSON.stringify(playgroundResult, null, 2)}</pre>
+                  <pre style={{ color: "#38bdf8" }}>{JSON.stringify(playgroundResult, null, 2)}</pre>
                 ) : (
-                  <span style={{ color: "var(--text-muted)" }}>
-                    Response from the MCP gateway will appear here after execution.
-                  </span>
+                  <div style={{ color: "var(--text-muted)", fontStyle: "italic", paddingTop: "2rem", textAlign: "center" }}>
+                    Select a tool, enter valid arguments, and execute to view the JSON-RPC response.
+                  </div>
                 )}
               </div>
             </div>
@@ -1157,36 +1332,37 @@ export default function WorkspaceDetailPage() {
       {/* TAB 8: SETTINGS */}
       {/* ========================================================================= */}
       {activeTab === "settings" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: "2rem" }}>
           {/* Members Management */}
-          <div className="glass-panel" style={{ padding: "1.75rem" }}>
-            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "0.5rem" }}>
+          <div className="frosted-panel" style={{ padding: "2rem" }}>
+            <div className="slash-tag">ROLE MANAGEMENT</div>
+            <h3 className="font-editorial" style={{ fontSize: "1.35rem", marginBottom: "0.5rem" }}>
               Workspace Members
             </h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
-              Manage users who can view or administer this workspace.
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem" }}>
+              Manage users permitted to view or administer this workspace.
             </p>
 
             {workspace.role === "OWNER" && (
-              <form onSubmit={handleAddMember} style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
+              <form onSubmit={handleAddMember} style={{ display: "flex", gap: "0.6rem", marginBottom: "2rem" }}>
                 <input
                   type="text"
                   required
-                  className="form-input"
-                  placeholder="Username to add"
+                  className="modern-input"
+                  placeholder="Username to invite"
                   value={newMemberUsername}
                   onChange={(e) => setNewMemberUsername(e.target.value)}
                 />
                 <select
-                  className="form-input"
-                  style={{ width: "120px" }}
+                  className="modern-input"
+                  style={{ width: "130px" }}
                   value={newMemberRole}
                   onChange={(e) => setNewMemberRole(e.target.value)}
                 >
                   <option value="MEMBER">MEMBER</option>
                   <option value="OWNER">OWNER</option>
                 </select>
-                <button type="submit" className="btn-primary" style={{ padding: "0.5rem 1rem" }}>
+                <button type="submit" className="pill-btn pill-btn-cyan" style={{ padding: "0.55rem 1.25rem" }}>
                   Add
                 </button>
               </form>
@@ -1200,23 +1376,22 @@ export default function WorkspaceDetailPage() {
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    padding: "0.75rem",
+                    padding: "0.9rem 0",
                     borderBottom: "1px solid var(--border-subtle)",
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{m.username || m.user_id}</div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Joined {new Date(m.created_at).toLocaleDateString()}</div>
+                    <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "#f8fafc" }}>{m.username || m.user_id}</div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>Joined {new Date(m.created_at).toLocaleDateString()}</div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <span className="badge badge-neutral">{m.role}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                    <span className="badge-status badge-status-transform">{m.role}</span>
                     {workspace.role === "OWNER" && m.user_id !== workspace.owner_id && (
                       <button
                         onClick={() => handleRemoveMember(m.id)}
-                        className="btn-danger"
-                        style={{ padding: "0.2rem 0.5rem", fontSize: "0.75rem" }}
+                        style={{ color: "var(--status-deny)", background: "transparent", border: "none", cursor: "pointer" }}
                       >
-                        Remove
+                        <Trash2 size={15} />
                       </button>
                     )}
                   </div>
@@ -1226,20 +1401,22 @@ export default function WorkspaceDetailPage() {
           </div>
 
           {/* Danger Zone */}
-          <div className="glass-panel" style={{ padding: "1.75rem", border: "1px solid rgba(244, 63, 94, 0.3)" }}>
-            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--status-deny)", marginBottom: "0.5rem" }}>
-              Danger Zone
+          <div className="frosted-panel" style={{ padding: "2rem", border: "1px solid rgba(244, 63, 94, 0.35)" }}>
+            <div className="slash-tag" style={{ color: "var(--status-deny)" }}>IRREVERSIBLE ACTION</div>
+            <h3 className="font-editorial" style={{ fontSize: "1.35rem", color: "var(--status-deny)", marginBottom: "0.5rem" }}>
+              Delete Workspace
             </h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
-              Permanently delete this workspace. All associated files, extracted texts, policies, and MCP credentials will be irreversibly removed.
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "2rem", lineHeight: 1.6 }}>
+              Permanently delete this workspace. All associated documents, extracted texts, policies, and MCP credentials will be irreversibly removed.
             </p>
 
             {workspace.role === "OWNER" ? (
               <button
                 onClick={handleDeleteWorkspace}
-                className="btn-danger"
-                style={{ padding: "0.75rem 1.5rem" }}
+                className="pill-btn pill-btn-dark"
+                style={{ background: "rgba(244, 63, 94, 0.15)", border: "1px solid rgba(244, 63, 94, 0.4)", color: "#f43f5e" }}
               >
+                <Trash2 size={16} />
                 Delete Workspace Permanently
               </button>
             ) : (
@@ -1252,7 +1429,7 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: VIEW EXTRACTED CONTENT */}
+      {/* MODAL: VIEW EXTRACTED CONTENT (Reference 3 Frosted Panel) */}
       {/* ========================================================================= */}
       {selectedFileContent && (
         <div style={{
@@ -1261,43 +1438,91 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(0, 0, 0, 0.8)",
-          backdropFilter: "blur(6px)",
+          background: "rgba(3, 7, 18, 0.85)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           zIndex: 150,
           padding: "1.5rem",
         }}>
-          <div className="glass-panel" style={{ width: "100%", maxWidth: "800px", maxHeight: "85vh", display: "flex", flexDirection: "column", padding: "2rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <h3 style={{ fontSize: "1.25rem", fontWeight: 700 }}>
-                Extracted Content: {selectedFileName}
-              </h3>
-              <button onClick={() => setSelectedFileContent(null)} className="btn-secondary" style={{ padding: "0.3rem 0.75rem" }}>
-                ✕ Close
-              </button>
-            </div>
+          <div className="frosted-panel frosted-panel-highlight" style={{
+            width: "100%",
+            maxWidth: "850px",
+            maxHeight: "85vh",
+            display: "flex",
+            flexDirection: "column",
+            padding: "2.5rem",
+            position: "relative",
+            boxShadow: "0 24px 64px rgba(0, 0, 0, 0.8)",
+            borderRadius: "var(--radius-xl)",
+          }}>
+            <button
+              onClick={() => setSelectedFileContent(null)}
+              style={{
+                position: "absolute",
+                top: "1.5rem",
+                right: "1.5rem",
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid var(--border-subtle)",
+                color: "var(--text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <X size={16} />
+            </button>
 
-            <div style={{ marginBottom: "1rem", display: "flex", gap: "0.5rem" }}>
-              <span className="badge badge-neutral">
-                Detected PII Entities: {selectedFileContent.detected_entities?.length || 0}
+            <div className="slash-tag">PARSED VAULT DOCUMENT</div>
+            <h3 className="font-editorial" style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>
+              {selectedFileName}
+            </h3>
+
+            <div style={{ display: "flex", gap: "0.6rem", marginBottom: "1.25rem" }}>
+              <span className="badge-status badge-status-allow">Zero Storage Exposure</span>
+              <span className="badge-status badge-status-transform">
+                Detected PII: {selectedFileContent.detected_entities?.length || 0}
               </span>
-              <span className="badge badge-allow">Zero Raw URL Exposure</span>
             </div>
 
-            <div className="code-box" style={{ flex: 1, overflowY: "auto", whiteSpace: "pre-wrap", marginBottom: "1.5rem" }}>
+            <div style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "1.25rem",
+              background: "rgba(10, 16, 28, 0.85)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-md)",
+              fontFamily: "JetBrains Mono, monospace",
+              fontSize: "0.82rem",
+              lineHeight: 1.6,
+              color: "#e2e8f0",
+              whiteSpace: "pre-wrap",
+              marginBottom: "1.5rem",
+            }}>
               {selectedFileContent.plain_text}
             </div>
 
             {selectedFileContent.detected_entities && selectedFileContent.detected_entities.length > 0 && (
-              <div style={{ maxHeight: "150px", overflowY: "auto", background: "rgba(10, 14, 23, 0.5)", padding: "0.75rem", borderRadius: "var(--radius-sm)" }}>
-                <div style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                  Detected Entities & Positions:
+              <div style={{
+                maxHeight: "130px",
+                overflowY: "auto",
+                background: "rgba(10, 16, 28, 0.5)",
+                padding: "0.9rem",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-subtle)",
+              }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                  Detected PII Entities:
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
                   {selectedFileContent.detected_entities.map((e, idx) => (
-                    <span key={idx} className="badge badge-transform" style={{ fontSize: "0.75rem" }}>
+                    <span key={idx} className="badge-status badge-status-transform" style={{ fontSize: "0.72rem" }}>
                       {e.entity_type}: {e.value}
                     </span>
                   ))}
@@ -1318,31 +1543,62 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(0, 0, 0, 0.8)",
-          backdropFilter: "blur(6px)",
+          background: "rgba(3, 7, 18, 0.85)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           zIndex: 150,
           padding: "1.5rem",
         }}>
-          <div className="glass-panel" style={{ width: "100%", maxWidth: "480px", padding: "2rem" }}>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>
-              Generate Private MCP Credential
+          <div className="frosted-panel frosted-panel-highlight" style={{
+            width: "100%",
+            maxWidth: "480px",
+            padding: "2.75rem 2.5rem",
+            position: "relative",
+            boxShadow: "0 24px 64px rgba(0, 0, 0, 0.8)",
+            borderRadius: "var(--radius-xl)",
+          }}>
+            <button
+              onClick={() => setNewMCPModal(false)}
+              style={{
+                position: "absolute",
+                top: "1.5rem",
+                right: "1.5rem",
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid var(--border-subtle)",
+                color: "var(--text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <X size={16} />
+            </button>
+
+            <div className="slash-tag">NEW CREDENTIAL</div>
+            <h3 className="font-editorial" style={{ fontSize: "1.6rem", marginBottom: "0.5rem" }}>
+              Generate MCP Token
             </h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
               Generates a cryptographically random, high-entropy token. The raw secret is returned ONCE and never stored.
             </p>
 
             <form onSubmit={handleCreateMCPCredential}>
-              <div style={{ marginBottom: "1.5rem" }}>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
+              <div style={{ marginBottom: "2rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--text-secondary)" }}>
                   Credential Label
                 </label>
                 <input
                   type="text"
                   required
-                  className="form-input"
+                  autoFocus
+                  className="modern-input"
                   placeholder="e.g. Claude Desktop or Production Agent"
                   value={newMCPName}
                   onChange={(e) => setNewMCPName(e.target.value)}
@@ -1350,11 +1606,12 @@ export default function WorkspaceDetailPage() {
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-                <button type="button" onClick={() => setNewMCPModal(false)} className="btn-secondary">
+                <button type="button" onClick={() => setNewMCPModal(false)} className="pill-btn pill-btn-dark">
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
-                  Generate Credential
+                <button type="submit" className="pill-btn pill-btn-cyan">
+                  <Key size={15} />
+                  Generate Token
                 </button>
               </div>
             </form>
@@ -1363,7 +1620,7 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: ONE-TIME TOKEN REVEAL */}
+      {/* MODAL: ONE-TIME TOKEN REVEAL (Reference 3 High-Tech Glass Panel) */}
       {/* ========================================================================= */}
       {createdCredential && (
         <div style={{
@@ -1372,64 +1629,83 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(0, 0, 0, 0.85)",
-          backdropFilter: "blur(8px)",
+          background: "rgba(3, 7, 18, 0.9)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           zIndex: 200,
           padding: "1.5rem",
         }}>
-          <div className="glass-panel" style={{ width: "100%", maxWidth: "620px", padding: "2rem" }}>
-            <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-              <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🔑</div>
-              <h3 style={{ fontSize: "1.3rem", fontWeight: 700, color: "#fff" }}>
+          <div className="frosted-panel frosted-panel-highlight" style={{
+            width: "100%",
+            maxWidth: "680px",
+            padding: "3rem 2.5rem",
+            boxShadow: "0 24px 64px rgba(0, 0, 0, 0.9), 0 0 45px rgba(56, 189, 248, 0.25)",
+            borderRadius: "var(--radius-xl)",
+          }}>
+            <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+              <div className="slash-tag" style={{ justifyContent: "center" }}>CONFIDENTIAL ONE-TIME SECRET</div>
+              <h3 className="font-editorial" style={{ fontSize: "1.8rem", marginBottom: "0.5rem" }}>
                 Save Your Private MCP Token
               </h3>
               <p style={{
                 fontSize: "0.85rem",
                 color: "var(--status-deny)",
                 background: "var(--status-deny-bg)",
-                padding: "0.5rem 1rem",
-                borderRadius: "var(--radius-sm)",
-                marginTop: "0.75rem",
-                border: "1px solid rgba(244, 63, 94, 0.3)",
+                padding: "0.6rem 1rem",
+                borderRadius: "var(--radius-pill)",
+                display: "inline-block",
+                border: "1px solid rgba(244, 63, 94, 0.35)",
               }}>
-                ⚠️ WARNING: This token will NEVER be shown again. Store it securely in your password manager or client config.
+                ⚠️ This secret will NEVER be shown again. Store it securely in your client config.
               </p>
             </div>
 
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
+            <div style={{ marginBottom: "1.75rem" }}>
+              <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.5rem" }}>
                 Raw Private MCP Token
               </div>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div style={{ display: "flex", gap: "0.6rem" }}>
                 <input
                   type="text"
                   readOnly
                   value={createdCredential.raw_token}
-                  className="form-input"
-                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.85rem", background: "rgba(10, 14, 23, 0.9)" }}
+                  className="modern-input"
+                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.85rem", color: "#38bdf8" }}
                 />
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(createdCredential.raw_token);
+                    setCopiedToken(true);
                     notify("success", "Token copied to clipboard!");
+                    setTimeout(() => setCopiedToken(false), 2500);
                   }}
-                  className="btn-primary"
+                  className="pill-btn pill-btn-primary"
                   style={{ padding: "0 1.25rem" }}
                 >
-                  Copy
+                  {copiedToken ? <Check size={16} /> : <Copy size={16} />}
+                  <span>{copiedToken ? "Copied" : "Copy"}</span>
                 </button>
               </div>
             </div>
 
             {/* Claude Desktop Config Generator */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-                Claude Desktop Configuration Snippet (`claude_desktop_config.json`)
+            <div style={{ marginBottom: "2rem" }}>
+              <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.5rem" }}>
+                Claude Desktop Configuration (`claude_desktop_config.json`)
               </div>
-              <div className="code-box">
+              <div style={{
+                padding: "1rem 1.25rem",
+                background: "rgba(8, 12, 22, 0.95)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "var(--radius-md)",
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: "0.78rem",
+                overflowX: "auto",
+                color: "#e2e8f0",
+              }}>
                 <pre>{JSON.stringify({
                   mcpServers: {
                     [workspace.name.toLowerCase().replace(/\s+/g, "-")]: {
@@ -1445,8 +1721,8 @@ export default function WorkspaceDetailPage() {
 
             <button
               onClick={() => setCreatedCredential(null)}
-              className="btn-primary"
-              style={{ width: "100%", padding: "0.8rem" }}
+              className="pill-btn pill-btn-cyan"
+              style={{ width: "100%", padding: "0.85rem" }}
             >
               I Have Securely Saved This Token
             </button>
