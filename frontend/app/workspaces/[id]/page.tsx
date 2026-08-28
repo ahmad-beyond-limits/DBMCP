@@ -30,12 +30,20 @@ import {
   Check,
   X,
   ArrowRight,
+  ArrowLeft,
   ShieldCheck,
   AlertTriangle,
   Share2,
   CheckSquare,
   Square,
   Lock,
+  Sliders,
+  Database,
+  Table,
+  Filter,
+  Eye,
+  Columns,
+  Sparkles,
 } from "lucide-react";
 
 export default function WorkspaceDetailPage() {
@@ -77,16 +85,28 @@ export default function WorkspaceDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadStep, setUploadStep] = useState<1 | 2 | 3>(1);
 
-  // Simplified "Share MCP Link" Wizard State
+  // 🌟 Advanced Power Query / Excel Spreadsheet "Share MCP Link" Wizard State 🌟
   const [shareWizardOpen, setShareWizardOpen] = useState(false);
   const [shareStep, setShareStep] = useState<1 | 2 | 3>(1);
   const [shareName, setShareName] = useState("Claude Assistant");
-  const [shareAllFiles, setShareAllFiles] = useState(true);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  
+  // Power Query Transformation States
+  const [activeTransformFileId, setActiveTransformFileId] = useState<string>("");
+  const [selectedColumnName, setSelectedColumnName] = useState<string>("email");
+  const [pdfAccessMode, setPdfAccessMode] = useState<"FULL" | "METADATA_ONLY">("FULL");
   const [maskEmails, setMaskEmails] = useState(true);
   const [maskNames, setMaskNames] = useState(false);
   const [maskSSN, setMaskSSN] = useState(true);
   const [customColumnsToHide, setCustomColumnsToHide] = useState("");
+  const [columnActions, setColumnActions] = useState<Record<string, "KEEP" | "MASK" | "REMOVE">>({
+    email: "MASK",
+    ssn: "MASK",
+    salary: "REMOVE",
+    credit_card: "REMOVE",
+    customer_id: "KEEP",
+    region: "KEEP",
+  });
   const [generatingLink, setGeneratingLink] = useState(false);
 
   // Playground States
@@ -120,6 +140,9 @@ export default function WorkspaceDetailPage() {
       setAuditLogs(logs);
       setMembers(mems);
       setSelectedFileIds(fList.map((f) => f.id));
+      if (fList.length > 0) {
+        setActiveTransformFileId(fList[0].id);
+      }
     } catch (err: any) {
       notify("error", err.message || "Failed to load workspace");
     } finally {
@@ -132,7 +155,7 @@ export default function WorkspaceDetailPage() {
     setTimeout(() => setNotification(null), 5000);
   };
 
-  // Simplified File Upload Flow
+  // File Upload Flow
   const handleExecuteUpload = async () => {
     if (!uploadFile) return;
 
@@ -141,6 +164,7 @@ export default function WorkspaceDetailPage() {
       const uploaded = await api.uploadFile(workspaceId, uploadFile);
       notify("success", `File '${uploadFile.name}' processed successfully.`);
       setFiles((prev) => [uploaded, ...prev]);
+      setSelectedFileIds((prev) => [...prev, uploaded.id]);
       setUploadModalOpen(false);
       setUploadFile(null);
       setUploadDescription("");
@@ -168,12 +192,13 @@ export default function WorkspaceDetailPage() {
       await api.deleteFile(workspaceId, fileId);
       notify("success", "File deleted.");
       setFiles((prev) => prev.filter((f) => f.id !== fileId));
+      setSelectedFileIds((prev) => prev.filter((id) => id !== fileId));
     } catch (err: any) {
       notify("error", err.message || "Failed to delete file");
     }
   };
 
-  // Simplified Share / Create MCP Link Flow
+  // Generate MCP Link with Power Query & Document Policies
   const handleGenerateShareLink = async () => {
     if (!shareName.trim()) return;
 
@@ -181,15 +206,15 @@ export default function WorkspaceDetailPage() {
     try {
       const created = await api.createMCPCredential(workspaceId, shareName.trim());
 
-      if (!shareAllFiles && selectedFileIds.length > 0) {
-        const excludedFiles = files.filter((f) => !selectedFileIds.includes(f.id));
-        for (const file of excludedFiles) {
-          try {
-            await api.createResourcePolicy(workspaceId, file.id, "read_resource", "DENY");
-          } catch (e) {}
-        }
+      // 1. Enforce excluded files if any
+      const excludedFiles = files.filter((f) => !selectedFileIds.includes(f.id));
+      for (const file of excludedFiles) {
+        try {
+          await api.createResourcePolicy(workspaceId, file.id, "read_resource", "DENY");
+        } catch (e) {}
       }
 
+      // 2. Anonymisation Rules
       if (maskEmails) {
         try {
           await api.createAnonymisationRule(workspaceId, "email", null, "MASK");
@@ -205,6 +230,20 @@ export default function WorkspaceDetailPage() {
           await api.createAnonymisationRule(workspaceId, "ssn", null, "MASK");
         } catch (e) {}
       }
+
+      // 3. Power Query Column Transformations
+      for (const [col, action] of Object.entries(columnActions)) {
+        if (action === "REMOVE") {
+          try {
+            await api.createAnonymisationRule(workspaceId, "custom_column", col, "REMOVE");
+          } catch (e) {}
+        } else if (action === "MASK") {
+          try {
+            await api.createAnonymisationRule(workspaceId, "custom_column", col, "MASK");
+          } catch (e) {}
+        }
+      }
+
       if (customColumnsToHide.trim()) {
         const columns = customColumnsToHide.split(",").map((c) => c.trim()).filter(Boolean);
         for (const col of columns) {
@@ -237,7 +276,7 @@ export default function WorkspaceDetailPage() {
       setShareWizardOpen(false);
       setShareStep(1);
       setShareName("Claude Assistant");
-      notify("success", "Shareable MCP Link generated!");
+      notify("success", "Shareable MCP Link generated with policies!");
     } catch (err: any) {
       notify("error", err.message || "Failed to generate link");
     } finally {
@@ -350,14 +389,26 @@ export default function WorkspaceDetailPage() {
     );
   }
 
+  const selectedFiles = files.filter((f) => selectedFileIds.includes(f.id));
+  const activeTransformFile = files.find((f) => f.id === activeTransformFileId) || selectedFiles[0];
+
+  // Available Columns for Dataset Transformation
+  const availableColumns = [
+    { name: "customer_id", letter: "A", type: "string", sample: ["CUST_101", "CUST_102", "CUST_103", "CUST_104"] },
+    { name: "email", letter: "B", type: "email", sample: ["alex@corp.com", "maya@corp.com", "david@corp.com", "sarah@corp.com"] },
+    { name: "ssn", letter: "C", type: "tax_id", sample: ["458-12-9011", "291-88-3402", "994-10-8812", "112-90-4820"] },
+    { name: "salary", letter: "D", type: "currency", sample: ["$95,000", "$120,000", "$85,000", "$140,000"] },
+    { name: "region", letter: "E", type: "string", sample: ["North America", "Europe", "Asia-Pacific", "Latin America"] },
+  ];
+
   return (
-    <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "2.5rem 1.5rem 5rem 1.5rem" }}>
+    <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "clamp(1.5rem, 3vw, 2.5rem) clamp(1rem, 3vw, 1.5rem) 5rem clamp(1rem, 3vw, 1.5rem)" }}>
       {/* Toast Notification */}
       {notification && (
         <div style={{
           position: "fixed",
-          bottom: "2.5rem",
-          right: "2.5rem",
+          bottom: "2rem",
+          right: "2rem",
           zIndex: 200,
           background: notification.type === "success" ? "var(--color-obsidian)" : "#dc2626",
           color: "#ffffff",
@@ -369,6 +420,7 @@ export default function WorkspaceDetailPage() {
           display: "flex",
           alignItems: "center",
           gap: "0.5rem",
+          maxWidth: "calc(100vw - 4rem)",
         }}>
           {notification.type === "success" ? <ShieldCheck size={16} color="#4ade80" /> : <AlertTriangle size={16} />}
           <span>{notification.text}</span>
@@ -427,6 +479,9 @@ export default function WorkspaceDetailPage() {
             onClick={() => {
               setSelectedFileIds(files.map((f) => f.id));
               setShareStep(1);
+              if (files.length > 0) {
+                setActiveTransformFileId(files[0].id);
+              }
               setShareWizardOpen(true);
             }}
             className="pill-btn pill-btn-solid"
@@ -463,12 +518,12 @@ export default function WorkspaceDetailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: DOCUMENTS */}
+      {/* TAB 1: DOCUMENTS (NO VIEW CONTENT FOR PDF DOCUMENTS AS REQUESTED)        */}
       {/* ========================================================================= */}
       {activeTab === "documents" && (
         <div>
           {files.length === 0 ? (
-            <div className="frosted-panel" style={{ textAlign: "center", padding: "5rem 2rem" }}>
+            <div className="frosted-panel" style={{ textAlign: "center", padding: "clamp(3rem, 6vw, 5rem) 1.5rem" }}>
               <div style={{
                 width: "56px",
                 height: "56px",
@@ -498,7 +553,7 @@ export default function WorkspaceDetailPage() {
               </button>
             </div>
           ) : (
-            <div className="frosted-panel" style={{ overflow: "hidden" }}>
+            <div className="frosted-panel" style={{ overflowX: "auto" }}>
               <table className="custom-table">
                 <thead>
                   <tr>
@@ -537,13 +592,16 @@ export default function WorkspaceDetailPage() {
                       </td>
                       <td style={{ textAlign: "right" }}>
                         <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
-                          <button
-                            onClick={() => handleViewContent(file)}
-                            className="pill-btn pill-btn-glass"
-                            style={{ padding: "0.3rem 0.8rem", fontSize: "0.78rem" }}
-                          >
-                            View Content
-                          </button>
+                          {/* ONLY CSV / JSON show View Content; NO view content for PDF documents */}
+                          {file.file_type !== "PDF" && (
+                            <button
+                              onClick={() => handleViewContent(file)}
+                              className="pill-btn pill-btn-glass"
+                              style={{ padding: "0.3rem 0.8rem", fontSize: "0.78rem" }}
+                            >
+                              View Content
+                            </button>
+                          )}
                           {workspace.role === "OWNER" && (
                             <button
                               onClick={() => handleDeleteFile(file.id)}
@@ -570,7 +628,7 @@ export default function WorkspaceDetailPage() {
       {/* ========================================================================= */}
       {activeTab === "links" && (
         <div>
-          <div className="frosted-panel" style={{ padding: "2rem", marginBottom: "1.75rem" }}>
+          <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)", marginBottom: "1.75rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
               <div>
                 <div className="slash-tag">AI CONNECTIONS</div>
@@ -585,6 +643,9 @@ export default function WorkspaceDetailPage() {
                 onClick={() => {
                   setSelectedFileIds(files.map((f) => f.id));
                   setShareStep(1);
+                  if (files.length > 0) {
+                    setActiveTransformFileId(files[0].id);
+                  }
                   setShareWizardOpen(true);
                 }}
                 className="pill-btn pill-btn-solid"
@@ -595,7 +656,7 @@ export default function WorkspaceDetailPage() {
             </div>
           </div>
 
-          <div className="frosted-panel" style={{ overflow: "hidden" }}>
+          <div className="frosted-panel" style={{ overflowX: "auto" }}>
             <table className="custom-table">
               <thead>
                 <tr>
@@ -666,9 +727,9 @@ export default function WorkspaceDetailPage() {
       {/* TAB 3: PRIVACY RULES & POLICIES */}
       {/* ========================================================================= */}
       {activeTab === "privacy" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "1.75rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))", gap: "1.75rem" }}>
           {/* Anonymisation Rules */}
-          <div className="frosted-panel" style={{ padding: "2rem" }}>
+          <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)" }}>
             <div className="slash-tag">DATA MASKING</div>
             <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
               Active Anonymisation Rules
@@ -692,6 +753,8 @@ export default function WorkspaceDetailPage() {
                       alignItems: "center",
                       padding: "0.85rem 0",
                       borderBottom: "1px solid var(--glass-border-subtle)",
+                      flexWrap: "wrap",
+                      gap: "0.5rem",
                     }}
                   >
                     <div>
@@ -710,7 +773,7 @@ export default function WorkspaceDetailPage() {
           </div>
 
           {/* Document Access Restrictions */}
-          <div className="frosted-panel" style={{ padding: "2rem" }}>
+          <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)" }}>
             <div className="slash-tag">DOCUMENT ACCESS</div>
             <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
               File Permissions
@@ -736,6 +799,8 @@ export default function WorkspaceDetailPage() {
                         alignItems: "center",
                         padding: "0.85rem 0",
                         borderBottom: "1px solid var(--glass-border-subtle)",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
                       }}
                     >
                       <div style={{ fontWeight: 500, fontSize: "0.9rem", color: "var(--color-obsidian)" }}>
@@ -759,7 +824,7 @@ export default function WorkspaceDetailPage() {
       {activeTab === "activity" && (
         <div className="frosted-panel" style={{ overflow: "hidden" }}>
           <div style={{
-            padding: "1.5rem 1.75rem",
+            padding: "1.25rem 1.5rem",
             borderBottom: "1px solid var(--glass-border-subtle)",
             display: "flex",
             justifyContent: "space-between",
@@ -780,50 +845,52 @@ export default function WorkspaceDetailPage() {
             </button>
           </div>
 
-          <table className="custom-table">
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>Operation</th>
-                <th>Caller</th>
-                <th>Decision</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auditLogs.length === 0 ? (
+          <div style={{ overflowX: "auto" }}>
+            <table className="custom-table">
+              <thead>
                 <tr>
-                  <td colSpan={5} style={{ textAlign: "center", padding: "4rem", color: "var(--text-dim)" }}>
-                    No activity recorded yet.
-                  </td>
+                  <th>Timestamp</th>
+                  <th>Operation</th>
+                  <th>Caller</th>
+                  <th>Decision</th>
+                  <th>Notes</th>
                 </tr>
-              ) : (
-                auditLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td style={{ color: "var(--text-dim)", whiteSpace: "nowrap", fontFamily: "JetBrains Mono, monospace", fontSize: "0.78rem" }}>
-                      {new Date(log.timestamp).toLocaleTimeString()} · {new Date(log.timestamp).toLocaleDateString()}
-                    </td>
-                    <td style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 500, fontSize: "0.85rem", color: "var(--accent-lime)" }}>
-                      {log.operation}
-                    </td>
-                    <td>
-                      <span className="badge-status" style={{ background: "rgba(0,0,0,0.04)", color: "var(--text-secondary)" }}>
-                        {log.actor_type}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge-status ${log.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
-                        {log.decision}
-                      </span>
-                    </td>
-                    <td style={{ color: "var(--text-muted)", maxWidth: "320px", fontSize: "0.82rem" }}>
-                      {log.reason || "—"}
+              </thead>
+              <tbody>
+                {auditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: "center", padding: "4rem", color: "var(--text-dim)" }}>
+                      No activity recorded yet.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  auditLogs.map((log) => (
+                    <tr key={log.id}>
+                      <td style={{ color: "var(--text-dim)", whiteSpace: "nowrap", fontFamily: "JetBrains Mono, monospace", fontSize: "0.78rem" }}>
+                        {new Date(log.timestamp).toLocaleTimeString()} · {new Date(log.timestamp).toLocaleDateString()}
+                      </td>
+                      <td style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 500, fontSize: "0.85rem", color: "var(--accent-lime)" }}>
+                        {log.operation}
+                      </td>
+                      <td>
+                        <span className="badge-status" style={{ background: "rgba(0,0,0,0.04)", color: "var(--text-secondary)" }}>
+                          {log.actor_type}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge-status ${log.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
+                          {log.decision}
+                        </span>
+                      </td>
+                      <td style={{ color: "var(--text-muted)", maxWidth: "320px", fontSize: "0.82rem" }}>
+                        {log.reason || "—"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -831,7 +898,7 @@ export default function WorkspaceDetailPage() {
       {/* TAB 5: TEST CONSOLE (PLAYGROUND) */}
       {/* ========================================================================= */}
       {activeTab === "playground" && (
-        <div className="frosted-panel" style={{ padding: "2rem" }}>
+        <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)" }}>
           <div className="slash-tag">DEVELOPER CONSOLE</div>
           <h3 style={{ fontSize: "1.3rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
             MCP Tool Test Console
@@ -840,7 +907,7 @@ export default function WorkspaceDetailPage() {
             Test live JSON-RPC requests directly against your MCP gateway.
           </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1.75rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1.75rem" }}>
             <div>
               <div style={{ marginBottom: "1.25rem" }}>
                 <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)" }}>
@@ -957,9 +1024,9 @@ export default function WorkspaceDetailPage() {
       {/* TAB 6: SETTINGS */}
       {/* ========================================================================= */}
       {activeTab === "settings" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "1.75rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: "1.75rem" }}>
           {/* Members */}
-          <div className="frosted-panel" style={{ padding: "2rem" }}>
+          <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)" }}>
             <div className="slash-tag">TEAM ACCESS</div>
             <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
               Workspace Access
@@ -969,7 +1036,7 @@ export default function WorkspaceDetailPage() {
             </p>
 
             {workspace.role === "OWNER" && (
-              <form onSubmit={handleAddMember} style={{ display: "flex", gap: "0.5rem", marginBottom: "1.75rem" }}>
+              <form onSubmit={handleAddMember} style={{ display: "flex", gap: "0.5rem", marginBottom: "1.75rem", flexWrap: "wrap" }}>
                 <input
                   type="text"
                   required
@@ -977,10 +1044,11 @@ export default function WorkspaceDetailPage() {
                   placeholder="Username"
                   value={newMemberUsername}
                   onChange={(e) => setNewMemberUsername(e.target.value)}
+                  style={{ flex: "1 1 140px" }}
                 />
                 <select
                   className="modern-input"
-                  style={{ width: "120px" }}
+                  style={{ width: "110px" }}
                   value={newMemberRole}
                   onChange={(e) => setNewMemberRole(e.target.value)}
                 >
@@ -1003,6 +1071,8 @@ export default function WorkspaceDetailPage() {
                     alignItems: "center",
                     padding: "0.85rem 0",
                     borderBottom: "1px solid var(--glass-border-subtle)",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
                   }}
                 >
                   <div>
@@ -1026,7 +1096,7 @@ export default function WorkspaceDetailPage() {
           </div>
 
           {/* Danger Zone */}
-          <div className="frosted-panel" style={{ padding: "2rem", border: "1px solid rgba(220, 38, 38, 0.25)", background: "var(--status-deny-bg)" }}>
+          <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 2rem)", border: "1px solid rgba(220, 38, 38, 0.25)", background: "var(--status-deny-bg)" }}>
             <div className="slash-tag" style={{ color: "var(--status-deny)" }}>DANGER ZONE</div>
             <h3 style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--status-deny)", marginBottom: "0.3rem" }}>
               Delete Workspace
@@ -1065,16 +1135,18 @@ export default function WorkspaceDetailPage() {
           alignItems: "center",
           justifyContent: "center",
           zIndex: 150,
-          padding: "1.5rem",
+          padding: "1rem",
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: "520px",
-            padding: "2.5rem 2.25rem",
+            padding: "clamp(1.75rem, 4vw, 2.5rem) clamp(1.25rem, 3vw, 2.25rem)",
             position: "relative",
             background: "#ffffff",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
+            maxHeight: "92vh",
+            overflowY: "auto",
           }}>
             <button
               onClick={() => setUploadModalOpen(false)}
@@ -1098,7 +1170,7 @@ export default function WorkspaceDetailPage() {
             </button>
 
             <div className="slash-tag">EASY UPLOAD</div>
-            <h2 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
+            <h2 style={{ fontSize: "1.4rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
               Upload Document to Workspace
             </h2>
             <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
@@ -1122,12 +1194,13 @@ export default function WorkspaceDetailPage() {
                   flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  padding: "2rem",
+                  padding: "1.75rem 1rem",
                   border: "2px dashed var(--glass-border-subtle)",
                   borderRadius: "var(--radius-md)",
                   background: "var(--canvas-bg)",
                   cursor: "pointer",
                   transition: "all 0.15s ease",
+                  textAlign: "center",
                 }}>
                   <Upload size={24} color="var(--accent-lime)" style={{ marginBottom: "0.5rem" }} />
                   <span style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--color-obsidian)" }}>
@@ -1217,7 +1290,7 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MULTI-LINK "SHARE MCP LINK" WIZARD */}
+      {/* 🌟 POWER QUERY / EXCEL SPREADSHEET "SHARE MCP LINK" WIZARD 🌟              */}
       {/* ========================================================================= */}
       {shareWizardOpen && (
         <div style={{
@@ -1226,218 +1299,660 @@ export default function WorkspaceDetailPage() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "rgba(15, 23, 42, 0.35)",
-          backdropFilter: "blur(12px)",
+          background: "rgba(15, 23, 42, 0.45)",
+          backdropFilter: "blur(14px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           zIndex: 160,
-          padding: "1.5rem",
+          padding: "clamp(0.5rem, 2vw, 1.5rem)",
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
-            maxWidth: "560px",
-            maxHeight: "90vh",
-            overflowY: "auto",
-            padding: "2.5rem 2.25rem",
-            position: "relative",
+            maxWidth: shareStep === 2 ? "1080px" : "560px",
+            maxHeight: "94vh",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
             background: "#ffffff",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
+            transition: "max-width 0.25s ease",
           }}>
-            <button
-              onClick={() => setShareWizardOpen(false)}
-              style={{
-                position: "absolute",
-                top: "1.25rem",
-                right: "1.25rem",
-                width: "30px",
-                height: "30px",
-                borderRadius: "50%",
-                background: "var(--canvas-bg)",
-                border: "1px solid var(--glass-border-subtle)",
-                color: "var(--text-muted)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-              }}
-            >
-              <X size={14} />
-            </button>
-
-            <div className="slash-tag">MCP LINK GENERATOR</div>
-            <h2 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
-              Create Tailored MCP Link
-            </h2>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
-              Configure exactly which files and data this AI link can access.
-            </p>
-
-            {/* Wizard Step 1: Name */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
-                1. Link Label / Purpose
-              </label>
-              <input
-                type="text"
-                className="modern-input"
-                placeholder="e.g. Claude Support Bot or Finance Auditor"
-                value={shareName}
-                onChange={(e) => setShareName(e.target.value)}
-              />
-            </div>
-
-            {/* Wizard Step 2: Choose which files */}
-            <div style={{ marginBottom: "1.75rem" }}>
-              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
-                2. Which files can this AI access?
-              </label>
-
-              <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShareAllFiles(true);
-                    setSelectedFileIds(files.map((f) => f.id));
-                  }}
-                  className={`pill-tab ${shareAllFiles ? "active" : ""}`}
-                  style={{ fontSize: "0.8rem", padding: "0.35rem 0.9rem" }}
-                >
-                  All Documents ({files.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShareAllFiles(false)}
-                  className={`pill-tab ${!shareAllFiles ? "active" : ""}`}
-                  style={{ fontSize: "0.8rem", padding: "0.35rem 0.9rem" }}
-                >
-                  Choose Specific Files
-                </button>
+            {/* Header with Step Tracker */}
+            <div style={{
+              padding: "1.25rem clamp(1rem, 3vw, 2rem) 1rem clamp(1rem, 3vw, 2rem)",
+              borderBottom: "1px solid var(--glass-border-subtle)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "0.75rem",
+            }}>
+              <div>
+                <div className="slash-tag" style={{ margin: 0, marginBottom: "0.2rem" }}>
+                  STEP {shareStep} OF 2: {shareStep === 1 ? "SELECT FILES" : "POWER QUERY TRANSFORMATION STUDIO"}
+                </div>
+                <h2 style={{ fontSize: "clamp(1.15rem, 2.5vw, 1.35rem)", fontWeight: 600, color: "var(--color-obsidian)" }}>
+                  {shareStep === 1 ? "Configure AI Link & File Scope" : "Data & Column Transformation Studio"}
+                </h2>
               </div>
 
-              {!shareAllFiles && (
-                <div style={{
-                  maxHeight: "140px",
-                  overflowY: "auto",
+              <button
+                onClick={() => setShareWizardOpen(false)}
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
                   background: "var(--canvas-bg)",
-                  padding: "0.75rem",
-                  borderRadius: "var(--radius-md)",
                   border: "1px solid var(--glass-border-subtle)",
-                }}>
-                  {files.length === 0 ? (
-                    <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>No files uploaded yet.</div>
-                  ) : (
-                    files.map((f) => {
-                      const isChecked = selectedFileIds.includes(f.id);
-                      return (
-                        <div
-                          key={f.id}
-                          onClick={() => {
-                            if (isChecked) {
-                              setSelectedFileIds(selectedFileIds.filter((id) => id !== f.id));
-                            } else {
-                              setSelectedFileIds([...selectedFileIds, f.id]);
-                            }
-                          }}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.6rem",
-                            padding: "0.35rem 0",
-                            cursor: "pointer",
-                            fontSize: "0.85rem",
-                            color: "var(--color-obsidian)",
-                          }}
+                  color: "var(--text-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem clamp(1rem, 3vw, 2rem)" }}>
+              {/* ========================================================================= */}
+              {/* STEP 1: LINK IDENTITY & FILE SELECTION */}
+              {/* ========================================================================= */}
+              {shareStep === 1 && (
+                <div>
+                  <div style={{ marginBottom: "1.75rem" }}>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--color-obsidian)" }}>
+                      1. Link Label / Purpose
+                    </label>
+                    <input
+                      type="text"
+                      className="modern-input"
+                      placeholder="e.g. Claude Support Bot or Financial Analyst"
+                      value={shareName}
+                      onChange={(e) => setShareName(e.target.value)}
+                    />
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.35rem" }}>
+                      Give this link a clear name so you can track its activity in the audit trail.
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: "1.5rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
+                      <label style={{ fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)" }}>
+                        2. Select Files to Include for this Link ({selectedFileIds.length}/{files.length})
+                      </label>
+
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFileIds(files.map((f) => f.id))}
+                          style={{ fontSize: "0.75rem", background: "none", border: "none", color: "var(--accent-lime)", cursor: "pointer", fontWeight: 600 }}
                         >
-                          {isChecked ? <CheckSquare size={16} color="var(--accent-lime)" /> : <Square size={16} color="var(--text-dim)" />}
-                          <span style={{ fontWeight: isChecked ? 600 : 400 }}>{f.original_filename}</span>
+                          Select All
+                        </button>
+                        <span style={{ color: "var(--text-dim)" }}>·</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFileIds([])}
+                          style={{ fontSize: "0.75rem", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+                        >
+                          Deselect All
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      maxHeight: "220px",
+                      overflowY: "auto",
+                      background: "var(--canvas-bg)",
+                      padding: "0.85rem",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--glass-border-subtle)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.4rem",
+                    }}>
+                      {files.length === 0 ? (
+                        <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", textAlign: "center", padding: "1.5rem" }}>
+                          No documents uploaded yet. Upload a file first.
                         </div>
-                      );
-                    })
+                      ) : (
+                        files.map((f) => {
+                          const isChecked = selectedFileIds.includes(f.id);
+                          return (
+                            <div
+                              key={f.id}
+                              onClick={() => {
+                                if (isChecked) {
+                                  setSelectedFileIds(selectedFileIds.filter((id) => id !== f.id));
+                                } else {
+                                  setSelectedFileIds([...selectedFileIds, f.id]);
+                                }
+                              }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "0.6rem 0.85rem",
+                                borderRadius: "var(--radius-sm)",
+                                background: isChecked ? "#ffffff" : "transparent",
+                                border: isChecked ? "1px solid var(--glass-border-subtle)" : "1px solid transparent",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                                {isChecked ? <CheckSquare size={16} color="var(--accent-lime)" /> : <Square size={16} color="var(--text-dim)" />}
+                                <FileText size={15} color={f.file_type === "PDF" ? "#ef4444" : "var(--accent-lime)"} />
+                                <span style={{ fontSize: "0.88rem", fontWeight: isChecked ? 600 : 400, color: "var(--color-obsidian)" }}>
+                                  {f.original_filename}
+                                </span>
+                              </div>
+
+                              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
+                                {f.file_type} · {(f.file_size / 1024).toFixed(0)} KB
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* STEP 2: POWER QUERY / EXCEL SPREADSHEET TRANSFORMATION STUDIO              */}
+              {/* ========================================================================= */}
+              {shareStep === 2 && (
+                <div>
+                  {/* File Selector Tabs for multi-file transformation */}
+                  <div style={{ marginBottom: "1.25rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
+                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", marginRight: "0.4rem" }}>
+                        Selected File:
+                      </span>
+                      {selectedFiles.map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => setActiveTransformFileId(f.id)}
+                          className={`pill-tab ${activeTransformFile?.id === f.id ? "active" : ""}`}
+                          style={{ fontSize: "0.8rem", padding: "0.35rem 0.85rem", gap: "0.4rem", display: "flex", alignItems: "center" }}
+                        >
+                          <FileText size={13} color={f.file_type === "PDF" ? "#ef4444" : "var(--accent-lime)"} />
+                          <span>{f.original_filename}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {activeTransformFile && (
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
+                      gap: "1.5rem",
+                      alignItems: "start",
+                    }}>
+                      {/* ========================================================================= */}
+                      {/* LEFT COLUMN: TRANSFORMATION CONTROLS / COLUMN LIST                         */}
+                      {/* ========================================================================= */}
+                      <div>
+                        {activeTransformFile.file_type === "PDF" || activeTransformFile.file_type === "DOCX" || activeTransformFile.file_type === "TXT" ? (
+                          /* PDF & Document Access Policy */
+                          <div style={{
+                            background: "var(--canvas-bg)",
+                            padding: "clamp(1rem, 3vw, 1.5rem)",
+                            borderRadius: "var(--radius-md)",
+                            border: "1px solid var(--glass-border-subtle)",
+                          }}>
+                            <div style={{ fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <Sliders size={15} color="var(--accent-lime)" />
+                              <span>PDF Document Security Policies</span>
+                            </div>
+
+                            <div style={{ marginBottom: "1.25rem" }}>
+                              <label style={{ display: "block", fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
+                                Document Access Level:
+                              </label>
+                              <select
+                                className="modern-input"
+                                value={pdfAccessMode}
+                                onChange={(e) => setPdfAccessMode(e.target.value as any)}
+                              >
+                                <option value="FULL">Full Document Retrieval &amp; Semantic Search (Standard)</option>
+                                <option value="METADATA_ONLY">Metadata &amp; Outline Only (High Security)</option>
+                              </select>
+                            </div>
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                              <label style={{ display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={maskEmails}
+                                  onChange={(e) => setMaskEmails(e.target.checked)}
+                                  style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
+                                />
+                                <span>Mask Emails in excerpts (<code>j***@company.com</code>)</span>
+                              </label>
+
+                              <label style={{ display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={maskNames}
+                                  onChange={(e) => setMaskNames(e.target.checked)}
+                                  style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
+                                />
+                                <span>Pseudonymize Person Names (<code>Person_001</code>)</span>
+                              </label>
+
+                              <label style={{ display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={maskSSN}
+                                  onChange={(e) => setMaskSSN(e.target.checked)}
+                                  style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
+                                />
+                                <span>Mask Identification Numbers &amp; SSNs</span>
+                              </label>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Power Query Columns Panel */
+                          <div style={{
+                            background: "var(--canvas-bg)",
+                            padding: "clamp(1rem, 2.5vw, 1.25rem)",
+                            borderRadius: "var(--radius-md)",
+                            border: "1px solid var(--glass-border-subtle)",
+                          }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
+                              <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                <Columns size={14} color="var(--accent-lime)" />
+                                <span>Columns ({availableColumns.length})</span>
+                              </div>
+                              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Click to Inspect</span>
+                            </div>
+
+                            {/* Column Selection List */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.25rem" }}>
+                              {availableColumns.map((col) => {
+                                const action = columnActions[col.name] || "KEEP";
+                                const isSelected = selectedColumnName === col.name;
+                                return (
+                                  <div
+                                    key={col.name}
+                                    onClick={() => setSelectedColumnName(col.name)}
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      padding: "0.6rem 0.75rem",
+                                      background: isSelected ? "#ffffff" : "rgba(255, 255, 255, 0.6)",
+                                      borderRadius: "var(--radius-sm)",
+                                      border: isSelected ? "1.5px solid var(--accent-lime)" : "1px solid var(--glass-border-subtle)",
+                                      cursor: "pointer",
+                                      transition: "all 0.15s ease",
+                                      boxShadow: isSelected ? "0 2px 8px rgba(132, 204, 22, 0.12)" : "none",
+                                    }}
+                                  >
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                      <span style={{
+                                        width: "20px",
+                                        height: "20px",
+                                        borderRadius: "4px",
+                                        background: isSelected ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
+                                        color: isSelected ? "var(--accent-lime)" : "var(--text-dim)",
+                                        fontFamily: "JetBrains Mono, monospace",
+                                        fontSize: "0.72rem",
+                                        fontWeight: 700,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                      }}>
+                                        {col.letter}
+                                      </span>
+                                      <div>
+                                        <div style={{ fontSize: "0.84rem", fontWeight: isSelected ? 700 : 500, color: "var(--color-obsidian)", fontFamily: "JetBrains Mono, monospace" }}>
+                                          {col.name}
+                                        </div>
+                                        <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                                          {col.type}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Action Status Badge */}
+                                    <span style={{
+                                      fontSize: "0.7rem",
+                                      fontWeight: 600,
+                                      padding: "0.15rem 0.5rem",
+                                      borderRadius: "var(--radius-pill)",
+                                      background: action === "REMOVE" ? "var(--status-deny-bg)" : action === "MASK" ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
+                                      color: action === "REMOVE" ? "var(--status-deny)" : action === "MASK" ? "var(--accent-lime)" : "var(--text-secondary)",
+                                    }}>
+                                      {action === "REMOVE" ? "Dropped" : action === "MASK" ? "Masked" : "Passed"}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Additional Redaction Input */}
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-muted)", marginBottom: "0.3rem", fontWeight: 500 }}>
+                                Custom columns to drop (comma-separated):
+                              </label>
+                              <input
+                                type="text"
+                                className="modern-input"
+                                placeholder="e.g. credit_card, zip_code"
+                                value={customColumnsToHide}
+                                onChange={(e) => setCustomColumnsToHide(e.target.value)}
+                                style={{ fontSize: "0.8rem", padding: "0.45rem 0.7rem" }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ========================================================================= */}
+                      {/* RIGHT COLUMN: INTERACTIVE EXCEL SPREADSHEET & LIVE TRANSFORM INSPECTOR     */}
+                      {/* ========================================================================= */}
+                      {activeTransformFile.file_type !== "PDF" && (
+                        <div style={{
+                          background: "var(--canvas-bg)",
+                          borderRadius: "var(--radius-md)",
+                          border: "1px solid var(--glass-border-subtle)",
+                          overflow: "hidden",
+                          display: "flex",
+                          flexDirection: "column",
+                        }}>
+                          {/* Active Column Transformation Toolbar */}
+                          <div style={{
+                            padding: "0.85rem 1.15rem",
+                            background: "#ffffff",
+                            borderBottom: "1px solid var(--glass-border-subtle)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                            gap: "0.75rem",
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                              <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                                Selected:
+                              </span>
+                              <span style={{
+                                fontFamily: "JetBrains Mono, monospace",
+                                fontWeight: 700,
+                                fontSize: "0.88rem",
+                                color: "var(--color-obsidian)",
+                                background: "var(--accent-lime-bg)",
+                                padding: "0.15rem 0.5rem",
+                                borderRadius: "4px",
+                                border: "1px solid var(--accent-lime-border)",
+                              }}>
+                                {selectedColumnName}
+                              </span>
+                            </div>
+
+                            {/* Transformation Action Buttons for Selected Column */}
+                            <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+                              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginRight: "0.2rem" }}>Action:</span>
+                              <button
+                                type="button"
+                                onClick={() => setColumnActions({ ...columnActions, [selectedColumnName]: "KEEP" })}
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.3rem 0.7rem",
+                                  borderRadius: "var(--radius-pill)",
+                                  border: "1px solid",
+                                  borderColor: (columnActions[selectedColumnName] || "KEEP") === "KEEP" ? "var(--color-obsidian)" : "var(--glass-border-subtle)",
+                                  background: (columnActions[selectedColumnName] || "KEEP") === "KEEP" ? "var(--color-obsidian)" : "#ffffff",
+                                  color: (columnActions[selectedColumnName] || "KEEP") === "KEEP" ? "#ffffff" : "var(--text-secondary)",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Keep Original
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setColumnActions({ ...columnActions, [selectedColumnName]: "MASK" })}
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.3rem 0.7rem",
+                                  borderRadius: "var(--radius-pill)",
+                                  border: "1px solid",
+                                  borderColor: columnActions[selectedColumnName] === "MASK" ? "var(--accent-lime)" : "var(--glass-border-subtle)",
+                                  background: columnActions[selectedColumnName] === "MASK" ? "var(--accent-lime-bg)" : "#ffffff",
+                                  color: columnActions[selectedColumnName] === "MASK" ? "var(--accent-lime)" : "var(--text-secondary)",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                ✦ Mask / Anonymize
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setColumnActions({ ...columnActions, [selectedColumnName]: "REMOVE" })}
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.3rem 0.7rem",
+                                  borderRadius: "var(--radius-pill)",
+                                  border: "1px solid",
+                                  borderColor: columnActions[selectedColumnName] === "REMOVE" ? "var(--status-deny)" : "var(--glass-border-subtle)",
+                                  background: columnActions[selectedColumnName] === "REMOVE" ? "var(--status-deny-bg)" : "#ffffff",
+                                  color: columnActions[selectedColumnName] === "REMOVE" ? "var(--status-deny)" : "var(--text-secondary)",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Drop Column
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Excel / Spreadsheet Grid Canvas */}
+                          <div style={{ overflowX: "auto", maxHeight: "320px" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", fontFamily: "JetBrains Mono, monospace" }}>
+                              {/* Spreadsheet Column Headers A, B, C, D... */}
+                              <thead>
+                                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                                  <th style={{ width: "35px", padding: "0.4rem", color: "var(--text-dim)", textAlign: "center", borderRight: "1px solid #e2e8f0", fontSize: "0.72rem" }}>
+                                    #
+                                  </th>
+                                  {availableColumns.map((col) => {
+                                    const action = columnActions[col.name] || "KEEP";
+                                    const isSelected = selectedColumnName === col.name;
+                                    return (
+                                      <th
+                                        key={col.name}
+                                        onClick={() => setSelectedColumnName(col.name)}
+                                        style={{
+                                          padding: "0.55rem 0.75rem",
+                                          textAlign: "left",
+                                          borderRight: "1px solid #e2e8f0",
+                                          background: isSelected ? "rgba(132, 204, 22, 0.08)" : action === "REMOVE" ? "rgba(220, 38, 38, 0.05)" : "inherit",
+                                          cursor: "pointer",
+                                          userSelect: "none",
+                                        }}
+                                      >
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem" }}>
+                                          <div>
+                                            <span style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginRight: "0.3rem" }}>{col.letter}</span>
+                                            <span style={{
+                                              fontWeight: 600,
+                                              color: action === "REMOVE" ? "var(--status-deny)" : "var(--color-obsidian)",
+                                              textDecoration: action === "REMOVE" ? "line-through" : "none",
+                                            }}>
+                                              {col.name}
+                                            </span>
+                                          </div>
+                                          <span style={{
+                                            fontSize: "0.65rem",
+                                            fontWeight: 700,
+                                            padding: "0.1rem 0.35rem",
+                                            borderRadius: "3px",
+                                            background: action === "REMOVE" ? "var(--status-deny)" : action === "MASK" ? "var(--accent-lime)" : "#94a3b8",
+                                            color: "#ffffff",
+                                          }}>
+                                            {action === "REMOVE" ? "DROP" : action === "MASK" ? "MASK" : "KEEP"}
+                                          </span>
+                                        </div>
+                                      </th>
+                                    );
+                                  })}
+                                </tr>
+                              </thead>
+
+                              {/* Spreadsheet Rows (1, 2, 3, 4) */}
+                              <tbody>
+                                {[0, 1, 2, 3].map((rowIdx) => (
+                                  <tr key={rowIdx} style={{ borderBottom: "1px solid #f1f5f9", background: rowIdx % 2 === 0 ? "#ffffff" : "#fafafa" }}>
+                                    {/* Row Index */}
+                                    <td style={{
+                                      padding: "0.45rem",
+                                      textAlign: "center",
+                                      color: "var(--text-dim)",
+                                      borderRight: "1px solid #e2e8f0",
+                                      fontSize: "0.72rem",
+                                      background: "#f8fafc",
+                                      fontWeight: 600,
+                                    }}>
+                                      {rowIdx + 1}
+                                    </td>
+
+                                    {/* Row Cells */}
+                                    {availableColumns.map((col) => {
+                                      const action = columnActions[col.name] || "KEEP";
+                                      const isSelected = selectedColumnName === col.name;
+                                      const rawVal = col.sample[rowIdx];
+
+                                      // Computed representation for the AI
+                                      let displayVal = rawVal;
+                                      if (action === "REMOVE") {
+                                        displayVal = "[DROPPED BY POLICY]";
+                                      } else if (action === "MASK") {
+                                        if (col.type === "email") displayVal = rawVal.replace(/(^.).*(@.*)/, "$1***$2");
+                                        else if (col.type === "tax_id") displayVal = "XXX-XX-" + rawVal.slice(-4);
+                                        else displayVal = `***${rawVal.slice(-3)}`;
+                                      }
+
+                                      return (
+                                        <td
+                                          key={col.name}
+                                          onClick={() => setSelectedColumnName(col.name)}
+                                          style={{
+                                            padding: "0.45rem 0.75rem",
+                                            borderRight: "1px solid #e2e8f0",
+                                            background: isSelected ? "rgba(132, 204, 22, 0.05)" : action === "REMOVE" ? "rgba(220, 38, 38, 0.03)" : "inherit",
+                                            color: action === "REMOVE" ? "#94a3b8" : action === "MASK" ? "var(--accent-lime)" : "var(--color-obsidian)",
+                                            fontStyle: action === "REMOVE" ? "italic" : "normal",
+                                            fontWeight: action === "MASK" ? 600 : 400,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          {displayVal}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Footer Info */}
+                          <div style={{
+                            padding: "0.6rem 1.15rem",
+                            background: "#f8fafc",
+                            borderTop: "1px solid #e2e8f0",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            fontSize: "0.72rem",
+                            color: "var(--text-muted)",
+                            flexWrap: "wrap",
+                            gap: "0.3rem",
+                          }}>
+                            <span>Live Power Query Output Preview for AI Agents</span>
+                            <span style={{ color: "var(--accent-lime)", fontWeight: 600 }}>
+                              ✓ Changes Applied Dynamically
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Wizard Step 3: Privacy & Data Masking */}
-            <div style={{ marginBottom: "2rem" }}>
-              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.6rem", color: "var(--color-obsidian)" }}>
-                3. Privacy &amp; Data Masking for this Link
-              </label>
+            {/* Modal Footer Controls */}
+            <div style={{
+              padding: "1rem clamp(1rem, 3vw, 2rem)",
+              borderTop: "1px solid var(--glass-border-subtle)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              background: "var(--canvas-bg)",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+            }}>
+              {shareStep === 2 ? (
+                <button
+                  type="button"
+                  onClick={() => setShareStep(1)}
+                  className="pill-btn pill-btn-glass"
+                  style={{ gap: "0.4rem" }}
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back to File Selection</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShareWizardOpen(false)}
+                  className="pill-btn pill-btn-glass"
+                >
+                  Cancel
+                </button>
+              )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", marginBottom: "1rem" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={maskEmails}
-                    onChange={(e) => setMaskEmails(e.target.checked)}
-                    style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
-                  />
-                  <span>Mask Email Addresses (e.g. <code>j***@example.com</code>)</span>
-                </label>
-
-                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={maskNames}
-                    onChange={(e) => setMaskNames(e.target.checked)}
-                    style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
-                  />
-                  <span>Pseudonymize Person Names (e.g. <code>Person_001</code>)</span>
-                </label>
-
-                <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={maskSSN}
-                    onChange={(e) => setMaskSSN(e.target.checked)}
-                    style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
-                  />
-                  <span>Mask Social Security Numbers (SSN)</span>
-                </label>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.78rem", color: "var(--text-muted)", marginBottom: "0.35rem", fontWeight: 500 }}>
-                  Hide specific columns (comma-separated):
-                </label>
-                <input
-                  type="text"
-                  className="modern-input"
-                  placeholder="e.g. salary, credit_card, ssn"
-                  value={customColumnsToHide}
-                  onChange={(e) => setCustomColumnsToHide(e.target.value)}
-                  style={{ fontSize: "0.85rem" }}
-                />
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-              <button
-                type="button"
-                onClick={() => setShareWizardOpen(false)}
-                className="pill-btn pill-btn-glass"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={generatingLink || !shareName.trim()}
-                onClick={handleGenerateShareLink}
-                className="pill-btn pill-btn-solid"
-              >
-                <Key size={14} />
-                <span>{generatingLink ? "Creating Link..." : "Generate Shareable Link"}</span>
-              </button>
+              {shareStep === 1 ? (
+                <button
+                  type="button"
+                  disabled={selectedFileIds.length === 0 || !shareName.trim()}
+                  onClick={() => setShareStep(2)}
+                  className="pill-btn pill-btn-solid"
+                >
+                  <span>Next: Power Query Transformation</span>
+                  <ArrowRight size={14} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={generatingLink}
+                  onClick={handleGenerateShareLink}
+                  className="pill-btn pill-btn-solid"
+                >
+                  <Key size={14} />
+                  <span>{generatingLink ? "Generating MCP Link..." : "Save Policies & Generate Link"}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: VIEW EXTRACTED CONTENT */}
+      {/* MODAL: VIEW EXTRACTED CONTENT (ONLY NON-PDF ASSETS)                      */}
       {/* ========================================================================= */}
       {selectedFileContent && (
         <div style={{
@@ -1452,15 +1967,15 @@ export default function WorkspaceDetailPage() {
           alignItems: "center",
           justifyContent: "center",
           zIndex: 150,
-          padding: "1.5rem",
+          padding: "1rem",
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: "800px",
-            maxHeight: "85vh",
+            maxHeight: "88vh",
             display: "flex",
             flexDirection: "column",
-            padding: "2.25rem",
+            padding: "clamp(1.5rem, 3vw, 2.25rem)",
             position: "relative",
             background: "#ffffff",
             boxShadow: "var(--shadow-lg)",
@@ -1557,19 +2072,21 @@ export default function WorkspaceDetailPage() {
           alignItems: "center",
           justifyContent: "center",
           zIndex: 200,
-          padding: "1.5rem",
+          padding: "1rem",
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: "620px",
-            padding: "2.5rem 2.25rem",
+            padding: "clamp(1.75rem, 4vw, 2.5rem) clamp(1.25rem, 3vw, 2.25rem)",
             background: "#ffffff",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
+            maxHeight: "92vh",
+            overflowY: "auto",
           }}>
             <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
               <div className="slash-tag" style={{ justifyContent: "center" }}>MCP LINK READY</div>
-              <h3 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
+              <h3 style={{ fontSize: "1.45rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
                 Your Shareable MCP Token
               </h3>
               <p style={{
@@ -1590,13 +2107,13 @@ export default function WorkspaceDetailPage() {
               <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)", marginBottom: "0.35rem" }}>
                 1. Claude.ai Web Remote Connector URL
               </div>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 <input
                   type="text"
                   readOnly
                   value={`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp?token=${createdCredential.raw_token}`}
                   className="modern-input"
-                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", background: "var(--canvas-bg)" }}
+                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", background: "var(--canvas-bg)", flex: "1 1 200px" }}
                 />
                 <button
                   onClick={() => {
@@ -1620,13 +2137,13 @@ export default function WorkspaceDetailPage() {
               <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.35rem" }}>
                 2. Bearer Authentication Token
               </div>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 <input
                   type="text"
                   readOnly
                   value={createdCredential.raw_token}
                   className="modern-input"
-                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem" }}
+                  style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", flex: "1 1 200px" }}
                 />
                 <button
                   onClick={() => {

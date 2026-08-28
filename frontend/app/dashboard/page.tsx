@@ -90,7 +90,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "2.5rem 1.5rem 5rem 1.5rem" }}>
+    <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "clamp(1.5rem, 3vw, 2.5rem) clamp(1rem, 3vw, 1.5rem) 5rem clamp(1rem, 3vw, 1.5rem)" }}>
       {/* Top Banner with Clean Greeting & Actions */}
       <div style={{
         display: "flex",
@@ -127,12 +127,12 @@ export default function DashboardPage() {
       {/* 3 Consistent Frosted Glass Metric Cards */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
         gap: "1.5rem",
         marginBottom: "2.5rem",
       }}>
         {/* Card 1: Total Workspaces */}
-        <div className="frosted-panel" style={{ padding: "1.85rem" }}>
+        <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 1.85rem)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.75rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
               <div style={{
@@ -160,7 +160,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div style={{ fontSize: "2.5rem", fontWeight: 700, lineHeight: 1, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
+          <div style={{ fontSize: "clamp(2rem, 4vw, 2.5rem)", fontWeight: 700, lineHeight: 1, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
             {workspaces.length}
           </div>
           <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
@@ -169,7 +169,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Card 2: Protected Documents */}
-        <div className="frosted-panel" style={{ padding: "1.85rem" }}>
+        <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 1.85rem)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.75rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
               <div style={{
@@ -197,7 +197,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div style={{ fontSize: "2.5rem", fontWeight: 700, lineHeight: 1, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
+          <div style={{ fontSize: "clamp(2rem, 4vw, 2.5rem)", fontWeight: 700, lineHeight: 1, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
             {totalFiles}
           </div>
           <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
@@ -206,7 +206,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Card 3: Active AI Links */}
-        <div className="frosted-panel" style={{ padding: "1.85rem" }}>
+        <div className="frosted-panel" style={{ padding: "clamp(1.25rem, 3vw, 1.85rem)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.75rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
               <div style={{
@@ -234,7 +234,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div style={{ fontSize: "2.5rem", fontWeight: 700, lineHeight: 1, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
+          <div style={{ fontSize: "clamp(2rem, 4vw, 2.5rem)", fontWeight: 700, lineHeight: 1, marginBottom: "0.5rem", color: "var(--color-obsidian)" }}>
             {totalKeys}
           </div>
           <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
@@ -273,7 +273,7 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        <div style={{ position: "relative", minWidth: "260px" }}>
+        <div style={{ position: "relative", minWidth: "240px", flex: "1 1 240px", maxWidth: "360px" }}>
           <Search size={15} color="var(--text-dim)" style={{ position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)" }} />
           <input
             type="text"
@@ -288,7 +288,7 @@ export default function DashboardPage() {
 
       {/* Workspaces Grid */}
       {filteredWorkspaces.length === 0 ? (
-        <div className="frosted-panel" style={{ textAlign: "center", padding: "5rem 2rem" }}>
+        <div className="frosted-panel" style={{ textAlign: "center", padding: "clamp(3rem, 6vw, 5rem) 1.5rem" }}>
           <div style={{
             width: "56px",
             height: "56px",
@@ -320,7 +320,7 @@ export default function DashboardPage() {
       ) : (
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))",
           gap: "1.5rem",
         }}>
           {filteredWorkspaces.map((ws) => (
@@ -329,12 +329,12 @@ export default function DashboardPage() {
               onClick={() => router.push(`/workspaces/${ws.id}`)}
               className="frosted-panel"
               style={{
-                padding: "1.85rem",
+                padding: "clamp(1.25rem, 3vw, 1.85rem)",
                 cursor: "pointer",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
-                minHeight: "200px",
+                minHeight: "190px",
               }}
             >
               <div>
@@ -347,7 +347,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <h3 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
+                <h3 style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
                   {ws.name}
                 </h3>
                 <div style={{ fontSize: "0.78rem", fontFamily: "JetBrains Mono, monospace", color: "var(--text-dim)", marginBottom: "1.5rem" }}>
@@ -363,8 +363,10 @@ export default function DashboardPage() {
                 borderTop: "1px solid var(--glass-border-subtle)",
                 fontSize: "0.82rem",
                 color: "var(--text-muted)",
+                flexWrap: "wrap",
+                gap: "0.5rem",
               }}>
-                <div style={{ display: "flex", gap: "1rem" }}>
+                <div style={{ display: "flex", gap: "0.75rem" }}>
                   <span><strong style={{ color: "var(--color-obsidian)" }}>{ws.files_count || 0}</strong> Files</span>
                   <span><strong style={{ color: "var(--color-obsidian)" }}>{ws.credentials_count || 0}</strong> MCP Links</span>
                 </div>
@@ -396,12 +398,12 @@ export default function DashboardPage() {
           alignItems: "center",
           justifyContent: "center",
           zIndex: 150,
-          padding: "1.5rem",
+          padding: "1rem",
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: "460px",
-            padding: "2.5rem 2.25rem",
+            padding: "clamp(1.75rem, 4vw, 2.5rem) clamp(1.25rem, 3vw, 2.25rem)",
             position: "relative",
             background: "#ffffff",
             boxShadow: "var(--shadow-lg)",
@@ -429,7 +431,7 @@ export default function DashboardPage() {
             </button>
 
             <div className="slash-tag">NEW VAULT</div>
-            <h2 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
+            <h2 style={{ fontSize: "1.4rem", fontWeight: 600, marginBottom: "0.4rem", color: "var(--color-obsidian)" }}>
               Create Workspace
             </h2>
             <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.75rem", lineHeight: 1.5 }}>
