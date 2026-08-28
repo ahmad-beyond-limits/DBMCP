@@ -46,7 +46,74 @@ import {
   Sparkles,
   Loader2,
   Edit3,
+  BookOpen,
+  Download,
+  FileCode,
+  Layers,
 } from "lucide-react";
+
+const ABOX_AI_SKILLS_MARKDOWN = `# ABOX Policy-Enforced Data Gateway: AI Agent Skills & Operational Protocol
+
+You are connected to an ABOX Policy-Enforced Data Workspace via the Model Context Protocol (MCP).
+Use these instructions to interact accurately, securely, and effectively with workspace resources.
+
+---
+
+## 🛠️ Complete MCP Tool Suite & Capabilities
+
+1. \`workspace_info()\`
+   - Inspect workspace name, active policies, security boundary status, and available tools.
+
+2. \`list_resources()\`
+   - Discover all accessible files (CSV, Excel .xlsx, PDF, Word .docx, JSON) permitted for your session.
+
+3. \`get_resource_metadata(resource_id)\`
+   - Check file size, detected MIME type, formatting, and processing status.
+
+4. \`get_dataset_schema(resource_id)\`
+   - Retrieve table column names, detected data types, and total row count for structured datasets.
+
+5. \`query_dataset(resource_id, columns, filters, limit, aggregation)\`
+   - Execute exact-match filtering and aggregations over CSV, Excel (.xlsx), or JSON data files.
+   - Supports comparison operators: \`{"column": {"$gt": 50}}\`, \`{"status": {"$ne": "archived"}}\`, \`{"tag": {"$in": ["A", "B"]}}\`.
+
+6. \`edit_dataset(resource_id, action, filters, updates, new_row)\`
+   - Safely modify records in dataset files:
+     - \`action: "update"\`: modifies matching rows with key-value pairs in \`updates\`.
+     - \`action: "insert"\`: appends \`new_row\` object to the dataset.
+     - \`action: "delete"\`: removes rows matching \`filters\`.
+
+7. \`search(query, limit)\`
+   - Perform semantic and keyword searches across permitted documents with policy-compliant results.
+
+8. \`read_resource(resource_id)\`
+   - Read extracted document text with automatic real-time PII anonymisation and policy redaction applied.
+
+---
+
+## ⚡ MANDATORY OPERATIONAL DIRECTIVES FOR AI AGENTS
+
+### 1. RECONFIRM & VERIFY EVERY DATA MUTATION (CRITICAL)
+- **MANDATORY RULE**: Whenever you execute \`edit_dataset\` (action: \`update\`, \`insert\`, or \`delete\`), you MUST IMMEDIATELY execute a follow-up \`query_dataset\` on that same \`resource_id\` using the updated filter criteria.
+- **VERIFICATION WORKFLOW**:
+  1. Call \`edit_dataset(...)\` to perform the requested modification.
+  2. Call \`query_dataset(resource_id=..., filters=...)\` to fetch the updated records from disk.
+  3. Verify that the values returned by \`query_dataset\` match the intended changes.
+  4. Only after positive verification, confirm the result to the user with the exact updated values and affected record count.
+- Never report that data has been changed without performing this verification query.
+
+### 2. ALWAYS INSPECT DATASET SCHEMA BEFORE QUERYING
+- Do not guess or assume column names.
+- Always call \`get_dataset_schema(resource_id)\` first when working with a new dataset to inspect exact column headers and case-sensitivity.
+
+### 3. PRECISE FILTERING & CLEAN ENCODING
+- Ensure filter values match the column data type (e.g. integer \`101\` vs string \`"101"\`).
+- For text fields, use exact matching. If a query returns no rows, check case and whitespace.
+
+### 4. RESPECT POLICY BOUNDARIES & PRIVACY REDACTIONS
+- If a resource returns \`Policy Error: Access Denied\` or a field contains \`[REDACTED]\` / \`[MASKED]\`, this is an intentional workspace privacy rule configured by the owner.
+- Explain the policy constraint clearly to the user instead of attempting to bypass it.
+`;
 
 export default function WorkspaceDetailPage() {
   const params = useParams();
@@ -104,6 +171,18 @@ export default function WorkspaceDetailPage() {
   const [loadingTransformFile, setLoadingTransformFile] = useState(false);
   const [isTableDetected, setIsTableDetected] = useState(true);
 
+  // Multi-Sheet, Editable Spreadsheet & Table Detection States
+  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [activeSheetName, setActiveSheetName] = useState<string>("");
+  const [rawStructuredData, setRawStructuredData] = useState<any>(null);
+  const [editableRows, setEditableRows] = useState<any[]>([]);
+  const [editingCell, setEditingCell] = useState<{ rowIndex: number; colName: string } | null>(null);
+  const [headerRowIndex, setHeaderRowIndex] = useState<number>(0);
+  const [studioMobileTab, setStudioMobileTab] = useState<"sidebar" | "sheet">("sheet");
+
+  // Privacy Tab Inspector State
+  const [selectedMcpPrivacyCredId, setSelectedMcpPrivacyCredId] = useState<string>("ALL");
+
   // Wizard Granular Permissions State
   const [shareCanRead, setShareCanRead] = useState(true);
   const [shareCanSearch, setShareCanSearch] = useState(true);
@@ -119,6 +198,10 @@ export default function WorkspaceDetailPage() {
   const [editingCanQuery, setEditingCanQuery] = useState(true);
   const [editingCanEdit, setEditingCanEdit] = useState(false);
   const [savingPerms, setSavingPerms] = useState(false);
+
+  // AI Agent Skills Guide Modal
+  const [skillsModalOpen, setSkillsModalOpen] = useState(false);
+  const [copiedSkills, setCopiedSkills] = useState(false);
 
   // Playground States
   const [playgroundToken, setPlaygroundToken] = useState("");
@@ -176,11 +259,24 @@ export default function WorkspaceDetailPage() {
     setLoadingTransformFile(true);
     try {
       const content = await api.getFileContent(workspaceId, fileId);
-      if (content.structured_data && content.structured_data.columns && content.structured_data.columns.length > 0) {
-        const cols: string[] = content.structured_data.columns;
-        const rows: any[] = content.structured_data.rows || [];
-        const schema: Record<string, string> = content.structured_data.schema || {};
-        setIsTableDetected(content.structured_data.table_detected !== false);
+      const struct = content.structured_data;
+      setRawStructuredData(struct);
+
+      if (struct && struct.columns && struct.columns.length > 0) {
+        const sheets = struct.sheets ? Object.keys(struct.sheets) : (struct.sheet_names || []);
+        setAvailableSheets(sheets);
+        
+        const currentSheet = sheets.length > 0 ? sheets[0] : "";
+        setActiveSheetName(currentSheet);
+
+        const sheetData = currentSheet && struct.sheets && struct.sheets[currentSheet] ? struct.sheets[currentSheet] : struct;
+        const cols: string[] = sheetData.columns || struct.columns || [];
+        const rows: any[] = sheetData.rows || struct.rows || [];
+        const schema: Record<string, string> = sheetData.schema || struct.schema || {};
+        
+        setHeaderRowIndex(sheetData.header_row_index !== undefined ? sheetData.header_row_index : 0);
+        setIsTableDetected(sheetData.table_detected !== false && cols.length > 0);
+        setEditableRows(rows);
 
         const parsed = cols.map((colName, idx) => {
           const letter = String.fromCharCode(65 + (idx % 26)) + (idx >= 26 ? Math.floor(idx / 26) : "");
@@ -190,7 +286,7 @@ export default function WorkspaceDetailPage() {
             colName.toLowerCase().includes("score") || colName.toLowerCase().includes("salary") || colName.toLowerCase().includes("age") ? "number" :
             "string"
           );
-          const sample = rows.slice(0, 5).map((r) => String(r[colName] !== undefined && r[colName] !== null ? r[colName] : ""));
+          const sample = rows.slice(0, 8).map((r) => String(r[colName] !== undefined && r[colName] !== null ? r[colName] : ""));
           return {
             name: colName,
             letter,
@@ -200,22 +296,76 @@ export default function WorkspaceDetailPage() {
         });
 
         setDynamicColumns(parsed);
-        setDynamicRowsCount(Math.min(5, rows.length || 4));
+        setDynamicRowsCount(rows.length || 0);
         if (parsed.length > 0) {
           setSelectedColumnName(parsed[0].name);
         }
       } else {
         setDynamicColumns([]);
         setDynamicRowsCount(0);
+        setEditableRows([]);
+        setAvailableSheets([]);
         setIsTableDetected(false);
       }
     } catch (err) {
       setDynamicColumns([]);
       setDynamicRowsCount(0);
+      setEditableRows([]);
+      setAvailableSheets([]);
       setIsTableDetected(false);
     } finally {
       setLoadingTransformFile(false);
     }
+  };
+
+  const handleSelectSheet = (sheetName: string) => {
+    if (!rawStructuredData || !rawStructuredData.sheets || !rawStructuredData.sheets[sheetName]) return;
+    setActiveSheetName(sheetName);
+    const sheetData = rawStructuredData.sheets[sheetName];
+    const cols: string[] = sheetData.columns || [];
+    const rows: any[] = sheetData.rows || [];
+    const schema: Record<string, string> = sheetData.schema || {};
+    
+    setHeaderRowIndex(sheetData.header_row_index !== undefined ? sheetData.header_row_index : 0);
+    setIsTableDetected(sheetData.table_detected !== false && cols.length > 0);
+    setEditableRows(rows);
+
+    const parsed = cols.map((colName, idx) => {
+      const letter = String.fromCharCode(65 + (idx % 26)) + (idx >= 26 ? Math.floor(idx / 26) : "");
+      const colType = schema[colName] || "string";
+      const sample = rows.slice(0, 8).map((r) => String(r[colName] !== undefined && r[colName] !== null ? r[colName] : ""));
+      return {
+        name: colName,
+        letter,
+        type: colType,
+        sample,
+      };
+    });
+
+    setDynamicColumns(parsed);
+    setDynamicRowsCount(rows.length || 0);
+    if (parsed.length > 0) {
+      setSelectedColumnName(parsed[0].name);
+    }
+  };
+
+  const handleCellChange = (rowIdx: number, colName: string, value: string) => {
+    setEditableRows((prev) => {
+      const copy = [...prev];
+      if (copy[rowIdx]) {
+        copy[rowIdx] = { ...copy[rowIdx], [colName]: value };
+      }
+      return copy;
+    });
+  };
+
+  const handleAddRow = () => {
+    const newRow: Record<string, string> = {};
+    availableColumns.forEach((c) => {
+      newRow[c.name] = "";
+    });
+    setEditableRows((prev) => [...prev, newRow]);
+    notify("success", "Added new row to editable spreadsheet.");
   };
 
   const notify = (type: "success" | "error", text: string) => {
@@ -764,22 +914,33 @@ export default function WorkspaceDetailPage() {
                   Create as many distinct MCP links as you need. Each link has dedicated document permissions, custom data masking policies, and AI mutation rights.
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  setSelectedFileIds(files.map((f) => f.id));
-                  setShareStep(1);
-                  const firstDataFile = files.find(isDataFile);
-                  if (firstDataFile) {
-                    setActiveTransformFileId(firstDataFile.id);
-                    loadDynamicFileSchema(firstDataFile.id);
-                  }
-                  setShareWizardOpen(true);
-                }}
-                className="pill-btn pill-btn-solid"
-              >
-                <Plus size={15} strokeWidth={1.5} />
-                Create New MCP Link
-              </button>
+              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => setSkillsModalOpen(true)}
+                  className="pill-btn pill-btn-glass"
+                  style={{ gap: "0.4rem" }}
+                  title="View AI Agent instructions and operational directives"
+                >
+                  <BookOpen size={14} strokeWidth={1.5} />
+                  <span>AI Skills Guide</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedFileIds(files.map((f) => f.id));
+                    setShareStep(1);
+                    const firstDataFile = files.find(isDataFile);
+                    if (firstDataFile) {
+                      setActiveTransformFileId(firstDataFile.id);
+                      loadDynamicFileSchema(firstDataFile.id);
+                    }
+                    setShareWizardOpen(true);
+                  }}
+                  className="pill-btn pill-btn-solid"
+                >
+                  <Plus size={15} strokeWidth={1.5} />
+                  <span>Create New MCP Link</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -913,99 +1074,244 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: PRIVACY RULES & POLICIES                                          */}
+      {/* TAB 3: PRIVACY RULES & MCP PERMISSIONS INSPECTOR                          */}
       {/* ========================================================================= */}
-      {activeTab === "privacy" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))", gap: "1.5rem" }}>
-          {/* Anonymisation Rules */}
-          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)" }}>
-            <div className="slash-tag">DATA MASKING</div>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-              Active Anonymisation Rules
-            </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem", fontWeight: 400 }}>
-              These rules mask sensitive PII before AI models receive query results.
-            </p>
+      {activeTab === "privacy" && (() => {
+        const selectedCred = mcpCredentials.find((c) => c.id === selectedMcpPrivacyCredId);
+        const isGlobal = selectedMcpPrivacyCredId === "ALL" || !selectedCred;
 
-            <div>
-              {policies.anonymisation_rules.length === 0 ? (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-tertiary)", fontStyle: "italic", padding: "1rem 0" }}>
-                  No active masking rules.
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            {/* Top Selector Card: Select MCP Link to Inspect */}
+            <div className="frosted-panel" style={{ padding: "1.5rem 2rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
+                <div>
+                  <div className="slash-tag">MCP ACCESS &amp; PRIVACY MATRIX</div>
+                  <h3 style={{ fontSize: "1.35rem", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+                    Security &amp; Privacy Inspector
+                  </h3>
+                  <p style={{ fontSize: "0.86rem", color: "var(--text-secondary)", marginTop: "0.2rem", maxWidth: "600px" }}>
+                    Select an MCP Link below to verify exactly which documents, tables, columns, and AI tools that token has access to.
+                  </p>
                 </div>
-              ) : (
-                policies.anonymisation_rules.map((rule) => (
-                  <div
-                    key={rule.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "0.85rem 0",
-                      borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
-                      flexWrap: "wrap",
-                      gap: "0.5rem",
-                    }}
+
+                <button
+                  onClick={() => handleOpenShareWizard()}
+                  className="pill-btn pill-btn-solid"
+                  style={{ fontSize: "0.82rem", padding: "0.45rem 1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                >
+                  <Share2 size={13} strokeWidth={1.5} />
+                  <span>Create New MCP Link</span>
+                </button>
+              </div>
+
+              {/* MCP Credential Selector Pills */}
+              <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.25rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMcpPrivacyCredId("ALL")}
+                  className={`pill-tab ${isGlobal ? "active" : ""}`}
+                  style={{ fontSize: "0.8rem", padding: "0.4rem 0.9rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                >
+                  <ShieldCheck size={14} strokeWidth={1.5} />
+                  <span>Workspace Global Policies</span>
+                </button>
+
+                {mcpCredentials.map((cred) => (
+                  <button
+                    key={cred.id}
+                    type="button"
+                    onClick={() => setSelectedMcpPrivacyCredId(cred.id)}
+                    className={`pill-tab ${selectedMcpPrivacyCredId === cred.id ? "active" : ""}`}
+                    style={{ fontSize: "0.8rem", padding: "0.4rem 0.9rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
                   >
+                    <Key size={13} strokeWidth={1.5} />
+                    <span>{cred.name}</span>
+                    <span className={`badge-status ${cred.is_active ? "badge-status-allow" : "badge-status-deny"}`} style={{ fontSize: "0.62rem", padding: "0.05rem 0.35rem" }}>
+                      {cred.is_active ? "Active" : "Revoked"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Main Inspection Grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", gap: "1.5rem" }}>
+              
+              {/* 1. MCP Tool Capabilities & Permissions Card */}
+              <div className="frosted-panel" style={{ padding: "1.5rem 1.75rem", display: "flex", flexDirection: "column" }}>
+                <div className="slash-tag">AI TOOL PERMISSIONS</div>
+                <h4 style={{ fontSize: "1.05rem", fontWeight: 500, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
+                  {isGlobal ? "Global Tool Policies" : `Authorized Tools for ${selectedCred?.name}`}
+                </h4>
+                <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "1.25rem" }}>
+                  Defines the MCP protocol tools permitted for this session.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", flex: 1 }}>
+                  {/* Read */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.65rem 0.85rem", background: "var(--bg-page)", borderRadius: "var(--radius-sm)", border: "1px solid rgba(40, 40, 40, 0.04)" }}>
                     <div>
-                      <div style={{ fontWeight: 450, fontSize: "0.9rem", color: "var(--text-primary)" }}>{rule.entity_type}</div>
-                      <div style={{ fontSize: "0.78rem", color: "var(--text-tertiary)" }}>
-                        {rule.field_name ? `Field: ${rule.field_name}` : "All occurrences"}
-                      </div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-primary)" }}>Read Documents</div>
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", fontFamily: "JetBrains Mono, monospace" }}>read_resource</div>
                     </div>
-                    <span className="badge-status badge-status-transform">
-                      {rule.transformation}
+                    <span className={`badge-status ${(!selectedCred || selectedCred.permissions?.read_resource !== false) ? "badge-status-allow" : "badge-status-deny"}`}>
+                      {(!selectedCred || selectedCred.permissions?.read_resource !== false) ? "Allowed" : "Blocked"}
                     </span>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
 
-          {/* Document Access Restrictions */}
-          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)" }}>
-            <div className="slash-tag">DOCUMENT ACCESS</div>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-              File Permissions
-            </h3>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem", fontWeight: 400 }}>
-              Restrictions placed on individual files or workspace resources.
-            </p>
-
-            <div>
-              {policies.resource_policies.length === 0 ? (
-                <div style={{ fontSize: "0.85rem", color: "var(--text-tertiary)", fontStyle: "italic", padding: "1rem 0" }}>
-                  All uploaded files are accessible to authorized AI tokens.
-                </div>
-              ) : (
-                policies.resource_policies.map((p) => {
-                  const targetFile = files.find((f) => f.id === p.resource_id);
-                  return (
-                    <div
-                      key={p.id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "0.85rem 0",
-                        borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
-                        flexWrap: "wrap",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      <div style={{ fontWeight: 450, fontSize: "0.9rem", color: "var(--text-primary)" }}>
-                        {targetFile ? targetFile.original_filename : "All Files (Default)"}
-                      </div>
-                      <span className={`badge-status ${p.decision === "ALLOW" ? "badge-status-allow" : "badge-status-deny"}`}>
-                        {p.decision}
-                      </span>
+                  {/* Search */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.65rem 0.85rem", background: "var(--bg-page)", borderRadius: "var(--radius-sm)", border: "1px solid rgba(40, 40, 40, 0.04)" }}>
+                    <div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-primary)" }}>Full-Text Search</div>
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", fontFamily: "JetBrains Mono, monospace" }}>search</div>
                     </div>
-                  );
-                })
-              )}
+                    <span className={`badge-status ${(!selectedCred || selectedCred.permissions?.search !== false) ? "badge-status-allow" : "badge-status-deny"}`}>
+                      {(!selectedCred || selectedCred.permissions?.search !== false) ? "Allowed" : "Blocked"}
+                    </span>
+                  </div>
+
+                  {/* Query */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.65rem 0.85rem", background: "var(--bg-page)", borderRadius: "var(--radius-sm)", border: "1px solid rgba(40, 40, 40, 0.04)" }}>
+                    <div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-primary)" }}>Query Tables &amp; Schema</div>
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", fontFamily: "JetBrains Mono, monospace" }}>query_dataset</div>
+                    </div>
+                    <span className={`badge-status ${(!selectedCred || selectedCred.permissions?.query_dataset !== false) ? "badge-status-allow" : "badge-status-deny"}`}>
+                      {(!selectedCred || selectedCred.permissions?.query_dataset !== false) ? "Allowed" : "Blocked"}
+                    </span>
+                  </div>
+
+                  {/* Edit */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.65rem 0.85rem", background: selectedCred?.permissions?.edit_dataset ? "rgba(234, 179, 8, 0.08)" : "var(--bg-page)", borderRadius: "var(--radius-sm)", border: selectedCred?.permissions?.edit_dataset ? "1px solid rgba(234, 179, 8, 0.3)" : "1px solid rgba(40, 40, 40, 0.04)" }}>
+                    <div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 500, color: selectedCred?.permissions?.edit_dataset ? "#B45309" : "var(--text-primary)" }}>AI Data Edit &amp; Mutation</div>
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", fontFamily: "JetBrains Mono, monospace" }}>edit_dataset</div>
+                    </div>
+                    <span className={`badge-status ${selectedCred?.permissions?.edit_dataset ? "badge-status-transform" : "badge-status-deny"}`}>
+                      {selectedCred?.permissions?.edit_dataset ? "Enabled" : "Blocked (Read-Only)"}
+                    </span>
+                  </div>
+                </div>
+
+                {selectedCred && (
+                  <div style={{ marginTop: "1rem", paddingTop: "0.75rem", borderTop: "1px solid rgba(40, 40, 40, 0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>Prefix: <code>{selectedCred.credential_prefix}...</code></span>
+                    <button
+                      onClick={() => handleOpenEditPermissions(selectedCred)}
+                      className="pill-btn pill-btn-glass"
+                      style={{ padding: "0.25rem 0.75rem", fontSize: "0.74rem" }}
+                    >
+                      Change Permissions
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Accessible Files & Resource Scope Card */}
+              <div className="frosted-panel" style={{ padding: "1.5rem 1.75rem", display: "flex", flexDirection: "column" }}>
+                <div className="slash-tag">RESOURCE SCOPE</div>
+                <h4 style={{ fontSize: "1.05rem", fontWeight: 500, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
+                  Accessible Files ({files.length})
+                </h4>
+                <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "1.25rem" }}>
+                  Documents and datasets in this workspace that can be served via MCP.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "280px", overflowY: "auto", flex: 1 }}>
+                  {files.length === 0 ? (
+                    <div style={{ fontSize: "0.82rem", color: "var(--text-tertiary)", textAlign: "center", padding: "2rem 0" }}>
+                      No files uploaded yet.
+                    </div>
+                  ) : (
+                    files.map((f) => {
+                      const isData = isDataFile(f);
+                      return (
+                        <div
+                          key={f.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "0.6rem 0.85rem",
+                            background: "var(--bg-page)",
+                            borderRadius: "var(--radius-sm)",
+                            border: "1px solid rgba(40, 40, 40, 0.04)",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                            <FileText size={14} strokeWidth={1.5} color="#2E3032" />
+                            <span style={{ fontSize: "0.84rem", fontWeight: 450, color: "var(--text-primary)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                              {f.original_filename}
+                            </span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
+                            <span className="badge-status" style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem" }}>
+                              {isData ? "TABLE" : "DOCUMENT"}
+                            </span>
+                            <span className="badge-status badge-status-allow" style={{ fontSize: "0.65rem", padding: "0.1rem 0.4rem" }}>
+                              Accessible
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Active Anonymisation & Column Redaction Matrix Card */}
+              <div className="frosted-panel" style={{ padding: "1.5rem 1.75rem", gridColumn: "1 / -1" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <div>
+                    <div className="slash-tag">DATA PRIVACY MATRIX</div>
+                    <h4 style={{ fontSize: "1.05rem", fontWeight: 500, color: "var(--text-primary)", marginBottom: "0.2rem" }}>
+                      Active Column Masking &amp; Anonymisation Rules
+                    </h4>
+                    <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                      Real-time redactions executed before any AI query response is transmitted.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem" }}>
+                  {policies.anonymisation_rules.length === 0 ? (
+                    <div style={{ fontSize: "0.85rem", color: "var(--text-tertiary)", fontStyle: "italic", padding: "1rem 0" }}>
+                      No custom masking rules active. Standard PII detectors remain enabled by default.
+                    </div>
+                  ) : (
+                    policies.anonymisation_rules.map((rule) => (
+                      <div
+                        key={rule.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "0.75rem 1rem",
+                          background: "var(--bg-page)",
+                          borderRadius: "var(--radius-sm)",
+                          border: "1px solid rgba(40, 40, 40, 0.04)",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 500, fontSize: "0.86rem", color: "var(--text-primary)" }}>{rule.entity_type}</div>
+                          <div style={{ fontSize: "0.74rem", color: "var(--text-tertiary)", marginTop: "2px" }}>
+                            {rule.field_name ? `Target Column: ${rule.field_name}` : "All detected occurrences"}
+                          </div>
+                        </div>
+                        <span className="badge-status badge-status-transform">
+                          {rule.transformation}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* TAB 4: ACTIVITY TRAIL                                                     */}
@@ -1500,30 +1806,32 @@ export default function WorkspaceDetailPage() {
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
-            maxWidth: shareStep === 2 && hasDataFilesSelected ? "1080px" : "560px",
-            maxHeight: "94vh",
+            maxWidth: shareStep === 2 && hasDataFilesSelected ? "98vw" : "560px",
+            height: shareStep === 2 && hasDataFilesSelected ? "94vh" : "auto",
+            maxHeight: "96vh",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
             background: "#FFFFFF",
             boxShadow: "var(--shadow-lg)",
             borderRadius: "var(--radius-xl)",
-            transition: "max-width 0.25s ease",
+            transition: "all 0.25s ease",
           }}>
             {/* Header with Step Tracker */}
             <div style={{
-              padding: "1.25rem clamp(1rem, 3vw, 2rem) 1rem clamp(1rem, 3vw, 2rem)",
-              borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
+              padding: "1rem clamp(1rem, 2.5vw, 1.75rem)",
+              borderBottom: "1px solid rgba(40, 40, 40, 0.05)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               flexWrap: "wrap",
               gap: "0.75rem",
+              background: "#FFFFFF",
             }}>
               <div>
                 <div className="slash-tag" style={{ margin: 0, marginBottom: "0.2rem" }}>
                   {hasDataFilesSelected
-                    ? `STEP ${shareStep} OF 2: ${shareStep === 1 ? "SELECT FILES" : "POWER QUERY DATA TRANSFORMATION"}`
+                    ? `STEP ${shareStep} OF 2: ${shareStep === 1 ? "SELECT FILES" : "DATA & COLUMN TRANSFORMATION STUDIO"}`
                     : "ABOX LINK CONFIGURATION"}
                 </div>
                 <h2 style={{ fontSize: "clamp(1.15rem, 2.5vw, 1.35rem)", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
@@ -1543,7 +1851,7 @@ export default function WorkspaceDetailPage() {
             </div>
 
             {/* Modal Body */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem clamp(1rem, 3vw, 2rem)" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: shareStep === 2 && hasDataFilesSelected ? "1rem clamp(0.75rem, 2vw, 1.5rem)" : "1.25rem clamp(1rem, 3vw, 2rem)", display: "flex", flexDirection: "column" }}>
               {/* ========================================================================= */}
               {/* STEP 1: LINK IDENTITY & FILE SELECTION */}
               {/* ========================================================================= */}
@@ -1742,7 +2050,7 @@ export default function WorkspaceDetailPage() {
                       >
                         {shareCanQuery ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" style={{ marginTop: "2px" }} /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" style={{ marginTop: "2px" }} />}
                         <div>
-                          <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Query Tables & Schema</div>
+                          <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Query Tables &amp; Schema</div>
                           <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)", marginTop: "2px" }}>query_dataset tool</div>
                         </div>
                       </div>
@@ -1779,63 +2087,179 @@ export default function WorkspaceDetailPage() {
               )}
 
               {/* ========================================================================= */}
-              {/* STEP 2: POWER QUERY TRANSFORMATION STUDIO                                 */}
+              {/* STEP 2: FULLSCREEN INTERACTIVE SPREADSHEET & TRANSFORMATION STUDIO        */}
               {/* ========================================================================= */}
               {shareStep === 2 && hasDataFilesSelected && (
-                <div>
-                  {/* File Selector Tabs for tabular data files only */}
-                  <div style={{ marginBottom: "1.25rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
-                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-                      <span style={{ fontSize: "0.75rem", fontWeight: 450, color: "var(--text-secondary)", textTransform: "uppercase", marginRight: "0.4rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                  {/* Top Bar: Active File Selector & Mobile Tab Toggle */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", overflowX: "auto" }}>
+                      <span style={{ fontSize: "0.74rem", fontWeight: 450, color: "var(--text-secondary)", textTransform: "uppercase", marginRight: "0.3rem" }}>
                         Active Data File:
                       </span>
                       {selectedDataFiles.map((f) => (
                         <button
                           key={f.id}
+                          type="button"
                           onClick={() => {
                             setActiveTransformFileId(f.id);
                             loadDynamicFileSchema(f.id);
                           }}
                           className={`pill-tab ${activeTransformFile?.id === f.id ? "active" : ""}`}
-                          style={{ fontSize: "0.8rem", padding: "0.35rem 0.85rem", gap: "0.4rem", display: "flex", alignItems: "center" }}
+                          style={{ fontSize: "0.78rem", padding: "0.3rem 0.75rem", gap: "0.4rem", display: "flex", alignItems: "center" }}
                         >
                           <Table size={13} strokeWidth={1.5} color="#2E3032" />
                           <span>{f.original_filename}</span>
                         </button>
                       ))}
                     </div>
+
+                    {/* Mobile Switcher (Visible on mobile/tablets) */}
+                    <div style={{ display: "flex", gap: "0.3rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setStudioMobileTab("sidebar")}
+                        className={`pill-tab ${studioMobileTab === "sidebar" ? "active" : ""}`}
+                        style={{ fontSize: "0.75rem", padding: "0.25rem 0.65rem" }}
+                      >
+                        Columns &amp; Sheets
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStudioMobileTab("sheet")}
+                        className={`pill-tab ${studioMobileTab === "sheet" ? "active" : ""}`}
+                        style={{ fontSize: "0.75rem", padding: "0.25rem 0.65rem" }}
+                      >
+                        Spreadsheet Grid
+                      </button>
+                    </div>
                   </div>
 
                   {loadingTransformFile ? (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "4rem 0", gap: "0.6rem", color: "var(--text-secondary)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, padding: "4rem 0", gap: "0.6rem", color: "var(--text-secondary)" }}>
                       <Loader2 size={20} className="animate-spin" />
                       <span>Reading Excel / CSV table columns &amp; sample data...</span>
                     </div>
                   ) : activeTransformFile && (
-                    <div style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
-                      gap: "1.5rem",
-                      alignItems: "start",
-                    }}>
-                      {/* Left: Power Query Column List */}
-                      <div>
+                    <div className="spreadsheet-studio-container">
+                      {/* ========================================================================= */}
+                      {/* LEFT SIDEBAR: SHEETS, DETECTED COLUMNS, TABLE DETECTOR                    */}
+                      {/* ========================================================================= */}
+                      <div className="spreadsheet-sidebar" style={{
+                        display: studioMobileTab === "sidebar" || (typeof window !== "undefined" && window.innerWidth >= 900) ? "flex" : "none"
+                      }}>
+                        {/* 1. Multi-Sheet Selector (If Excel has multiple worksheets) */}
+                        {availableSheets.length > 1 && (
+                          <div style={{
+                            background: "var(--bg-page)",
+                            padding: "0.85rem 1rem",
+                            borderRadius: "var(--radius-md)",
+                            border: "1px solid rgba(40, 40, 40, 0.04)",
+                          }}>
+                            <div style={{ fontSize: "0.74rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem" }}>
+                              <Layers size={13} strokeWidth={1.5} color="#2E3032" />
+                              <span>Worksheets ({availableSheets.length})</span>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                              {availableSheets.map((sName) => (
+                                <button
+                                  key={sName}
+                                  type="button"
+                                  onClick={() => handleSelectSheet(sName)}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    padding: "0.45rem 0.65rem",
+                                    borderRadius: "var(--radius-sm)",
+                                    background: activeSheetName === sName ? "#FFFFFF" : "transparent",
+                                    border: activeSheetName === sName ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid transparent",
+                                    cursor: "pointer",
+                                    textAlign: "left",
+                                    fontSize: "0.82rem",
+                                    fontWeight: activeSheetName === sName ? 500 : 400,
+                                    color: "var(--text-primary)",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                    <Table size={12} strokeWidth={1.5} color={activeSheetName === sName ? "#2E3032" : "var(--text-tertiary)"} />
+                                    <span>{sName}</span>
+                                  </div>
+                                  {activeSheetName === sName && (
+                                    <span className="badge-status badge-status-allow" style={{ fontSize: "0.62rem", padding: "0.05rem 0.35rem" }}>
+                                      Active
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 2. Smart Table Detection & Header Row Selector */}
                         <div style={{
                           background: "var(--bg-page)",
-                          padding: "clamp(1rem, 2.5vw, 1.25rem)",
+                          padding: "0.85rem 1rem",
                           borderRadius: "var(--radius-md)",
                           border: "1px solid rgba(40, 40, 40, 0.04)",
                         }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
-                            <div style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                              <Columns size={14} strokeWidth={1.5} color="#2E3032" />
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                            <div style={{ fontSize: "0.74rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <Sliders size={13} strokeWidth={1.5} color="#2E3032" />
+                              <span>Table Header Detector</span>
+                            </div>
+                            <span className="badge-status badge-status-allow" style={{ fontSize: "0.62rem", padding: "0.05rem 0.35rem" }}>
+                              {isTableDetected ? "Table Detected" : "Raw Data"}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", marginBottom: "0.5rem" }}>
+                            Header row automatically detected. You can change row offset manually:
+                          </div>
+                          <div style={{ display: "flex", gap: "0.3rem" }}>
+                            {[0, 1, 2, 3].map((rowIdx) => (
+                              <button
+                                key={rowIdx}
+                                type="button"
+                                onClick={() => setHeaderRowIndex(rowIdx)}
+                                style={{
+                                  flex: 1,
+                                  fontSize: "0.72rem",
+                                  padding: "0.25rem 0.4rem",
+                                  borderRadius: "var(--radius-sm)",
+                                  border: headerRowIndex === rowIdx ? "1px solid #2E3032" : "1px solid rgba(40, 40, 40, 0.06)",
+                                  background: headerRowIndex === rowIdx ? "#2E3032" : "#FFFFFF",
+                                  color: headerRowIndex === rowIdx ? "#FFFFFF" : "var(--text-secondary)",
+                                  cursor: "pointer",
+                                  fontWeight: 450,
+                                }}
+                              >
+                                Row {rowIdx + 1}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 3. Detected Columns List */}
+                        <div style={{
+                          background: "var(--bg-page)",
+                          padding: "0.85rem 1rem",
+                          borderRadius: "var(--radius-md)",
+                          border: "1px solid rgba(40, 40, 40, 0.04)",
+                          flex: 1,
+                          display: "flex",
+                          flexDirection: "column",
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.65rem" }}>
+                            <div style={{ fontSize: "0.74rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <Columns size={13} strokeWidth={1.5} color="#2E3032" />
                               <span>Detected Columns ({availableColumns.length})</span>
                             </div>
-                            <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>Click to Inspect</span>
+                            <span style={{ fontSize: "0.7rem", color: "var(--text-tertiary)" }}>Click to Inspect</span>
                           </div>
 
                           {/* Column Selection List */}
-                          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.25rem", maxHeight: "240px", overflowY: "auto" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", overflowY: "auto", maxHeight: "260px", paddingRight: "0.2rem" }}>
                             {availableColumns.map((col) => {
                               const action = columnActions[col.name] || "KEEP";
                               const isSelected = selectedColumnName === col.name;
@@ -1847,7 +2271,7 @@ export default function WorkspaceDetailPage() {
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "space-between",
-                                    padding: "0.6rem 0.75rem",
+                                    padding: "0.5rem 0.65rem",
                                     background: isSelected ? "#FFFFFF" : "rgba(255, 255, 255, 0.6)",
                                     borderRadius: "var(--radius-sm)",
                                     border: isSelected ? "1.5px solid #2E3032" : "1px solid rgba(40, 40, 40, 0.05)",
@@ -1855,15 +2279,15 @@ export default function WorkspaceDetailPage() {
                                     transition: "all 0.15s ease",
                                   }}
                                 >
-                                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", minWidth: 0 }}>
                                     <span style={{
-                                      width: "20px",
-                                      height: "20px",
-                                      borderRadius: "4px",
+                                      width: "18px",
+                                      height: "18px",
+                                      borderRadius: "3px",
                                       background: isSelected ? "#2E3032" : "rgba(0,0,0,0.04)",
                                       color: isSelected ? "#FFFFFF" : "var(--text-tertiary)",
                                       fontFamily: "JetBrains Mono, monospace",
-                                      fontSize: "0.72rem",
+                                      fontSize: "0.68rem",
                                       fontWeight: 500,
                                       display: "flex",
                                       alignItems: "center",
@@ -1873,79 +2297,85 @@ export default function WorkspaceDetailPage() {
                                       {col.letter}
                                     </span>
                                     <div style={{ minWidth: 0, overflow: "hidden" }}>
-                                      <div style={{ fontSize: "0.84rem", fontWeight: isSelected ? 500 : 400, color: "var(--text-primary)", fontFamily: "JetBrains Mono, monospace", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                                      <div style={{ fontSize: "0.8rem", fontWeight: isSelected ? 500 : 400, color: "var(--text-primary)", fontFamily: "JetBrains Mono, monospace", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                                         {col.name}
                                       </div>
-                                      <div style={{ fontSize: "0.7rem", color: "var(--text-tertiary)" }}>
+                                      <div style={{ fontSize: "0.68rem", color: "var(--text-tertiary)" }}>
                                         {col.type}
                                       </div>
                                     </div>
                                   </div>
 
                                   <span style={{
-                                    fontSize: "0.7rem",
+                                    fontSize: "0.65rem",
                                     fontWeight: 450,
-                                    padding: "0.15rem 0.5rem",
+                                    padding: "0.1rem 0.45rem",
                                     borderRadius: "var(--radius-pill)",
-                                    background: action === "REMOVE" ? "var(--status-deny-bg)" : "rgba(0,0,0,0.04)",
-                                    color: action === "REMOVE" ? "var(--status-deny)" : "var(--text-secondary)",
+                                    background: action === "REMOVE" ? "var(--status-deny-bg)" : action === "MASK" ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.04)",
+                                    color: action === "REMOVE" ? "var(--status-deny)" : action === "MASK" ? "#2E3032" : "var(--text-secondary)",
                                     flexShrink: 0,
                                   }}>
-                                    {action === "REMOVE" ? "Dropped" : action === "MASK" ? "Masked" : "Passed"}
+                                    {action === "REMOVE" ? "Drop" : action === "MASK" ? "Mask" : "Keep"}
                                   </span>
                                 </div>
                               );
                             })}
                           </div>
 
-                          {/* Additional Redaction Input */}
-                          <div>
-                            <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-secondary)", marginBottom: "0.3rem", fontWeight: 450 }}>
-                              Custom columns to drop (comma-separated):
+                          {/* Custom Drop Input */}
+                          <div style={{ marginTop: "0.75rem", paddingTop: "0.65rem", borderTop: "1px solid rgba(40, 40, 40, 0.04)" }}>
+                            <label style={{ display: "block", fontSize: "0.7rem", color: "var(--text-secondary)", marginBottom: "0.25rem", fontWeight: 450 }}>
+                              Custom columns to drop:
                             </label>
                             <input
                               type="text"
                               className="modern-input"
-                              placeholder="e.g. credit_card, phone_number"
+                              placeholder="e.g. credit_card, ssn"
                               value={customColumnsToHide}
                               onChange={(e) => setCustomColumnsToHide(e.target.value)}
-                              style={{ fontSize: "0.8rem", padding: "0.45rem 0.7rem" }}
+                              style={{ fontSize: "0.76rem", padding: "0.35rem 0.6rem" }}
                             />
                           </div>
                         </div>
                       </div>
 
-                      {/* Right: Interactive Spreadsheet & Live Transform Preview */}
-                      <div>
+                      {/* ========================================================================= */}
+                      {/* RIGHT SPREADSHEET CANVAS: INTERACTIVE CELL EDITING & ACTIONS               */}
+                      {/* ========================================================================= */}
+                      <div className="spreadsheet-main-area" style={{
+                        display: studioMobileTab === "sheet" || (typeof window !== "undefined" && window.innerWidth >= 900) ? "flex" : "none"
+                      }}>
                         <div style={{
-                          background: "var(--bg-page)",
+                          background: "#FFFFFF",
                           borderRadius: "var(--radius-md)",
-                          border: "1px solid rgba(40, 40, 40, 0.04)",
+                          border: "1px solid rgba(40, 40, 40, 0.06)",
                           overflow: "hidden",
                           display: "flex",
                           flexDirection: "column",
+                          flex: 1,
                         }}>
                           {/* Active Column Transformation Toolbar */}
                           <div style={{
-                            padding: "0.85rem 1.15rem",
-                            background: "#FFFFFF",
-                            borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
+                            padding: "0.75rem 1.15rem",
+                            background: "#FBFBFC",
+                            borderBottom: "1px solid rgba(40, 40, 40, 0.05)",
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
                             flexWrap: "wrap",
-                            gap: "0.75rem",
+                            gap: "0.6rem",
                           }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                              <span style={{ fontSize: "0.75rem", fontWeight: 450, color: "var(--text-secondary)", textTransform: "uppercase" }}>
-                                Selected:
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <span style={{ fontSize: "0.74rem", fontWeight: 450, color: "var(--text-secondary)", textTransform: "uppercase" }}>
+                                Selected Column:
                               </span>
                               <span style={{
                                 fontFamily: "JetBrains Mono, monospace",
                                 fontWeight: 500,
-                                fontSize: "0.88rem",
+                                fontSize: "0.84rem",
                                 color: "var(--text-primary)",
-                                background: "var(--bg-page)",
+                                background: "#FFFFFF",
+                                border: "1px solid rgba(40, 40, 40, 0.08)",
                                 padding: "0.15rem 0.5rem",
                                 borderRadius: "4px",
                               }}>
@@ -1953,16 +2383,15 @@ export default function WorkspaceDetailPage() {
                               </span>
                             </div>
 
-                            {/* Action Buttons */}
+                            {/* Action Buttons & Add Row */}
                             <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
-                              <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", marginRight: "0.2rem" }}>Action:</span>
                               <button
                                 type="button"
                                 disabled={!selectedColumnName}
                                 onClick={() => setColumnActions({ ...columnActions, [selectedColumnName]: "KEEP" })}
                                 style={{
-                                  fontSize: "0.75rem",
-                                  padding: "0.3rem 0.7rem",
+                                  fontSize: "0.74rem",
+                                  padding: "0.28rem 0.65rem",
                                   borderRadius: "var(--radius-pill)",
                                   border: "1px solid",
                                   borderColor: (columnActions[selectedColumnName] || "KEEP") === "KEEP" ? "#2E3032" : "rgba(40, 40, 40, 0.06)",
@@ -1980,8 +2409,8 @@ export default function WorkspaceDetailPage() {
                                 disabled={!selectedColumnName}
                                 onClick={() => setColumnActions({ ...columnActions, [selectedColumnName]: "MASK" })}
                                 style={{
-                                  fontSize: "0.75rem",
-                                  padding: "0.3rem 0.7rem",
+                                  fontSize: "0.74rem",
+                                  padding: "0.28rem 0.65rem",
                                   borderRadius: "var(--radius-pill)",
                                   border: "1px solid",
                                   borderColor: columnActions[selectedColumnName] === "MASK" ? "#2E3032" : "rgba(40, 40, 40, 0.06)",
@@ -1999,8 +2428,8 @@ export default function WorkspaceDetailPage() {
                                 disabled={!selectedColumnName}
                                 onClick={() => setColumnActions({ ...columnActions, [selectedColumnName]: "REMOVE" })}
                                 style={{
-                                  fontSize: "0.75rem",
-                                  padding: "0.3rem 0.7rem",
+                                  fontSize: "0.74rem",
+                                  padding: "0.28rem 0.65rem",
                                   borderRadius: "var(--radius-pill)",
                                   border: "1px solid",
                                   borderColor: columnActions[selectedColumnName] === "REMOVE" ? "var(--status-deny)" : "rgba(40, 40, 40, 0.06)",
@@ -2012,17 +2441,24 @@ export default function WorkspaceDetailPage() {
                               >
                                 Drop Column
                               </button>
+
+                              <button
+                                type="button"
+                                onClick={handleAddRow}
+                                className="pill-btn pill-btn-glass"
+                                style={{ fontSize: "0.74rem", padding: "0.28rem 0.65rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                              >
+                                <span>+ Add Row</span>
+                              </button>
                             </div>
                           </div>
 
-                          {/* Excel Grid Canvas */}
-                          <div style={{ overflowX: "auto", maxHeight: "320px" }}>
-                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", fontFamily: "JetBrains Mono, monospace" }}>
+                          {/* Proper Interactive Spreadsheet Canvas */}
+                          <div style={{ flex: 1, overflow: "auto", position: "relative", minHeight: "260px" }}>
+                            <table className="spreadsheet-grid-table">
                               <thead>
-                                <tr style={{ background: "#f8fafc", borderBottom: "1px solid rgba(40, 40, 40, 0.06)" }}>
-                                  <th style={{ width: "35px", padding: "0.4rem", color: "var(--text-tertiary)", textAlign: "center", borderRight: "1px solid rgba(40, 40, 40, 0.06)", fontSize: "0.72rem" }}>
-                                    #
-                                  </th>
+                                <tr>
+                                  <th className="spreadsheet-row-index">#</th>
                                   {availableColumns.map((col) => {
                                     const action = columnActions[col.name] || "KEEP";
                                     const isSelected = selectedColumnName === col.name;
@@ -2031,19 +2467,16 @@ export default function WorkspaceDetailPage() {
                                         key={col.name}
                                         onClick={() => setSelectedColumnName(col.name)}
                                         style={{
-                                          padding: "0.55rem 0.75rem",
-                                          textAlign: "left",
-                                          borderRight: "1px solid rgba(40, 40, 40, 0.06)",
-                                          background: isSelected ? "rgba(0, 0, 0, 0.03)" : "inherit",
+                                          background: isSelected ? "#EAEAEA" : "#F7F7F8",
                                           cursor: "pointer",
-                                          userSelect: "none",
                                         }}
                                       >
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem" }}>
-                                          <div>
-                                            <span style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", marginRight: "0.3rem" }}>{col.letter}</span>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                                          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                                            <span style={{ fontSize: "0.68rem", color: "var(--text-tertiary)", fontFamily: "JetBrains Mono, monospace" }}>{col.letter}</span>
                                             <span style={{
                                               fontWeight: 500,
+                                              fontSize: "0.82rem",
                                               color: action === "REMOVE" ? "var(--status-deny)" : "var(--text-primary)",
                                               textDecoration: action === "REMOVE" ? "line-through" : "none",
                                             }}>
@@ -2051,11 +2484,11 @@ export default function WorkspaceDetailPage() {
                                             </span>
                                           </div>
                                           <span style={{
-                                            fontSize: "0.65rem",
+                                            fontSize: "0.62rem",
                                             fontWeight: 500,
-                                            padding: "0.1rem 0.35rem",
+                                            padding: "0.08rem 0.35rem",
                                             borderRadius: "3px",
-                                            background: action === "REMOVE" ? "var(--status-deny)" : "#2E3032",
+                                            background: action === "REMOVE" ? "var(--status-deny)" : action === "MASK" ? "#B45309" : "#2E3032",
                                             color: "#FFFFFF",
                                           }}>
                                             {action === "REMOVE" ? "DROP" : action === "MASK" ? "MASK" : "KEEP"}
@@ -2068,24 +2501,20 @@ export default function WorkspaceDetailPage() {
                               </thead>
 
                               <tbody>
-                                {Array.from({ length: dynamicRowsCount || 3 }).map((_, rowIdx) => (
-                                  <tr key={rowIdx} style={{ borderBottom: "1px solid rgba(40, 40, 40, 0.04)", background: rowIdx % 2 === 0 ? "#FFFFFF" : "#FAFBFB" }}>
-                                    <td style={{
-                                      padding: "0.45rem",
-                                      textAlign: "center",
-                                      color: "var(--text-tertiary)",
-                                      borderRight: "1px solid rgba(40, 40, 40, 0.06)",
-                                      fontSize: "0.72rem",
-                                      background: "#F8F9FA",
-                                      fontWeight: 500,
-                                    }}>
+                                {(editableRows.length > 0 ? editableRows : Array.from({ length: dynamicRowsCount || 3 })).map((rowObj, rowIdx) => (
+                                  <tr key={rowIdx}>
+                                    <td className="spreadsheet-row-index">
                                       {rowIdx + 1}
                                     </td>
 
                                     {availableColumns.map((col) => {
                                       const action = columnActions[col.name] || "KEEP";
-                                      const isSelected = selectedColumnName === col.name;
-                                      const rawVal = col.sample[rowIdx] !== undefined ? col.sample[rowIdx] : "";
+                                      const isSelectedCol = selectedColumnName === col.name;
+                                      const rawVal = rowObj && typeof rowObj === "object" && rowObj[col.name] !== undefined
+                                        ? String(rowObj[col.name])
+                                        : (col.sample[rowIdx] !== undefined ? col.sample[rowIdx] : "");
+
+                                      const isEditingThisCell = editingCell?.rowIndex === rowIdx && editingCell?.colName === col.name;
 
                                       let displayVal = rawVal;
                                       if (action === "REMOVE") {
@@ -2100,18 +2529,38 @@ export default function WorkspaceDetailPage() {
                                         }
                                       }
 
+                                      if (isEditingThisCell) {
+                                        return (
+                                          <td key={col.name} className="cell-editing">
+                                            <input
+                                              autoFocus
+                                              className="spreadsheet-cell-input"
+                                              value={rawVal}
+                                              onChange={(e) => handleCellChange(rowIdx, col.name, e.target.value)}
+                                              onBlur={() => setEditingCell(null)}
+                                              onKeyDown={(e) => {
+                                                if (e.key === "Enter" || e.key === "Escape") {
+                                                  setEditingCell(null);
+                                                }
+                                              }}
+                                            />
+                                          </td>
+                                        );
+                                      }
+
                                       return (
                                         <td
                                           key={col.name}
                                           onClick={() => setSelectedColumnName(col.name)}
+                                          onDoubleClick={() => setEditingCell({ rowIndex: rowIdx, colName: col.name })}
+                                          title="Double-click to edit cell directly"
                                           style={{
-                                            padding: "0.45rem 0.75rem",
-                                            borderRight: "1px solid rgba(40, 40, 40, 0.06)",
-                                            background: isSelected ? "rgba(0, 0, 0, 0.02)" : "inherit",
+                                            background: isSelectedCol ? "rgba(46, 48, 50, 0.02)" : "#FFFFFF",
                                             color: action === "REMOVE" ? "var(--text-tertiary)" : "var(--text-primary)",
                                             fontStyle: action === "REMOVE" ? "italic" : "normal",
                                             fontWeight: action === "MASK" ? 500 : 400,
-                                            cursor: "pointer",
+                                            cursor: "cell",
+                                            fontFamily: "JetBrains Mono, monospace",
                                           }}
                                         >
                                           {displayVal || <span style={{ color: "var(--text-tertiary)", fontStyle: "italic" }}>null</span>}
@@ -2124,21 +2573,26 @@ export default function WorkspaceDetailPage() {
                             </table>
                           </div>
 
+                          {/* Studio Footer Status */}
                           <div style={{
-                            padding: "0.6rem 1.15rem",
+                            padding: "0.55rem 1.15rem",
                             background: "#F8F9FA",
-                            borderTop: "1px solid rgba(40, 40, 40, 0.06)",
+                            borderTop: "1px solid rgba(40, 40, 40, 0.05)",
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
                             fontSize: "0.72rem",
                             color: "var(--text-secondary)",
                             flexWrap: "wrap",
-                            gap: "0.3rem",
+                            gap: "0.4rem",
                           }}>
-                            <span>Real columns &amp; rows dynamically loaded from {activeTransformFile.original_filename}</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <span>Sheet: <strong>{activeSheetName || "Default"}</strong> ({editableRows.length} rows loaded)</span>
+                              <span>•</span>
+                              <span style={{ color: "var(--text-tertiary)" }}>Double-click any cell to edit value</span>
+                            </div>
                             <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>
-                              ✓ Live Workspace Isolated
+                              ✓ Live Workspace Isolated &amp; Policy Enforced
                             </span>
                           </div>
                         </div>
@@ -2436,6 +2890,63 @@ export default function WorkspaceDetailPage() {
               </div>
             </div>
 
+            {/* 4. AI Agent Skills File & Instructions */}
+            <div style={{ marginBottom: "1.75rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem", flexWrap: "wrap", gap: "0.4rem" }}>
+                <div style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
+                  4. AI Agent Skills & Instructions
+                </div>
+                <div style={{ display: "flex", gap: "0.35rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(ABOX_AI_SKILLS_MARKDOWN);
+                      notify("success", "AI Skills markdown copied to clipboard!");
+                    }}
+                    className="pill-btn pill-btn-glass"
+                    style={{ padding: "0.2rem 0.65rem", fontSize: "0.74rem", gap: "0.3rem" }}
+                  >
+                    <Copy size={12} strokeWidth={1.5} />
+                    Copy Skills Prompt
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const blob = new Blob([ABOX_AI_SKILLS_MARKDOWN], { type: "text/markdown" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = "ABOX_AGENT_SKILLS.md";
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      notify("success", "Downloaded ABOX_AGENT_SKILLS.md");
+                    }}
+                    className="pill-btn pill-btn-glass"
+                    style={{ padding: "0.2rem 0.65rem", fontSize: "0.74rem", gap: "0.3rem" }}
+                  >
+                    <Download size={12} strokeWidth={1.5} />
+                    Download .md
+                  </button>
+                </div>
+              </div>
+              <div style={{
+                padding: "0.75rem 0.95rem",
+                background: "var(--bg-page)",
+                border: "1px solid rgba(40, 40, 40, 0.05)",
+                borderRadius: "var(--radius-md)",
+                fontSize: "0.76rem",
+                color: "var(--text-secondary)",
+                lineHeight: 1.5,
+              }}>
+                <div style={{ fontWeight: 500, color: "var(--text-primary)", marginBottom: "0.15rem" }}>
+                  ⚡ Mandatory AI Verification Directive:
+                </div>
+                <div>
+                  Whenever the AI executes <code>edit_dataset</code>, it is strictly instructed to immediately run <code>query_dataset</code> to verify that the change persisted in storage before replying to the user.
+                </div>
+              </div>
+            </div>
+
             <button
               onClick={() => setCreatedCredential(null)}
               className="pill-btn pill-btn-solid"
@@ -2634,6 +3145,164 @@ export default function WorkspaceDetailPage() {
                 className="pill-btn pill-btn-solid"
               >
                 {savingPerms ? "Saving Changes..." : "Save Permissions"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: AI AGENT SKILLS & OPERATIONAL GUIDE                                */}
+      {/* ========================================================================= */}
+      {skillsModalOpen && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(46, 48, 50, 0.4)",
+          backdropFilter: "blur(14px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 160,
+          padding: "clamp(0.5rem, 2vw, 1.5rem)",
+        }}>
+          <div className="frosted-panel" style={{
+            width: "100%",
+            maxWidth: "760px",
+            maxHeight: "90vh",
+            display: "flex",
+            flexDirection: "column",
+            background: "#FFFFFF",
+            boxShadow: "var(--shadow-lg)",
+            borderRadius: "var(--radius-xl)",
+            overflow: "hidden",
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: "1.5rem 2rem 1.25rem 2rem",
+              borderBottom: "1px solid rgba(40, 40, 40, 0.05)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}>
+              <div>
+                <div className="slash-tag" style={{ margin: 0, marginBottom: "0.2rem" }}>MCP PROTOCOL SKILLS FILE</div>
+                <h2 style={{ fontSize: "1.35rem", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+                  AI Agent Skills & Operational Guide
+                </h2>
+              </div>
+              <button
+                onClick={() => setSkillsModalOpen(false)}
+                className="icon-circle-btn"
+                style={{ width: "32px", height: "32px" }}
+              >
+                <X size={15} strokeWidth={1.5} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{
+              padding: "1.5rem 2rem",
+              overflowY: "auto",
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              gap: "1.25rem",
+            }}>
+              {/* Highlight Banner */}
+              <div style={{
+                padding: "1rem 1.25rem",
+                background: "rgba(255, 230, 60, 0.15)",
+                border: "1px solid rgba(234, 179, 8, 0.25)",
+                borderRadius: "var(--radius-md)",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "0.75rem",
+              }}>
+                <ShieldCheck size={18} strokeWidth={1.5} color="#B45309" style={{ marginTop: "2px", flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: "0.86rem", color: "#92400E", marginBottom: "0.2rem" }}>
+                    Embedded Protocol Verification Directives
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#78350F", lineHeight: 1.5 }}>
+                    When an AI agent connects via MCP, it automatically receives these operational directives. The AI is strictly required to always execute a follow-up <code>query_dataset</code> after any <code>edit_dataset</code> mutation to verify and confirm persisted changes before answering the user.
+                  </div>
+                </div>
+              </div>
+
+              {/* Raw Markdown Code View */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem", flexWrap: "wrap", gap: "0.4rem" }}>
+                  <span style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
+                    ABOX_AGENT_SKILLS.md Content
+                  </span>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(ABOX_AI_SKILLS_MARKDOWN);
+                        setCopiedSkills(true);
+                        notify("success", "Skills file copied to clipboard!");
+                        setTimeout(() => setCopiedSkills(false), 2000);
+                      }}
+                      className="pill-btn pill-btn-glass"
+                      style={{ padding: "0.3rem 0.85rem", fontSize: "0.78rem" }}
+                    >
+                      {copiedSkills ? <Check size={13} strokeWidth={1.5} /> : <Copy size={13} strokeWidth={1.5} />}
+                      <span>{copiedSkills ? "Copied" : "Copy Markdown"}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const blob = new Blob([ABOX_AI_SKILLS_MARKDOWN], { type: "text/markdown" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "ABOX_AGENT_SKILLS.md";
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        notify("success", "Downloaded ABOX_AGENT_SKILLS.md");
+                      }}
+                      className="pill-btn pill-btn-solid"
+                      style={{ padding: "0.3rem 0.85rem", fontSize: "0.78rem" }}
+                    >
+                      <Download size={13} strokeWidth={1.5} />
+                      <span>Download .md</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: "1rem 1.25rem",
+                  background: "#2E3032",
+                  borderRadius: "var(--radius-md)",
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: "0.76rem",
+                  color: "#ECECED",
+                  lineHeight: 1.6,
+                  maxHeight: "360px",
+                  overflowY: "auto",
+                  whiteSpace: "pre-wrap",
+                }}>
+                  {ABOX_AI_SKILLS_MARKDOWN}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: "1rem 2rem",
+              borderTop: "1px solid rgba(40, 40, 40, 0.05)",
+              display: "flex",
+              justifyContent: "flex-end",
+            }}>
+              <button
+                onClick={() => setSkillsModalOpen(false)}
+                className="pill-btn pill-btn-solid"
+                style={{ padding: "0.55rem 1.5rem" }}
+              >
+                Close Guide
               </button>
             </div>
           </div>

@@ -24,6 +24,7 @@ from app.mcp.schemas import (
     MCPCredentialUpdateRequest,
 )
 from app.mcp.server import MCPServer
+from app.mcp.skills import ABOX_AI_SKILLS_GUIDE
 from app.workspaces.service import WorkspaceService
 
 router = APIRouter(tags=["MCP"])
@@ -388,7 +389,21 @@ async def get_mcp_info(
         "protocol": "MCP JSON-RPC 2.0",
         "transport": "Streamable HTTP",
         "endpoint": "/mcp",
-        "description": "DBMCP Policy-Enforced Remote MCP Server",
+        "server": "ABOX Policy-Enforced MCP Gateway",
+        "skills_guide_endpoint": "/mcp/skills",
+        "instructions": ABOX_AI_SKILLS_GUIDE,
+    }
+
+
+@router.get("/mcp/skills")
+@router.get("/workspaces/{workspace_id}/skills-guide")
+async def get_mcp_skills_guide():
+    """Returns the standardized ABOX AI Agent skills file and operational instructions."""
+    return {
+        "title": "ABOX AI Agent Skills & Operational Guide",
+        "version": "2024-11-05",
+        "content": ABOX_AI_SKILLS_GUIDE,
+        "verification_rule": "MANDATORY: Always call query_dataset immediately after calling edit_dataset to verify and confirm persisted data in storage before replying to the user.",
     }
 
 
@@ -405,7 +420,7 @@ async def handle_mcp_rpc(
     """
     Standard MCP JSON-RPC 2.0 Protocol Gateway.
     Evaluates every request within context.workspace_id and against workspace policies.
-    Permits initialize and tools/list for client handshakes (e.g. Claude Remote Connectors).
+    Permits initialize, tools/list, resources/list, and prompts/list for client handshakes (e.g. Claude Remote Connectors).
     """
     method = rpc_req.method
     params = rpc_req.params or {}
@@ -418,12 +433,14 @@ async def handle_mcp_rpc(
                 "protocolVersion": "2024-11-05",
                 "capabilities": {
                     "tools": {"listChanged": False},
-                    "resources": {"subscribe": False},
+                    "resources": {"subscribe": False, "listChanged": False},
+                    "prompts": {"listChanged": False},
                 },
                 "serverInfo": {
-                    "name": "DBMCP Policy-Enforced Gateway",
+                    "name": "ABOX Policy-Enforced Gateway",
                     "version": "1.0.0",
                 },
+                "instructions": ABOX_AI_SKILLS_GUIDE,
             },
         )
 
@@ -432,7 +449,95 @@ async def handle_mcp_rpc(
         tools = await MCPServer.list_tools()
         return JSONRPCResponse(id=rpc_req.id, result={"tools": tools})
 
-    # 3. Call Tool (Strictly requires valid context)
+    # 3. List Resources (Permits AI clients to discover data and skills guide)
+    elif method in ["resources/list", "list_resources"]:
+        if context:
+            res = await MCPServer.call_tool(db, context, "list_resources", {})
+            return JSONRPCResponse(id=rpc_req.id, result=res)
+        else:
+            return JSONRPCResponse(
+                id=rpc_req.id,
+                result={
+                    "resources": [
+                        {
+                            "uri": "abox://skills/workflow-guide",
+                            "name": "ABOX Agent Skills & Operational Guide",
+                            "mimeType": "text/markdown",
+                            "description": "Mandatory operating rules, verification protocols, and tool usage guide for AI agents",
+                        }
+                    ]
+                },
+            )
+
+    # 4. Read Resource (Permits reading files or the built-in skills guide)
+    elif method in ["resources/read", "read_resource"]:
+        uri = params.get("uri") or params.get("resource_id") or ""
+        clean_uri = uri.strip().lower()
+        if clean_uri in [
+            "abox://skills/workflow-guide",
+            "abox://skills/guide",
+            "abox://instructions",
+            "skills",
+            "skills.md",
+            "abox_agent_skills.md",
+            "instructions",
+        ]:
+            return JSONRPCResponse(
+                id=rpc_req.id,
+                result={
+                    "contents": [
+                        {
+                            "uri": "abox://skills/workflow-guide",
+                            "mimeType": "text/markdown",
+                            "text": ABOX_AI_SKILLS_GUIDE,
+                        }
+                    ]
+                },
+            )
+        if not context:
+            return JSONRPCResponse(
+                id=rpc_req.id,
+                result={
+                    "isError": True,
+                    "content": [{"type": "text", "text": "Authentication Error: A valid DBMCP token is required to read workspace files."}],
+                },
+            )
+        res = await MCPServer.call_tool(db, context, "read_resource", {"resource_id": uri})
+        return JSONRPCResponse(id=rpc_req.id, result=res)
+
+    # 5. Prompts List & Get (Permits AI clients to load skills prompt)
+    elif method in ["prompts/list", "list_prompts"]:
+        return JSONRPCResponse(
+            id=rpc_req.id,
+            result={
+                "prompts": [
+                    {
+                        "name": "abox_agent_skills",
+                        "description": "ABOX AI Agent Skills, Verification Directives & Operational Guide",
+                        "arguments": [],
+                    }
+                ]
+            },
+        )
+
+    elif method in ["prompts/get", "get_prompt"]:
+        return JSONRPCResponse(
+            id=rpc_req.id,
+            result={
+                "description": "ABOX AI Agent Skills & Operational Protocol",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": {
+                            "type": "text",
+                            "text": ABOX_AI_SKILLS_GUIDE,
+                        },
+                    }
+                ],
+            },
+        )
+
+    # 6. Call Tool (Strictly requires valid context)
     elif method in ["tools/call", "call_tool"]:
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
@@ -467,7 +572,7 @@ async def handle_mcp_rpc(
         call_res = await MCPServer.call_tool(db, active_context, tool_name, arguments)
         return JSONRPCResponse(id=rpc_req.id, result=call_res)
 
-    # 4. Direct tool method invocation fallback
+    # 7. Direct tool method invocation fallback
     known_tool_names = [t["name"] for t in await MCPServer.list_tools()]
     if method in known_tool_names:
         if not context:

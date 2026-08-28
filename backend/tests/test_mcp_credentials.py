@@ -41,9 +41,26 @@ async def test_mcp_credential_lifecycle(client: AsyncClient, db_session: AsyncSe
     }
     res_ok = await client.post("/mcp", json=valid_req, headers={"Authorization": f"Bearer {raw_token}"})
     assert res_ok.status_code == 200
-    assert res_ok.json()["result"]["serverInfo"]["name"] == "DBMCP Policy-Enforced Gateway"
+    assert "Policy-Enforced Gateway" in res_ok.json()["result"]["serverInfo"]["name"]
+    assert "instructions" in res_ok.json()["result"]
 
-    # 4. Invalid token fails
+    # 4. Skills endpoint and prompts test
+    skills_http = await client.get("/mcp/skills")
+    assert skills_http.status_code == 200
+    assert "ABOX" in skills_http.json()["title"]
+
+    prompts_req = {"jsonrpc": "2.0", "id": 10, "method": "prompts/list"}
+    prompts_res = await client.post("/mcp", json=prompts_req)
+    assert prompts_res.status_code == 200
+    assert len(prompts_res.json()["result"]["prompts"]) > 0
+
+    # Skills resource read test
+    read_skills_req = {"jsonrpc": "2.0", "id": 11, "method": "resources/read", "params": {"uri": "abox://skills/workflow-guide"}}
+    read_skills_res = await client.post("/mcp", json=read_skills_req)
+    assert read_skills_res.status_code == 200
+    assert "MANDATORY" in read_skills_res.json()["result"]["contents"][0]["text"]
+
+    # 5. Invalid token fails
     res_bad = await client.post("/mcp", json=valid_req, headers={"Authorization": "Bearer mcp_live_fake_badsecret123"})
     assert res_bad.status_code == 401
 

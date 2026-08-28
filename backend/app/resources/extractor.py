@@ -148,8 +148,16 @@ class ContentExtractor:
                     continue
 
                 if len(non_empty_rows) >= 2:
-                    # Header row
-                    raw_headers = non_empty_rows[0]
+                    # Smart Header Detection: locate the row with the most distinct populated column headers
+                    best_header_idx = 0
+                    max_cols = 0
+                    for idx, r in enumerate(non_empty_rows[:8]):
+                        non_empty_cols = [c for c in r if c and str(c).strip()]
+                        if len(non_empty_cols) > max_cols:
+                            max_cols = len(non_empty_cols)
+                            best_header_idx = idx
+
+                    raw_headers = non_empty_rows[best_header_idx]
                     headers = []
                     for i, h in enumerate(raw_headers):
                         h_clean = str(h).strip() if h else f"Column_{i + 1}"
@@ -158,7 +166,7 @@ class ContentExtractor:
                     sheet_rows = []
                     sheet_schema: Dict[str, str] = {}
 
-                    for r in non_empty_rows[1:]:
+                    for r in non_empty_rows[best_header_idx + 1:]:
                         row_dict = {}
                         for i, col_name in enumerate(headers):
                             val = r[i] if i < len(r) else ""
@@ -176,7 +184,8 @@ class ContentExtractor:
                         "schema": sheet_schema,
                         "row_count": len(sheet_rows),
                         "rows": sheet_rows,
-                        "table_detected": True,
+                        "header_row_index": best_header_idx,
+                        "table_detected": len(headers) > 0 and len(sheet_rows) > 0,
                     }
 
                     if not primary_columns:
@@ -202,6 +211,7 @@ class ContentExtractor:
                 "row_count": len(primary_rows),
                 "rows": primary_rows,
                 "sheets": sheets_data,
+                "sheet_names": list(sheets_data.keys()),
                 "table_detected": len(primary_columns) > 0,
             }
             return plain_text, structured_data

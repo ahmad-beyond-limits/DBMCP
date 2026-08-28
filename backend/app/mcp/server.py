@@ -8,6 +8,7 @@ from app.anonymisation.engine import AnonymisationEngine
 from app.audit.service import AuditService
 from app.database.models import ExtractedContent, FileRecord
 from app.mcp.auth import AuthenticatedMCPContext
+from app.mcp.skills import ABOX_AI_SKILLS_GUIDE
 from app.policies.engine import PolicyEngine
 from app.search.service import SearchService
 from app.structured.query_engine import StructuredQueryEngine
@@ -16,11 +17,11 @@ logger = logging.getLogger(__name__)
 
 DATASET_FILE_TYPES = ["CSV", "JSON", "XLSX", "XLS"]
 
-# Standard MCP Tool Definitions
+# Standard MCP Tool Definitions with Embedded AI Skills Directives
 MCP_TOOLS_DEFINITIONS = [
     {
         "name": "workspace_info",
-        "description": "Returns general metadata, policy status, and capabilities of the authenticated workspace.",
+        "description": "Returns general metadata, security boundaries, and the full AI agent skills operational guide for interacting with this workspace.",
         "inputSchema": {
             "type": "object",
             "properties": {},
@@ -59,18 +60,18 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "read_resource",
-        "description": "Reads the extracted text of a permitted resource. All workspace anonymisation rules (masking, pseudonymisation, redaction) are applied at read time.",
+        "description": "Reads the extracted text of a permitted resource. All workspace anonymisation rules (masking, pseudonymisation, redaction) are applied at read time. Also supports reading 'abox://skills/workflow-guide' for full AI agent guidelines.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "resource_id": {"type": "string", "description": "The resource UUID or filename to read"},
+                "resource_id": {"type": "string", "description": "The resource UUID, filename, or 'abox://skills/workflow-guide'"},
             },
             "required": ["resource_id"],
         },
     },
     {
         "name": "get_dataset_schema",
-        "description": "Returns the schema and columns for a structured dataset (CSV, Excel, or JSON), omitting columns restricted by field-level policies.",
+        "description": "Returns the schema, columns, and data types for a structured dataset (CSV, Excel, or JSON). MANDATORY: Call this before querying or editing an unfamiliar dataset to verify exact column names.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -81,7 +82,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "query_dataset",
-        "description": "Executes controlled queries or aggregations over structured datasets (CSV, Excel, or JSON). Queries referencing restricted columns are strictly denied.",
+        "description": "Executes controlled queries or aggregations over structured datasets (CSV, Excel, or JSON). Supports exact matching and comparison operators ($gt, $gte, $lt, $lte, $eq, $ne, $in, $contains). Use this tool to verify and reconfirm any data changes after calling edit_dataset.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -103,7 +104,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Edits, updates, inserts, or deletes records in a structured dataset (CSV, Excel, or JSON). Use this tool whenever the user instructs you to change or modify data (e.g. 'update student John Doe score to 95', 'change email for customer 101', 'insert a new row', 'delete obsolete entries').",
+        "description": "Edits, updates, inserts, or deletes records in a structured dataset (CSV, Excel, or JSON). MANDATORY RULE: After executing edit_dataset, you MUST IMMEDIATELY call query_dataset with the filter criteria to verify and reconfirm that the data change has persisted in storage before replying to the user.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -252,6 +253,8 @@ class MCPServer:
                         "workspace_name": context.workspace_name,
                         "security_protocol": "ABOX Policy Boundary Gateway v1.0",
                         "available_tools": [t["name"] for t in MCP_TOOLS_DEFINITIONS],
+                        "ai_skills_guide": ABOX_AI_SKILLS_GUIDE,
+                        "verification_rule": "MANDATORY: Always call query_dataset immediately after calling edit_dataset to verify and confirm persisted data in storage before replying to the user.",
                     }, indent=2),
                 }
             ]
@@ -271,7 +274,15 @@ class MCPServer:
         )
         files = (await db.execute(stmt)).scalars().all()
 
-        permitted_resources = []
+        permitted_resources = [
+            {
+                "id": "abox://skills/workflow-guide",
+                "filename": "ABOX_AGENT_SKILLS.md",
+                "file_type": "SKILLS_GUIDE",
+                "file_size": len(ABOX_AI_SKILLS_GUIDE),
+                "description": "Mandatory operating rules, verification protocols, and tool usage guide for AI agents",
+            }
+        ]
         for f in files:
             decision = await PolicyEngine.evaluate(
                 db=db,
@@ -411,6 +422,26 @@ class MCPServer:
     ) -> Dict[str, Any]:
         if not resource_id:
             return {"isError": True, "content": [{"type": "text", "text": "Missing resource_id"}]}
+
+        # Built-in skills / operational guide resource
+        clean_id = resource_id.strip().lower()
+        if clean_id in [
+            "abox://skills/workflow-guide",
+            "abox://skills/guide",
+            "abox://instructions",
+            "skills",
+            "skills.md",
+            "abox_agent_skills.md",
+            "instructions",
+        ]:
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": ABOX_AI_SKILLS_GUIDE,
+                    }
+                ]
+            }
 
         stmt = select(FileRecord).where(
             FileRecord.workspace_id == context.workspace_id,
