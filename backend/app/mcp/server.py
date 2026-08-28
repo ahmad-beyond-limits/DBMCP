@@ -14,6 +14,8 @@ from app.structured.query_engine import StructuredQueryEngine
 
 logger = logging.getLogger(__name__)
 
+DATASET_FILE_TYPES = ["CSV", "JSON", "XLSX", "XLS"]
+
 # Standard MCP Tool Definitions
 MCP_TOOLS_DEFINITIONS = [
     {
@@ -38,7 +40,7 @@ MCP_TOOLS_DEFINITIONS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "resource_id": {"type": "string", "description": "The unique resource UUID"},
+                "resource_id": {"type": "string", "description": "The unique resource UUID or filename"},
             },
             "required": ["resource_id"],
         },
@@ -61,29 +63,29 @@ MCP_TOOLS_DEFINITIONS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "resource_id": {"type": "string", "description": "The resource UUID to read"},
+                "resource_id": {"type": "string", "description": "The resource UUID or filename to read"},
             },
             "required": ["resource_id"],
         },
     },
     {
         "name": "get_dataset_schema",
-        "description": "Returns the schema and columns for a structured dataset (CSV or JSON), omitting columns restricted by field-level policies.",
+        "description": "Returns the schema and columns for a structured dataset (CSV, Excel, or JSON), omitting columns restricted by field-level policies.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "resource_id": {"type": "string", "description": "The dataset resource UUID"},
+                "resource_id": {"type": "string", "description": "The dataset resource UUID or filename"},
             },
             "required": ["resource_id"],
         },
     },
     {
         "name": "query_dataset",
-        "description": "Executes controlled queries or aggregations over structured datasets. Queries referencing restricted columns are strictly denied.",
+        "description": "Executes controlled queries or aggregations over structured datasets (CSV, Excel, or JSON). Queries referencing restricted columns are strictly denied.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "resource_id": {"type": "string", "description": "Dataset resource UUID"},
+                "resource_id": {"type": "string", "description": "Dataset resource UUID or filename"},
                 "columns": {"type": "array", "items": {"type": "string"}, "description": "Columns to project"},
                 "filters": {"type": "object", "description": "Key-value filter mapping"},
                 "limit": {"type": "integer", "description": "Max rows to return (default 50)"},
@@ -97,6 +99,37 @@ MCP_TOOLS_DEFINITIONS = [
                 },
             },
             "required": ["resource_id"],
+        },
+    },
+    {
+        "name": "edit_dataset",
+        "description": "Edits, updates, inserts, or deletes records in a structured dataset (CSV, Excel, or JSON). Use this tool whenever the user instructs you to change or modify data (e.g. 'update student John Doe score to 95', 'change email for customer 101', 'insert a new row', 'delete obsolete entries').",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "resource_id": {
+                    "type": "string",
+                    "description": "The dataset resource UUID or filename (e.g. 'studentperformance.csv', 'students_data.xlsx')",
+                },
+                "action": {
+                    "type": "string",
+                    "enum": ["update", "insert", "delete"],
+                    "description": "Mutation type: 'update' (modify matching rows), 'insert' (append a new row), 'delete' (remove matching rows)",
+                },
+                "filters": {
+                    "type": "object",
+                    "description": "Key-value criteria to locate rows to update or delete (e.g. {'student_id': '101'} or {'name': 'John Doe'})",
+                },
+                "updates": {
+                    "type": "object",
+                    "description": "Key-value pairs of columns and new values to update (e.g. {'math_score': 95, 'status': 'PASS'})",
+                },
+                "new_row": {
+                    "type": "object",
+                    "description": "Object representing a new row to insert when action is 'insert'",
+                },
+            },
+            "required": ["resource_id", "action"],
         },
     },
 ]
@@ -175,6 +208,16 @@ class MCPServer:
                     limit=args.get("limit", 50),
                     aggregation=args.get("aggregation"),
                 )
+            elif tool_name == "edit_dataset":
+                return await cls._edit_dataset(
+                    db=db,
+                    context=context,
+                    resource_id=args.get("resource_id"),
+                    action=args.get("action", "update"),
+                    filters=args.get("filters"),
+                    updates=args.get("updates"),
+                    new_row=args.get("new_row"),
+                )
             else:
                 return {
                     "isError": True,
@@ -207,7 +250,7 @@ class MCPServer:
                     "text": json.dumps({
                         "workspace_id": context.workspace_id,
                         "workspace_name": context.workspace_name,
-                        "security_protocol": "MCP Policy Boundary Gateway v1.0",
+                        "security_protocol": "ABOX Policy Boundary Gateway v1.0",
                         "available_tools": [t["name"] for t in MCP_TOOLS_DEFINITIONS],
                     }, indent=2),
                 }
@@ -272,8 +315,8 @@ class MCPServer:
             return {"isError": True, "content": [{"type": "text", "text": "Missing resource_id"}]}
 
         stmt = select(FileRecord).where(
-            FileRecord.id == resource_id,
             FileRecord.workspace_id == context.workspace_id,
+            (FileRecord.id == resource_id) | (FileRecord.original_filename == resource_id),
         )
         file_rec = (await db.execute(stmt)).scalar_one_or_none()
         if not file_rec:
@@ -294,11 +337,23 @@ class MCPServer:
                 actor_type="MCP_CLIENT",
                 credential_id=context.credential_id,
                 resource_type="file",
-                resource_id=resource_id,
+                resource_id=file_rec.id,
                 decision="DENY",
                 reason=decision.reason,
             )
             return {"isError": True, "content": [{"type": "text", "text": "Access denied by workspace policy"}]}
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=context.workspace_id,
+            operation="RESOURCE_METADATA_READ",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            resource_type="file",
+            resource_id=file_rec.id,
+            decision="ALLOW",
+            reason="Metadata retrieved",
+        )
 
         return {
             "content": [
@@ -309,7 +364,6 @@ class MCPServer:
                         "filename": file_rec.original_filename,
                         "file_type": file_rec.file_type,
                         "file_size": file_rec.file_size,
-                        "status": file_rec.status,
                         "created_at": file_rec.created_at.isoformat(),
                     }, indent=2),
                 }
@@ -318,18 +372,17 @@ class MCPServer:
 
     @classmethod
     async def _search(
-        cls,
-        db: AsyncSession,
-        context: AuthenticatedMCPContext,
-        query: str,
-        limit: int,
+        cls, db: AsyncSession, context: AuthenticatedMCPContext, query: str, limit: int
     ) -> Dict[str, Any]:
+        if not query or not query.strip():
+            return {"isError": True, "content": [{"type": "text", "text": "Query cannot be empty"}]}
+
         results = await SearchService.search_workspace(
             db=db,
             workspace_id=context.workspace_id,
+            query=query.strip(),
             actor=context,
-            query=query,
-            limit=limit,
+            limit=min(limit, 20),
         )
 
         await AuditService.log_event(
@@ -339,8 +392,8 @@ class MCPServer:
             actor_type="MCP_CLIENT",
             credential_id=context.credential_id,
             decision="ALLOW",
-            reason=f"Search returned {len(results)} matches",
-            request_metadata={"query": query},
+            reason=f"Search for '{query}' returned {len(results)} snippets",
+            request_metadata={"query": query, "count": len(results)},
         )
 
         return {
@@ -359,16 +412,14 @@ class MCPServer:
         if not resource_id:
             return {"isError": True, "content": [{"type": "text", "text": "Missing resource_id"}]}
 
-        # Ensure resource strictly exists in THIS workspace
         stmt = select(FileRecord).where(
-            FileRecord.id == resource_id,
             FileRecord.workspace_id == context.workspace_id,
+            (FileRecord.id == resource_id) | (FileRecord.original_filename == resource_id),
         )
         file_rec = (await db.execute(stmt)).scalar_one_or_none()
         if not file_rec:
             return {"isError": True, "content": [{"type": "text", "text": "Resource not found in workspace"}]}
 
-        # Policy Engine evaluation
         decision = await PolicyEngine.evaluate(
             db=db,
             workspace_id=context.workspace_id,
@@ -384,25 +435,22 @@ class MCPServer:
                 actor_type="MCP_CLIENT",
                 credential_id=context.credential_id,
                 resource_type="file",
-                resource_id=resource_id,
+                resource_id=file_rec.id,
                 decision="DENY",
                 reason=decision.reason,
             )
             return {"isError": True, "content": [{"type": "text", "text": "Access denied by workspace policy"}]}
 
-        # Retrieve extracted content
-        c_stmt = select(ExtractedContent).where(ExtractedContent.file_id == resource_id)
+        c_stmt = select(ExtractedContent).where(ExtractedContent.file_id == file_rec.id)
         extracted = (await db.execute(c_stmt)).scalar_one_or_none()
         raw_text = extracted.plain_text if extracted else ""
 
-        # Apply Anonymisation Engine
         safe_content = AnonymisationEngine.apply_to_text(
             text=raw_text,
             rules=decision.transformations,
             workspace_id=context.workspace_id,
         )
 
-        # Audit successful read
         await AuditService.log_event(
             db=db,
             workspace_id=context.workspace_id,
@@ -410,7 +458,7 @@ class MCPServer:
             actor_type="MCP_CLIENT",
             credential_id=context.credential_id,
             resource_type="file",
-            resource_id=resource_id,
+            resource_id=file_rec.id,
             decision=decision.decision,
             reason="Resource read successfully with policy enforcement",
         )
@@ -432,11 +480,11 @@ class MCPServer:
             return {"isError": True, "content": [{"type": "text", "text": "Missing resource_id"}]}
 
         stmt = select(FileRecord).where(
-            FileRecord.id == resource_id,
             FileRecord.workspace_id == context.workspace_id,
+            (FileRecord.id == resource_id) | (FileRecord.original_filename == resource_id),
         )
         file_rec = (await db.execute(stmt)).scalar_one_or_none()
-        if not file_rec or file_rec.file_type not in ["CSV", "JSON"]:
+        if not file_rec or file_rec.file_type not in DATASET_FILE_TYPES:
             return {"isError": True, "content": [{"type": "text", "text": "Resource is not a structured dataset"}]}
 
         decision = await PolicyEngine.evaluate(
@@ -449,7 +497,7 @@ class MCPServer:
         if not decision.allowed:
             return {"isError": True, "content": [{"type": "text", "text": "Access denied by workspace policy"}]}
 
-        c_stmt = select(ExtractedContent).where(ExtractedContent.file_id == resource_id)
+        c_stmt = select(ExtractedContent).where(ExtractedContent.file_id == file_rec.id)
         extracted = (await db.execute(c_stmt)).scalar_one_or_none()
         structured = extracted.structured_data if extracted else {}
 
@@ -478,14 +526,13 @@ class MCPServer:
             return {"isError": True, "content": [{"type": "text", "text": "Missing resource_id"}]}
 
         stmt = select(FileRecord).where(
-            FileRecord.id == resource_id,
             FileRecord.workspace_id == context.workspace_id,
+            (FileRecord.id == resource_id) | (FileRecord.original_filename == resource_id),
         )
         file_rec = (await db.execute(stmt)).scalar_one_or_none()
-        if not file_rec or file_rec.file_type not in ["CSV", "JSON"]:
+        if not file_rec or file_rec.file_type not in DATASET_FILE_TYPES:
             return {"isError": True, "content": [{"type": "text", "text": "Resource is not a structured dataset"}]}
 
-        # Evaluate policy engine
         decision = await PolicyEngine.evaluate(
             db=db,
             workspace_id=context.workspace_id,
@@ -502,13 +549,13 @@ class MCPServer:
                 actor_type="MCP_CLIENT",
                 credential_id=context.credential_id,
                 resource_type="dataset",
-                resource_id=resource_id,
+                resource_id=file_rec.id,
                 decision="DENY",
                 reason=decision.reason,
             )
             return {"isError": True, "content": [{"type": "text", "text": f"Query Denied: {decision.reason}"}]}
 
-        c_stmt = select(ExtractedContent).where(ExtractedContent.file_id == resource_id)
+        c_stmt = select(ExtractedContent).where(ExtractedContent.file_id == file_rec.id)
         extracted = (await db.execute(c_stmt)).scalar_one_or_none()
         structured = extracted.structured_data if extracted else {}
 
@@ -575,3 +622,164 @@ class MCPServer:
             reason=f"Tabular query returned {len(rows)} rows",
         )
         return {"content": [{"type": "text", "text": json.dumps({"rows": rows, "count": len(rows)}, indent=2)}]}
+
+    @classmethod
+    async def _edit_dataset(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        resource_id: Optional[str],
+        action: str,
+        filters: Optional[Dict[str, Any]],
+        updates: Optional[Dict[str, Any]],
+        new_row: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Executes mutations (update, insert, delete) on structured datasets.
+        Enables AI models to change data when requested by the user.
+        """
+        if not resource_id:
+            return {"isError": True, "content": [{"type": "text", "text": "Missing resource_id"}]}
+
+        stmt = select(FileRecord).where(
+            FileRecord.workspace_id == context.workspace_id,
+            (FileRecord.id == resource_id) | (FileRecord.original_filename == resource_id),
+        )
+        file_rec = (await db.execute(stmt)).scalar_one_or_none()
+        if not file_rec or file_rec.file_type not in DATASET_FILE_TYPES:
+            return {"isError": True, "content": [{"type": "text", "text": f"Dataset '{resource_id}' not found or not a structured data file"}]}
+
+        # Policy evaluation
+        decision = await PolicyEngine.evaluate(
+            db=db,
+            workspace_id=context.workspace_id,
+            actor=context,
+            operation="edit_dataset",
+            resource=file_rec,
+        )
+        if not decision.allowed:
+            await AuditService.log_event(
+                db=db,
+                workspace_id=context.workspace_id,
+                operation="DATASET_EDIT_DENIED",
+                actor_type="MCP_CLIENT",
+                credential_id=context.credential_id,
+                resource_type="dataset",
+                resource_id=file_rec.id,
+                decision="DENY",
+                reason=decision.reason,
+            )
+            return {"isError": True, "content": [{"type": "text", "text": f"Edit Denied: {decision.reason}"}]}
+
+        c_stmt = select(ExtractedContent).where(ExtractedContent.file_id == file_rec.id)
+        extracted = (await db.execute(c_stmt)).scalar_one_or_none()
+        if not extracted or not extracted.structured_data:
+            return {"isError": True, "content": [{"type": "text", "text": "Structured dataset content not found for editing"}]}
+
+        structured = dict(extracted.structured_data)
+        rows: List[Dict[str, Any]] = list(structured.get("rows", []))
+        columns: List[str] = list(structured.get("columns", []))
+        modified_count = 0
+        affected_samples = []
+
+        if action == "update":
+            if not updates:
+                return {"isError": True, "content": [{"type": "text", "text": "Missing 'updates' mapping for update action"}]}
+
+            # Ensure any new updated column names are in columns list
+            for col in updates.keys():
+                if col not in columns:
+                    columns.append(col)
+
+            for row in rows:
+                match = True
+                if filters:
+                    for fk, fv in filters.items():
+                        row_val = row.get(fk)
+                        if str(row_val).strip().lower() != str(fv).strip().lower():
+                            match = False
+                            break
+                if match:
+                    for uk, uv in updates.items():
+                        row[uk] = uv
+                    modified_count += 1
+                    if len(affected_samples) < 5:
+                        affected_samples.append(dict(row))
+
+        elif action == "insert":
+            if not new_row:
+                return {"isError": True, "content": [{"type": "text", "text": "Missing 'new_row' dictionary for insert action"}]}
+            for col in new_row.keys():
+                if col not in columns:
+                    columns.append(col)
+            rows.append(new_row)
+            modified_count = 1
+            affected_samples.append(new_row)
+
+        elif action == "delete":
+            if not filters:
+                return {"isError": True, "content": [{"type": "text", "text": "Safety constraint: 'filters' must be provided for delete action"}]}
+
+            remaining_rows = []
+            for row in rows:
+                match = True
+                for fk, fv in filters.items():
+                    row_val = row.get(fk)
+                    if str(row_val).strip().lower() != str(fv).strip().lower():
+                        match = False
+                        break
+                if match:
+                    modified_count += 1
+                    if len(affected_samples) < 5:
+                        affected_samples.append(dict(row))
+                else:
+                    remaining_rows.append(row)
+            rows = remaining_rows
+
+        else:
+            return {"isError": True, "content": [{"type": "text", "text": f"Unsupported action '{action}'. Use 'update', 'insert', or 'delete'."}]}
+
+        # Save back updated structured data & plain text
+        structured["columns"] = columns
+        structured["rows"] = rows
+        structured["row_count"] = len(rows)
+        extracted.structured_data = structured
+
+        # Re-generate plain_text CSV representation for search/read tools
+        lines = [",".join(columns)]
+        for r in rows[:200]:
+            lines.append(",".join([str(r.get(c, "")) for c in columns]))
+        extracted.plain_text = "\n".join(lines)
+
+        db.add(extracted)
+        await db.commit()
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=context.workspace_id,
+            operation="DATASET_EDIT_APPLIED",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            resource_type="dataset",
+            resource_id=file_rec.id,
+            decision="ALLOW",
+            reason=f"Action '{action}' modified {modified_count} record(s) in {file_rec.original_filename}",
+            request_metadata={"action": action, "modified_count": modified_count},
+        )
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "success": True,
+                        "action": action,
+                        "dataset": file_rec.original_filename,
+                        "records_modified": modified_count,
+                        "total_records": len(rows),
+                        "affected_samples": affected_samples,
+                        "message": f"Successfully performed '{action}' on {modified_count} record(s) in {file_rec.original_filename}.",
+                    }, indent=2),
+                }
+            ]
+        }

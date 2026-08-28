@@ -17,6 +17,8 @@ ALLOWED_EXTENSIONS = {
     ".txt": "TXT",
     ".csv": "CSV",
     ".json": "JSON",
+    ".xlsx": "XLSX",
+    ".xls": "XLSX",
 }
 
 
@@ -27,7 +29,7 @@ class ResourceService:
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type '{ext}'. Allowed types: PDF, DOCX, TXT, CSV, JSON",
+                detail=f"Unsupported file type '{ext}'. Allowed types: PDF, DOCX, TXT, CSV, JSON, XLSX",
             )
         return ext, ALLOWED_EXTENSIONS[ext]
 

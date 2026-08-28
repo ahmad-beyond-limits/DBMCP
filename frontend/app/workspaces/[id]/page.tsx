@@ -45,6 +45,7 @@ import {
   Columns,
   Sparkles,
   Loader2,
+  Edit3,
 } from "lucide-react";
 
 export default function WorkspaceDetailPage() {
@@ -101,6 +102,7 @@ export default function WorkspaceDetailPage() {
   const [dynamicColumns, setDynamicColumns] = useState<Array<{ name: string; letter: string; type: string; sample: string[] }>>([]);
   const [dynamicRowsCount, setDynamicRowsCount] = useState<number>(0);
   const [loadingTransformFile, setLoadingTransformFile] = useState(false);
+  const [isTableDetected, setIsTableDetected] = useState(true);
 
   // Playground States
   const [playgroundToken, setPlaygroundToken] = useState("");
@@ -162,6 +164,7 @@ export default function WorkspaceDetailPage() {
         const cols: string[] = content.structured_data.columns;
         const rows: any[] = content.structured_data.rows || [];
         const schema: Record<string, string> = content.structured_data.schema || {};
+        setIsTableDetected(content.structured_data.table_detected !== false);
 
         const parsed = cols.map((colName, idx) => {
           const letter = String.fromCharCode(65 + (idx % 26)) + (idx >= 26 ? Math.floor(idx / 26) : "");
@@ -189,10 +192,12 @@ export default function WorkspaceDetailPage() {
         // Fallback if structured data is plain text
         setDynamicColumns([]);
         setDynamicRowsCount(0);
+        setIsTableDetected(false);
       }
     } catch (err) {
       setDynamicColumns([]);
       setDynamicRowsCount(0);
+      setIsTableDetected(false);
     } finally {
       setLoadingTransformFile(false);
     }
@@ -203,12 +208,15 @@ export default function WorkspaceDetailPage() {
     setTimeout(() => setNotification(null), 5000);
   };
 
-  // Helper to distinguish tabular data files from non-data documents
+  // Helper to distinguish tabular data files (CSV, XLSX, XLS, JSON) from non-data documents
   const isDataFile = (file: FileRecord) => {
-    const ext = file.original_filename.toLowerCase();
+    const ext = (file.original_filename || "").toLowerCase();
+    const type = (file.file_type || "").toUpperCase();
     return (
-      file.file_type === "CSV" ||
-      file.file_type === "JSON" ||
+      type === "CSV" ||
+      type === "JSON" ||
+      type === "XLSX" ||
+      type === "XLS" ||
       ext.endsWith(".csv") ||
       ext.endsWith(".xlsx") ||
       ext.endsWith(".xls") ||
@@ -592,7 +600,7 @@ export default function WorkspaceDetailPage() {
                 No documents uploaded yet
               </h3>
               <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", maxWidth: "440px", margin: "0 auto 1.75rem auto", lineHeight: 1.6 }}>
-                Upload PDF reports, CSV data tables, or text files. AI models can safely query them under policy control.
+                Upload Excel spreadsheets (.xlsx), CSV data tables, PDFs, or JSON datasets. AI models can safely query them under policy control.
               </p>
               <button
                 onClick={() => setUploadModalOpen(true)}
@@ -642,7 +650,7 @@ export default function WorkspaceDetailPage() {
                       </td>
                       <td style={{ textAlign: "right" }}>
                         <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
-                          {/* ONLY CSV / JSON show View Content; NO view content for PDF documents */}
+                          {/* ONLY CSV / XLSX / JSON show View Content; NO view content for PDF documents */}
                           {file.file_type !== "PDF" && (
                             <button
                               onClick={() => handleViewContent(file)}
@@ -686,7 +694,7 @@ export default function WorkspaceDetailPage() {
                   Active MCP Sharing Links
                 </h3>
                 <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", maxWidth: "600px", lineHeight: 1.5 }}>
-                  Create as many distinct MCP links as you need. Each link has dedicated document permissions and custom data masking policies.
+                  Create as many distinct MCP links as you need. Each link has dedicated document permissions, custom data masking policies, and AI mutation rights.
                 </p>
               </div>
               <button
@@ -888,7 +896,7 @@ export default function WorkspaceDetailPage() {
               <div className="slash-tag">AUDIT TRAIL</div>
               <h3 style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--color-obsidian)" }}>Activity &amp; Query Log</h3>
               <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                Every tool call and data request is logged securely without exposing private secrets.
+                Every tool call, query, and data mutation is logged securely without exposing secrets.
               </p>
             </div>
             <button onClick={loadWorkspaceData} className="pill-btn pill-btn-glass" style={{ padding: "0.4rem 0.9rem", fontSize: "0.8rem" }}>
@@ -956,7 +964,7 @@ export default function WorkspaceDetailPage() {
             MCP Tool Test Console
           </h3>
           <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "1.75rem" }}>
-            Test live JSON-RPC requests directly against your MCP gateway.
+            Test live JSON-RPC requests directly against your MCP gateway, including queries and data edits.
           </p>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1.75rem" }}>
@@ -990,8 +998,16 @@ export default function WorkspaceDetailPage() {
                     } else if (e.target.value === "search") {
                       setPlaygroundArgs(JSON.stringify({ query: "example" }, null, 2));
                     } else if (e.target.value === "query_dataset") {
-                      const firstCsv = files.find((f) => f.file_type === "CSV" || f.file_type === "JSON")?.id || "";
-                      setPlaygroundArgs(JSON.stringify({ resource_id: firstCsv, limit: 10 }, null, 2));
+                      const firstData = files.find(isDataFile)?.id || "";
+                      setPlaygroundArgs(JSON.stringify({ resource_id: firstData, limit: 10 }, null, 2));
+                    } else if (e.target.value === "edit_dataset") {
+                      const firstData = files.find(isDataFile)?.id || "";
+                      setPlaygroundArgs(JSON.stringify({
+                        resource_id: firstData,
+                        action: "update",
+                        filters: { id: "101" },
+                        updates: { status: "ACTIVE" },
+                      }, null, 2));
                     } else {
                       setPlaygroundArgs("{}");
                     }
@@ -1004,6 +1020,7 @@ export default function WorkspaceDetailPage() {
                   <option value="read_resource">read_resource</option>
                   <option value="get_dataset_schema">get_dataset_schema</option>
                   <option value="query_dataset">query_dataset</option>
+                  <option value="edit_dataset">edit_dataset (Update / Insert / Delete)</option>
                   <option value="tools/list">tools/list (Protocol Schema)</option>
                 </select>
               </div>
@@ -1259,11 +1276,11 @@ export default function WorkspaceDetailPage() {
                     Click to browse or drag file here
                   </span>
                   <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.25rem" }}>
-                    PDF, CSV, TXT, DOCX, JSON (up to 50MB)
+                    Excel (.xlsx, .xls), CSV, JSON, PDF, DOCX, TXT (up to 50MB)
                   </span>
                   <input
                     type="file"
-                    accept=".pdf,.docx,.txt,.csv,.json"
+                    accept=".pdf,.docx,.txt,.csv,.json,.xlsx,.xls"
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
                         setUploadFile(e.target.files[0]);
@@ -1582,7 +1599,7 @@ export default function WorkspaceDetailPage() {
                   {loadingTransformFile ? (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "4rem 0", gap: "0.6rem", color: "var(--text-muted)" }}>
                       <Loader2 size={20} className="animate-spin" />
-                      <span>Reading file columns &amp; sample data...</span>
+                      <span>Reading Excel / CSV table columns &amp; sample data...</span>
                     </div>
                   ) : activeTransformFile && (
                     <div style={{
