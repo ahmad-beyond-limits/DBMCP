@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useGateway } from "@/lib/GatewayContext";
 import { Lock, Cpu, EyeOff, Database, Terminal, CheckCircle2, Shield, ArrowRight } from "lucide-react";
 
 export default function HomePage() {
   const [hasToken, setHasToken] = useState(false);
+  const { checkAndNavigate } = useGateway();
 
   useEffect(() => {
     const token = localStorage.getItem("dbmcp_access_token");
@@ -46,12 +48,15 @@ export default function HomePage() {
         </p>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.85rem", flexWrap: "wrap" }}>
-          <Link href={hasToken ? "/dashboard" : "/register"} className="pill-btn pill-btn-primary">
+          <button
+            onClick={() => checkAndNavigate(hasToken ? "/dashboard" : "/register")}
+            className="pill-btn pill-btn-primary"
+          >
             {hasToken ? "Open Workspace Console" : "Start Building Free"}
             <div className="btn-arrow-circle">
               <ArrowRight size={12} />
             </div>
-          </Link>
+          </button>
           <a href="#how-it-works" className="pill-btn pill-btn-dark">
             How It Works
           </a>

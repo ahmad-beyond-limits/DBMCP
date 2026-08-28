@@ -33,7 +33,12 @@ export default function RegisterPage() {
       await api.register(username, password);
       router.push("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Registration failed");
+      const msg = err.message || "";
+      if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("network")) {
+        setError("Cloud server is waking up from idle state. Please wait 15-20 seconds and click Create Account again.");
+      } else {
+        setError(msg || "Registration failed");
+      }
     } finally {
       setLoading(false);
     }
