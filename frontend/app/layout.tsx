@@ -15,6 +15,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* Google tag (gtag.js) */}
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-GLWLERBJ0H" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+
+              gtag('config', 'G-GLWLERBJ0H');
+            `,
+          }}
+        />
+      </head>
       <body>
         <GatewayProvider>
           <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -28,13 +43,13 @@ export default function RootLayout({
 
             {/* Clean Minimalist Footer */}
             <footer style={{
-              borderTop: "1px solid var(--glass-border-subtle)",
+              borderTop: "1px solid rgba(40, 40, 40, 0.04)",
               padding: "2rem clamp(1rem, 3vw, 2.5rem)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               fontSize: "0.82rem",
-              color: "var(--text-muted)",
+              color: "var(--text-secondary)",
               background: "rgba(255, 255, 255, 0.7)",
               backdropFilter: "blur(20px)",
               flexWrap: "wrap",
@@ -44,7 +59,7 @@ export default function RootLayout({
                 <span className="slash-tag" style={{ margin: 0 }}>ABOX</span>
                 <span>Model Context Protocol Gateway with Policy-Enforced AI Access.</span>
               </div>
-              <div style={{ fontFamily: "JetBrains Mono, monospace", color: "var(--text-dim)", fontSize: "0.75rem" }}>
+              <div style={{ fontFamily: "JetBrains Mono, monospace", color: "var(--text-tertiary)", fontSize: "0.75rem" }}>
                 ABOX Gateway
               </div>
             </footer>
