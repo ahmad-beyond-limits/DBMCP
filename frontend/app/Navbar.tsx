@@ -60,7 +60,7 @@ export default function Navbar() {
               alignItems: "center",
               gap: "0.15rem",
             }}>
-              <span style={{ color: "var(--accent-lime-bright)" }}>/</span>DBMCP
+              <span style={{ color: "var(--accent-lime-bright)" }}>/</span>ABOX
             </span>
             <span style={{
               fontSize: "0.65rem",

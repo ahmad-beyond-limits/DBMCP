@@ -4,7 +4,7 @@ import { GatewayProvider } from "@/lib/GatewayContext";
 import Navbar from "./Navbar";
 
 export const metadata: Metadata = {
-  title: "DBMCP | Policy-Enforced AI Data Workspace",
+  title: "ABOX | Policy-Enforced AI Data Workspace",
   description: "Expose enterprise documents and structured data to AI models via MCP with granular policies and PII anonymisation.",
 };
 
@@ -17,7 +17,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <GatewayProvider>
-          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--bg-main)" }}>
+          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
             {/* Global Navbar with Instant Warmup Detection */}
             <Navbar />
 
@@ -28,21 +28,24 @@ export default function RootLayout({
 
             {/* Clean Minimalist Footer */}
             <footer style={{
-              borderTop: "1px solid var(--border-card)",
-              padding: "2rem 2.5rem",
+              borderTop: "1px solid var(--glass-border-subtle)",
+              padding: "2rem clamp(1rem, 3vw, 2.5rem)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               fontSize: "0.82rem",
               color: "var(--text-muted)",
-              background: "#ffffff",
+              background: "rgba(255, 255, 255, 0.7)",
+              backdropFilter: "blur(20px)",
+              flexWrap: "wrap",
+              gap: "1rem",
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <span className="slash-tag" style={{ margin: 0 }}>DBMCP</span>
-                <span>Model Context Protocol Gateway with Granular Policy Enforcement.</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                <span className="slash-tag" style={{ margin: 0 }}>ABOX</span>
+                <span>Model Context Protocol Gateway with Policy-Enforced AI Access.</span>
               </div>
               <div style={{ fontFamily: "JetBrains Mono, monospace", color: "var(--text-dim)", fontSize: "0.75rem" }}>
-                Open Source MVP
+                ABOX Gateway
               </div>
             </footer>
           </div>

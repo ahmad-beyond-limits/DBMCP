@@ -96,7 +96,7 @@ export default function LandingPage() {
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.25rem" }}>
                     <span style={{ fontSize: "0.7rem", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.08em", color: "#d9f99d" }}>
-                      DBMCP GATEWAY VAULT
+                      ABOX GATEWAY VAULT
                     </span>
                     <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#a3e635" }} />
                   </div>

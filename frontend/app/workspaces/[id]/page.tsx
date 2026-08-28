@@ -87,17 +87,13 @@ export default function WorkspaceDetailPage() {
 
   // 🌟 Advanced Power Query / Excel Spreadsheet "Share MCP Link" Wizard State 🌟
   const [shareWizardOpen, setShareWizardOpen] = useState(false);
-  const [shareStep, setShareStep] = useState<1 | 2 | 3>(1);
+  const [shareStep, setShareStep] = useState<1 | 2>(1);
   const [shareName, setShareName] = useState("Claude Assistant");
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   
-  // Power Query Transformation States
+  // Power Query Transformation States (Only for Tabular Data Files: CSV, Excel, JSON)
   const [activeTransformFileId, setActiveTransformFileId] = useState<string>("");
   const [selectedColumnName, setSelectedColumnName] = useState<string>("email");
-  const [pdfAccessMode, setPdfAccessMode] = useState<"FULL" | "METADATA_ONLY">("FULL");
-  const [maskEmails, setMaskEmails] = useState(true);
-  const [maskNames, setMaskNames] = useState(false);
-  const [maskSSN, setMaskSSN] = useState(true);
   const [customColumnsToHide, setCustomColumnsToHide] = useState("");
   const [columnActions, setColumnActions] = useState<Record<string, "KEEP" | "MASK" | "REMOVE">>({
     email: "MASK",
@@ -140,7 +136,11 @@ export default function WorkspaceDetailPage() {
       setAuditLogs(logs);
       setMembers(mems);
       setSelectedFileIds(fList.map((f) => f.id));
-      if (fList.length > 0) {
+      
+      const firstDataFile = fList.find((f) => isDataFile(f));
+      if (firstDataFile) {
+        setActiveTransformFileId(firstDataFile.id);
+      } else if (fList.length > 0) {
         setActiveTransformFileId(fList[0].id);
       }
     } catch (err: any) {
@@ -153,6 +153,19 @@ export default function WorkspaceDetailPage() {
   const notify = (type: "success" | "error", text: string) => {
     setNotification({ type, text });
     setTimeout(() => setNotification(null), 5000);
+  };
+
+  // Helper to distinguish tabular data files from non-data documents
+  const isDataFile = (file: FileRecord) => {
+    const ext = file.original_filename.toLowerCase();
+    return (
+      file.file_type === "CSV" ||
+      file.file_type === "JSON" ||
+      ext.endsWith(".csv") ||
+      ext.endsWith(".xlsx") ||
+      ext.endsWith(".xls") ||
+      ext.endsWith(".json")
+    );
   };
 
   // File Upload Flow
@@ -214,42 +227,28 @@ export default function WorkspaceDetailPage() {
         } catch (e) {}
       }
 
-      // 2. Anonymisation Rules
-      if (maskEmails) {
-        try {
-          await api.createAnonymisationRule(workspaceId, "email", null, "MASK");
-        } catch (e) {}
-      }
-      if (maskNames) {
-        try {
-          await api.createAnonymisationRule(workspaceId, "person_name", null, "PSEUDONYMIZE");
-        } catch (e) {}
-      }
-      if (maskSSN) {
-        try {
-          await api.createAnonymisationRule(workspaceId, "ssn", null, "MASK");
-        } catch (e) {}
-      }
-
-      // 3. Power Query Column Transformations
-      for (const [col, action] of Object.entries(columnActions)) {
-        if (action === "REMOVE") {
-          try {
-            await api.createAnonymisationRule(workspaceId, "custom_column", col, "REMOVE");
-          } catch (e) {}
-        } else if (action === "MASK") {
-          try {
-            await api.createAnonymisationRule(workspaceId, "custom_column", col, "MASK");
-          } catch (e) {}
+      // 2. Power Query Column Transformations (Only applied if tabular data files are shared)
+      const hasDataFilesSelected = files.filter((f) => selectedFileIds.includes(f.id)).some(isDataFile);
+      if (hasDataFilesSelected) {
+        for (const [col, action] of Object.entries(columnActions)) {
+          if (action === "REMOVE") {
+            try {
+              await api.createAnonymisationRule(workspaceId, "custom_column", col, "REMOVE");
+            } catch (e) {}
+          } else if (action === "MASK") {
+            try {
+              await api.createAnonymisationRule(workspaceId, "custom_column", col, "MASK");
+            } catch (e) {}
+          }
         }
-      }
 
-      if (customColumnsToHide.trim()) {
-        const columns = customColumnsToHide.split(",").map((c) => c.trim()).filter(Boolean);
-        for (const col of columns) {
-          try {
-            await api.createAnonymisationRule(workspaceId, "custom_column", col, "REMOVE");
-          } catch (e) {}
+        if (customColumnsToHide.trim()) {
+          const columns = customColumnsToHide.split(",").map((c) => c.trim()).filter(Boolean);
+          for (const col of columns) {
+            try {
+              await api.createAnonymisationRule(workspaceId, "custom_column", col, "REMOVE");
+            } catch (e) {}
+          }
         }
       }
 
@@ -276,7 +275,7 @@ export default function WorkspaceDetailPage() {
       setShareWizardOpen(false);
       setShareStep(1);
       setShareName("Claude Assistant");
-      notify("success", "Shareable MCP Link generated with policies!");
+      notify("success", "Shareable ABOX MCP Link generated!");
     } catch (err: any) {
       notify("error", err.message || "Failed to generate link");
     } finally {
@@ -390,7 +389,9 @@ export default function WorkspaceDetailPage() {
   }
 
   const selectedFiles = files.filter((f) => selectedFileIds.includes(f.id));
-  const activeTransformFile = files.find((f) => f.id === activeTransformFileId) || selectedFiles[0];
+  const selectedDataFiles = selectedFiles.filter(isDataFile);
+  const hasDataFilesSelected = selectedDataFiles.length > 0;
+  const activeTransformFile = selectedDataFiles.find((f) => f.id === activeTransformFileId) || selectedDataFiles[0];
 
   // Available Columns for Dataset Transformation
   const availableColumns = [
@@ -479,8 +480,9 @@ export default function WorkspaceDetailPage() {
             onClick={() => {
               setSelectedFileIds(files.map((f) => f.id));
               setShareStep(1);
-              if (files.length > 0) {
-                setActiveTransformFileId(files[0].id);
+              const firstDataFile = files.find(isDataFile);
+              if (firstDataFile) {
+                setActiveTransformFileId(firstDataFile.id);
               }
               setShareWizardOpen(true);
             }}
@@ -570,7 +572,7 @@ export default function WorkspaceDetailPage() {
                     <tr key={file.id}>
                       <td style={{ fontWeight: 500, color: "var(--color-obsidian)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                          <FileText size={16} color="var(--accent-lime)" />
+                          <FileText size={16} color={isDataFile(file) ? "var(--accent-lime)" : "#64748b"} />
                           <span>{file.original_filename}</span>
                         </div>
                       </td>
@@ -643,8 +645,9 @@ export default function WorkspaceDetailPage() {
                 onClick={() => {
                   setSelectedFileIds(files.map((f) => f.id));
                   setShareStep(1);
-                  if (files.length > 0) {
-                    setActiveTransformFileId(files[0].id);
+                  const firstDataFile = files.find(isDataFile);
+                  if (firstDataFile) {
+                    setActiveTransformFileId(firstDataFile.id);
                   }
                   setShareWizardOpen(true);
                 }}
@@ -1290,7 +1293,7 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 🌟 POWER QUERY / EXCEL SPREADSHEET "SHARE MCP LINK" WIZARD 🌟              */}
+      {/* 🌟 ABOX SHARE MCP LINK WIZARD (TRANSFORMATION ONLY FOR TABULAR DATA)       */}
       {/* ========================================================================= */}
       {shareWizardOpen && (
         <div style={{
@@ -1309,7 +1312,7 @@ export default function WorkspaceDetailPage() {
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
-            maxWidth: shareStep === 2 ? "1080px" : "560px",
+            maxWidth: shareStep === 2 && hasDataFilesSelected ? "1080px" : "560px",
             maxHeight: "94vh",
             display: "flex",
             flexDirection: "column",
@@ -1331,10 +1334,14 @@ export default function WorkspaceDetailPage() {
             }}>
               <div>
                 <div className="slash-tag" style={{ margin: 0, marginBottom: "0.2rem" }}>
-                  STEP {shareStep} OF 2: {shareStep === 1 ? "SELECT FILES" : "POWER QUERY TRANSFORMATION STUDIO"}
+                  {hasDataFilesSelected
+                    ? `STEP ${shareStep} OF 2: ${shareStep === 1 ? "SELECT FILES" : "POWER QUERY DATA TRANSFORMATION"}`
+                    : "ABOX LINK CONFIGURATION"}
                 </div>
                 <h2 style={{ fontSize: "clamp(1.15rem, 2.5vw, 1.35rem)", fontWeight: 600, color: "var(--color-obsidian)" }}>
-                  {shareStep === 1 ? "Configure AI Link & File Scope" : "Data & Column Transformation Studio"}
+                  {shareStep === 1
+                    ? "Configure AI Link & File Scope"
+                    : "Data & Column Transformation Studio"}
                 </h2>
               </div>
 
@@ -1423,6 +1430,7 @@ export default function WorkspaceDetailPage() {
                       ) : (
                         files.map((f) => {
                           const isChecked = selectedFileIds.includes(f.id);
+                          const isData = isDataFile(f);
                           return (
                             <div
                               key={f.id}
@@ -1447,43 +1455,72 @@ export default function WorkspaceDetailPage() {
                             >
                               <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
                                 {isChecked ? <CheckSquare size={16} color="var(--accent-lime)" /> : <Square size={16} color="var(--text-dim)" />}
-                                <FileText size={15} color={f.file_type === "PDF" ? "#ef4444" : "var(--accent-lime)"} />
+                                <FileText size={15} color={isData ? "var(--accent-lime)" : "#64748b"} />
                                 <span style={{ fontSize: "0.88rem", fontWeight: isChecked ? 600 : 400, color: "var(--color-obsidian)" }}>
                                   {f.original_filename}
                                 </span>
                               </div>
 
-                              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
-                                {f.file_type} · {(f.file_size / 1024).toFixed(0)} KB
-                              </span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                <span style={{
+                                  fontSize: "0.68rem",
+                                  fontWeight: 600,
+                                  padding: "0.1rem 0.4rem",
+                                  borderRadius: "var(--radius-pill)",
+                                  background: isData ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
+                                  color: isData ? "var(--accent-lime)" : "var(--text-muted)",
+                                }}>
+                                  {isData ? "DATA" : "DOC"}
+                                </span>
+                                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
+                                  {(f.file_size / 1024).toFixed(0)} KB
+                                </span>
+                              </div>
                             </div>
                           );
                         })
                       )}
                     </div>
+
+                    {!hasDataFilesSelected && selectedFiles.length > 0 && (
+                      <div style={{
+                        marginTop: "1rem",
+                        padding: "0.75rem 1rem",
+                        background: "rgba(0,0,0,0.03)",
+                        borderRadius: "var(--radius-md)",
+                        fontSize: "0.82rem",
+                        color: "var(--text-secondary)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}>
+                        <ShieldCheck size={16} color="var(--accent-lime)" />
+                        <span>Selected files are documents (PDF/Word/Text). They will be served safely via standard MCP resources with no column transformation needed.</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
               {/* ========================================================================= */}
-              {/* STEP 2: POWER QUERY / EXCEL SPREADSHEET TRANSFORMATION STUDIO              */}
+              {/* STEP 2: POWER QUERY TRANSFORMATION STUDIO (ONLY FOR DATA FILES)           */}
               {/* ========================================================================= */}
-              {shareStep === 2 && (
+              {shareStep === 2 && hasDataFilesSelected && (
                 <div>
-                  {/* File Selector Tabs for multi-file transformation */}
+                  {/* File Selector Tabs for tabular data files only */}
                   <div style={{ marginBottom: "1.25rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
                     <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
                       <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", marginRight: "0.4rem" }}>
-                        Selected File:
+                        Active Data File:
                       </span>
-                      {selectedFiles.map((f) => (
+                      {selectedDataFiles.map((f) => (
                         <button
                           key={f.id}
                           onClick={() => setActiveTransformFileId(f.id)}
                           className={`pill-tab ${activeTransformFile?.id === f.id ? "active" : ""}`}
                           style={{ fontSize: "0.8rem", padding: "0.35rem 0.85rem", gap: "0.4rem", display: "flex", alignItems: "center" }}
                         >
-                          <FileText size={13} color={f.file_type === "PDF" ? "#ef4444" : "var(--accent-lime)"} />
+                          <Table size={13} color="var(--accent-lime)" />
                           <span>{f.original_filename}</span>
                         </button>
                       ))}
@@ -1497,171 +1534,105 @@ export default function WorkspaceDetailPage() {
                       gap: "1.5rem",
                       alignItems: "start",
                     }}>
-                      {/* ========================================================================= */}
-                      {/* LEFT COLUMN: TRANSFORMATION CONTROLS / COLUMN LIST                         */}
-                      {/* ========================================================================= */}
+                      {/* Left: Power Query Column List */}
                       <div>
-                        {activeTransformFile.file_type === "PDF" || activeTransformFile.file_type === "DOCX" || activeTransformFile.file_type === "TXT" ? (
-                          /* PDF & Document Access Policy */
-                          <div style={{
-                            background: "var(--canvas-bg)",
-                            padding: "clamp(1rem, 3vw, 1.5rem)",
-                            borderRadius: "var(--radius-md)",
-                            border: "1px solid var(--glass-border-subtle)",
-                          }}>
-                            <div style={{ fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                              <Sliders size={15} color="var(--accent-lime)" />
-                              <span>PDF Document Security Policies</span>
+                        <div style={{
+                          background: "var(--canvas-bg)",
+                          padding: "clamp(1rem, 2.5vw, 1.25rem)",
+                          borderRadius: "var(--radius-md)",
+                          border: "1px solid var(--glass-border-subtle)",
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
+                            <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <Columns size={14} color="var(--accent-lime)" />
+                              <span>Columns ({availableColumns.length})</span>
                             </div>
-
-                            <div style={{ marginBottom: "1.25rem" }}>
-                              <label style={{ display: "block", fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-                                Document Access Level:
-                              </label>
-                              <select
-                                className="modern-input"
-                                value={pdfAccessMode}
-                                onChange={(e) => setPdfAccessMode(e.target.value as any)}
-                              >
-                                <option value="FULL">Full Document Retrieval &amp; Semantic Search (Standard)</option>
-                                <option value="METADATA_ONLY">Metadata &amp; Outline Only (High Security)</option>
-                              </select>
-                            </div>
-
-                            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                              <label style={{ display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={maskEmails}
-                                  onChange={(e) => setMaskEmails(e.target.checked)}
-                                  style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
-                                />
-                                <span>Mask Emails in excerpts (<code>j***@company.com</code>)</span>
-                              </label>
-
-                              <label style={{ display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={maskNames}
-                                  onChange={(e) => setMaskNames(e.target.checked)}
-                                  style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
-                                />
-                                <span>Pseudonymize Person Names (<code>Person_001</code>)</span>
-                              </label>
-
-                              <label style={{ display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.85rem", color: "var(--color-obsidian)", cursor: "pointer" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={maskSSN}
-                                  onChange={(e) => setMaskSSN(e.target.checked)}
-                                  style={{ accentColor: "var(--color-obsidian)", width: "15px", height: "15px" }}
-                                />
-                                <span>Mask Identification Numbers &amp; SSNs</span>
-                              </label>
-                            </div>
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Click to Inspect</span>
                           </div>
-                        ) : (
-                          /* Power Query Columns Panel */
-                          <div style={{
-                            background: "var(--canvas-bg)",
-                            padding: "clamp(1rem, 2.5vw, 1.25rem)",
-                            borderRadius: "var(--radius-md)",
-                            border: "1px solid var(--glass-border-subtle)",
-                          }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
-                              <div style={{ fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", color: "var(--color-obsidian)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                                <Columns size={14} color="var(--accent-lime)" />
-                                <span>Columns ({availableColumns.length})</span>
-                              </div>
-                              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Click to Inspect</span>
-                            </div>
 
-                            {/* Column Selection List */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.25rem" }}>
-                              {availableColumns.map((col) => {
-                                const action = columnActions[col.name] || "KEEP";
-                                const isSelected = selectedColumnName === col.name;
-                                return (
-                                  <div
-                                    key={col.name}
-                                    onClick={() => setSelectedColumnName(col.name)}
-                                    style={{
+                          {/* Column Selection List */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.25rem" }}>
+                            {availableColumns.map((col) => {
+                              const action = columnActions[col.name] || "KEEP";
+                              const isSelected = selectedColumnName === col.name;
+                              return (
+                                <div
+                                  key={col.name}
+                                  onClick={() => setSelectedColumnName(col.name)}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    padding: "0.6rem 0.75rem",
+                                    background: isSelected ? "#ffffff" : "rgba(255, 255, 255, 0.6)",
+                                    borderRadius: "var(--radius-sm)",
+                                    border: isSelected ? "1.5px solid var(--accent-lime)" : "1px solid var(--glass-border-subtle)",
+                                    cursor: "pointer",
+                                    transition: "all 0.15s ease",
+                                    boxShadow: isSelected ? "0 2px 8px rgba(132, 204, 22, 0.12)" : "none",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                    <span style={{
+                                      width: "20px",
+                                      height: "20px",
+                                      borderRadius: "4px",
+                                      background: isSelected ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
+                                      color: isSelected ? "var(--accent-lime)" : "var(--text-dim)",
+                                      fontFamily: "JetBrains Mono, monospace",
+                                      fontSize: "0.72rem",
+                                      fontWeight: 700,
                                       display: "flex",
                                       alignItems: "center",
-                                      justifyContent: "space-between",
-                                      padding: "0.6rem 0.75rem",
-                                      background: isSelected ? "#ffffff" : "rgba(255, 255, 255, 0.6)",
-                                      borderRadius: "var(--radius-sm)",
-                                      border: isSelected ? "1.5px solid var(--accent-lime)" : "1px solid var(--glass-border-subtle)",
-                                      cursor: "pointer",
-                                      transition: "all 0.15s ease",
-                                      boxShadow: isSelected ? "0 2px 8px rgba(132, 204, 22, 0.12)" : "none",
-                                    }}
-                                  >
-                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                      <span style={{
-                                        width: "20px",
-                                        height: "20px",
-                                        borderRadius: "4px",
-                                        background: isSelected ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
-                                        color: isSelected ? "var(--accent-lime)" : "var(--text-dim)",
-                                        fontFamily: "JetBrains Mono, monospace",
-                                        fontSize: "0.72rem",
-                                        fontWeight: 700,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                      }}>
-                                        {col.letter}
-                                      </span>
-                                      <div>
-                                        <div style={{ fontSize: "0.84rem", fontWeight: isSelected ? 700 : 500, color: "var(--color-obsidian)", fontFamily: "JetBrains Mono, monospace" }}>
-                                          {col.name}
-                                        </div>
-                                        <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
-                                          {col.type}
-                                        </div>
+                                      justifyContent: "center",
+                                    }}>
+                                      {col.letter}
+                                    </span>
+                                    <div>
+                                      <div style={{ fontSize: "0.84rem", fontWeight: isSelected ? 700 : 500, color: "var(--color-obsidian)", fontFamily: "JetBrains Mono, monospace" }}>
+                                        {col.name}
+                                      </div>
+                                      <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                                        {col.type}
                                       </div>
                                     </div>
-
-                                    {/* Action Status Badge */}
-                                    <span style={{
-                                      fontSize: "0.7rem",
-                                      fontWeight: 600,
-                                      padding: "0.15rem 0.5rem",
-                                      borderRadius: "var(--radius-pill)",
-                                      background: action === "REMOVE" ? "var(--status-deny-bg)" : action === "MASK" ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
-                                      color: action === "REMOVE" ? "var(--status-deny)" : action === "MASK" ? "var(--accent-lime)" : "var(--text-secondary)",
-                                    }}>
-                                      {action === "REMOVE" ? "Dropped" : action === "MASK" ? "Masked" : "Passed"}
-                                    </span>
                                   </div>
-                                );
-                              })}
-                            </div>
 
-                            {/* Additional Redaction Input */}
-                            <div>
-                              <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-muted)", marginBottom: "0.3rem", fontWeight: 500 }}>
-                                Custom columns to drop (comma-separated):
-                              </label>
-                              <input
-                                type="text"
-                                className="modern-input"
-                                placeholder="e.g. credit_card, zip_code"
-                                value={customColumnsToHide}
-                                onChange={(e) => setCustomColumnsToHide(e.target.value)}
-                                style={{ fontSize: "0.8rem", padding: "0.45rem 0.7rem" }}
-                              />
-                            </div>
+                                  {/* Action Status Badge */}
+                                  <span style={{
+                                    fontSize: "0.7rem",
+                                    fontWeight: 600,
+                                    padding: "0.15rem 0.5rem",
+                                    borderRadius: "var(--radius-pill)",
+                                    background: action === "REMOVE" ? "var(--status-deny-bg)" : action === "MASK" ? "var(--accent-lime-bg)" : "rgba(0,0,0,0.04)",
+                                    color: action === "REMOVE" ? "var(--status-deny)" : action === "MASK" ? "var(--accent-lime)" : "var(--text-secondary)",
+                                  }}>
+                                    {action === "REMOVE" ? "Dropped" : action === "MASK" ? "Masked" : "Passed"}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
-                        )}
+
+                          {/* Additional Redaction Input */}
+                          <div>
+                            <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-muted)", marginBottom: "0.3rem", fontWeight: 500 }}>
+                              Custom columns to drop (comma-separated):
+                            </label>
+                            <input
+                              type="text"
+                              className="modern-input"
+                              placeholder="e.g. credit_card, zip_code"
+                              value={customColumnsToHide}
+                              onChange={(e) => setCustomColumnsToHide(e.target.value)}
+                              style={{ fontSize: "0.8rem", padding: "0.45rem 0.7rem" }}
+                            />
+                          </div>
+                        </div>
                       </div>
 
-                      {/* ========================================================================= */}
-                      {/* RIGHT COLUMN: INTERACTIVE EXCEL SPREADSHEET & LIVE TRANSFORM INSPECTOR     */}
-                      {/* ========================================================================= */}
-                      {activeTransformFile.file_type !== "PDF" && (
+                      {/* Right: Interactive Excel Spreadsheet & Live Transform Preview */}
+                      <div>
                         <div style={{
                           background: "var(--canvas-bg)",
                           borderRadius: "var(--radius-md)",
@@ -1761,7 +1732,6 @@ export default function WorkspaceDetailPage() {
                           {/* Excel / Spreadsheet Grid Canvas */}
                           <div style={{ overflowX: "auto", maxHeight: "320px" }}>
                             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", fontFamily: "JetBrains Mono, monospace" }}>
-                              {/* Spreadsheet Column Headers A, B, C, D... */}
                               <thead>
                                 <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                                   <th style={{ width: "35px", padding: "0.4rem", color: "var(--text-dim)", textAlign: "center", borderRight: "1px solid #e2e8f0", fontSize: "0.72rem" }}>
@@ -1811,11 +1781,9 @@ export default function WorkspaceDetailPage() {
                                 </tr>
                               </thead>
 
-                              {/* Spreadsheet Rows (1, 2, 3, 4) */}
                               <tbody>
                                 {[0, 1, 2, 3].map((rowIdx) => (
                                   <tr key={rowIdx} style={{ borderBottom: "1px solid #f1f5f9", background: rowIdx % 2 === 0 ? "#ffffff" : "#fafafa" }}>
-                                    {/* Row Index */}
                                     <td style={{
                                       padding: "0.45rem",
                                       textAlign: "center",
@@ -1828,13 +1796,11 @@ export default function WorkspaceDetailPage() {
                                       {rowIdx + 1}
                                     </td>
 
-                                    {/* Row Cells */}
                                     {availableColumns.map((col) => {
                                       const action = columnActions[col.name] || "KEEP";
                                       const isSelected = selectedColumnName === col.name;
                                       const rawVal = col.sample[rowIdx];
 
-                                      // Computed representation for the AI
                                       let displayVal = rawVal;
                                       if (action === "REMOVE") {
                                         displayVal = "[DROPPED BY POLICY]";
@@ -1868,7 +1834,6 @@ export default function WorkspaceDetailPage() {
                             </table>
                           </div>
 
-                          {/* Footer Info */}
                           <div style={{
                             padding: "0.6rem 1.15rem",
                             background: "#f8fafc",
@@ -1887,7 +1852,7 @@ export default function WorkspaceDetailPage() {
                             </span>
                           </div>
                         </div>
-                      )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1925,25 +1890,25 @@ export default function WorkspaceDetailPage() {
                 </button>
               )}
 
-              {shareStep === 1 ? (
+              {shareStep === 1 && hasDataFilesSelected ? (
                 <button
                   type="button"
                   disabled={selectedFileIds.length === 0 || !shareName.trim()}
                   onClick={() => setShareStep(2)}
                   className="pill-btn pill-btn-solid"
                 >
-                  <span>Next: Power Query Transformation</span>
+                  <span>Next: Power Query Data Transformation</span>
                   <ArrowRight size={14} />
                 </button>
               ) : (
                 <button
                   type="button"
-                  disabled={generatingLink}
+                  disabled={generatingLink || selectedFileIds.length === 0 || !shareName.trim()}
                   onClick={handleGenerateShareLink}
                   className="pill-btn pill-btn-solid"
                 >
                   <Key size={14} />
-                  <span>{generatingLink ? "Generating MCP Link..." : "Save Policies & Generate Link"}</span>
+                  <span>{generatingLink ? "Generating Link..." : "Generate ABOX MCP Link"}</span>
                 </button>
               )}
             </div>
@@ -2085,7 +2050,7 @@ export default function WorkspaceDetailPage() {
             overflowY: "auto",
           }}>
             <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
-              <div className="slash-tag" style={{ justifyContent: "center" }}>MCP LINK READY</div>
+              <div className="slash-tag" style={{ justifyContent: "center" }}>ABOX MCP LINK READY</div>
               <h3 style={{ fontSize: "1.45rem", fontWeight: 600, marginBottom: "0.3rem", color: "var(--color-obsidian)" }}>
                 Your Shareable MCP Token
               </h3>
