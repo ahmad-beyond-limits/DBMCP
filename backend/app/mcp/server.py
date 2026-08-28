@@ -566,6 +566,7 @@ class MCPServer:
                 structured_data=structured or {},
                 column=col,
                 agg_func=func,
+                filters=filters,
                 denied_fields=decision.denied_fields,
             )
             if not ok:
@@ -638,6 +639,8 @@ class MCPServer:
         Executes mutations (update, insert, delete) on structured datasets.
         Enables AI models to change data when requested by the user.
         """
+        from app.structured.query_engine import _matches_filter, _get_row_val
+
         if not resource_id:
             return {"isError": True, "content": [{"type": "text", "text": "Missing resource_id"}]}
 
@@ -688,20 +691,21 @@ class MCPServer:
 
             # Ensure any new updated column names are in columns list
             for col in updates.keys():
-                if col not in columns:
+                found_col = any(c.strip().lower() == col.strip().lower() for c in columns)
+                if not found_col:
                     columns.append(col)
 
             for row in rows:
-                match = True
-                if filters:
-                    for fk, fv in filters.items():
-                        row_val = row.get(fk)
-                        if str(row_val).strip().lower() != str(fv).strip().lower():
-                            match = False
-                            break
-                if match:
+                if not filters or _matches_filter(row, filters):
                     for uk, uv in updates.items():
-                        row[uk] = uv
+                        # Update existing key case-insensitively or set new key
+                        target_key = uk
+                        for existing_k in list(row.keys()):
+                            if existing_k.strip().lower() == uk.strip().lower():
+                                target_key = existing_k
+                                break
+                        row[target_key] = uv
+
                     modified_count += 1
                     if len(affected_samples) < 5:
                         affected_samples.append(dict(row))
@@ -710,7 +714,8 @@ class MCPServer:
             if not new_row:
                 return {"isError": True, "content": [{"type": "text", "text": "Missing 'new_row' dictionary for insert action"}]}
             for col in new_row.keys():
-                if col not in columns:
+                found_col = any(c.strip().lower() == col.strip().lower() for c in columns)
+                if not found_col:
                     columns.append(col)
             rows.append(new_row)
             modified_count = 1
@@ -722,13 +727,7 @@ class MCPServer:
 
             remaining_rows = []
             for row in rows:
-                match = True
-                for fk, fv in filters.items():
-                    row_val = row.get(fk)
-                    if str(row_val).strip().lower() != str(fv).strip().lower():
-                        match = False
-                        break
-                if match:
+                if _matches_filter(row, filters):
                     modified_count += 1
                     if len(affected_samples) < 5:
                         affected_samples.append(dict(row))
@@ -739,11 +738,19 @@ class MCPServer:
         else:
             return {"isError": True, "content": [{"type": "text", "text": f"Unsupported action '{action}'. Use 'update', 'insert', or 'delete'."}]}
 
+        import copy
+        from sqlalchemy.orm.attributes import flag_modified
+
         # Save back updated structured data & plain text
-        structured["columns"] = columns
-        structured["rows"] = rows
-        structured["row_count"] = len(rows)
-        extracted.structured_data = structured
+        new_structured = {
+            "columns": list(columns),
+            "rows": copy.deepcopy(rows),
+            "row_count": len(rows),
+            "schema": structured.get("schema", {}),
+            "table_detected": structured.get("table_detected", True),
+        }
+        extracted.structured_data = new_structured
+        flag_modified(extracted, "structured_data")
 
         # Re-generate plain_text CSV representation for search/read tools
         lines = [",".join(columns)]
