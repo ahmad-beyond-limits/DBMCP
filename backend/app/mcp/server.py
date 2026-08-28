@@ -747,11 +747,54 @@ class MCPServer:
 
         # Re-generate plain_text CSV representation for search/read tools
         lines = [",".join(columns)]
-        for r in rows[:200]:
+        for r in rows:
             lines.append(",".join([str(r.get(c, "")) for c in columns]))
         extracted.plain_text = "\n".join(lines)
-
         db.add(extracted)
+
+        # Synchronize and overwrite the original file in storage (Supabase / Local)
+        try:
+            import io
+            import csv
+            import openpyxl
+            from app.storage.supabase_storage import get_storage_backend
+
+            storage = get_storage_backend()
+            new_binary: bytes = b""
+            content_type = file_rec.content_type or "application/octet-stream"
+
+            if file_rec.file_type == "CSV" or file_rec.original_filename.lower().endswith(".csv"):
+                out_stream = io.StringIO()
+                writer = csv.DictWriter(out_stream, fieldnames=columns)
+                writer.writeheader()
+                for r in rows:
+                    writer.writerow({c: r.get(c, "") for c in columns})
+                new_binary = out_stream.getvalue().encode("utf-8")
+                content_type = "text/csv"
+
+            elif file_rec.file_type == "JSON" or file_rec.original_filename.lower().endswith(".json"):
+                new_binary = json.dumps(rows, indent=2).encode("utf-8")
+                content_type = "application/json"
+
+            elif file_rec.file_type in ["XLSX", "XLS"] or file_rec.original_filename.lower().endswith((".xlsx", ".xls")):
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = "Sheet1"
+                ws.append(columns)
+                for r in rows:
+                    ws.append([r.get(c, "") for c in columns])
+                out_bytes = io.BytesIO()
+                wb.save(out_bytes)
+                new_binary = out_bytes.getvalue()
+                content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+            if new_binary and file_rec.storage_path:
+                await storage.upload(file_rec.storage_path, new_binary, content_type)
+                file_rec.file_size = len(new_binary)
+                db.add(file_rec)
+        except Exception as storage_err:
+            logger.error(f"Error synchronizing raw storage binary for {file_rec.original_filename}: {storage_err}", exc_info=True)
+
         await db.commit()
 
         await AuditService.log_event(
