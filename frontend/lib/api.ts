@@ -9,7 +9,14 @@ import {
   WorkspaceMember,
 } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com";
+export function getApiBase(): string {
+  if (typeof window !== "undefined") {
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return "http://localhost:8000";
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com";
+}
 
 class ApiClient {
   private getHeaders(contentType: string | null = "application/json"): HeadersInit {
@@ -29,8 +36,9 @@ class ApiClient {
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const isFormData = options.body instanceof FormData;
     const defaultHeaders = this.getHeaders(isFormData ? null : "application/json");
+    const apiBase = getApiBase();
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const response = await fetch(`${apiBase}${endpoint}`, {
       ...options,
       headers: {
         ...defaultHeaders,
@@ -63,10 +71,10 @@ class ApiClient {
   }
 
   // Auth
-  async register(username: string, password: string) {
+  async register(username: string, password: string, first_name?: string, last_name?: string) {
     const data = await this.request<{ access_token: string; refresh_token: string }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, first_name, last_name }),
     });
     if (typeof window !== "undefined") {
       localStorage.setItem("dbmcp_access_token", data.access_token);
@@ -104,6 +112,13 @@ class ApiClient {
 
   async getMe(): Promise<User> {
     return this.request<User>("/auth/me");
+  }
+
+  async updateMe(data: { first_name?: string; last_name?: string }): Promise<User> {
+    return this.request<User>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
   }
 
   // Workspaces
@@ -276,7 +291,7 @@ class ApiClient {
 
   // MCP Gateway Tool Test Execution
   async executeMCPTool(token: string, method: string, params: any) {
-    const res = await fetch(`${API_BASE}/mcp`, {
+    const res = await fetch(`${getApiBase()}/mcp`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -9,6 +9,7 @@ from app.auth.schemas import (
     UserLoginRequest,
     UserRegisterRequest,
     UserResponse,
+    UserUpdateRequest,
 )
 from app.core.config import settings
 from app.core.rate_limit import rate_limit
@@ -83,6 +84,8 @@ async def register(data: UserRegisterRequest, db: AsyncSession = Depends(get_db)
     hashed_pwd = hash_password(data.password)
     new_user = User(
         username=data.username.strip(),
+        first_name=data.first_name.strip() if data.first_name else None,
+        last_name=data.last_name.strip() if data.last_name else None,
         password_hash=hashed_pwd,
     )
     db.add(new_user)
@@ -157,4 +160,23 @@ async def refresh_token(data: TokenRefreshRequest, db: AsyncSession = Depends(ge
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(user: User = Depends(get_current_user)):
     """Get the current authenticated user's profile."""
+    return user
+
+
+@router.patch("/me", response_model=UserResponse)
+@router.put("/me", response_model=UserResponse)
+@router.post("/me", response_model=UserResponse)
+async def update_current_user_profile(
+    data: UserUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current user's first and last name."""
+    if data.first_name is not None:
+        user.first_name = data.first_name.strip() if data.first_name.strip() else None
+    if data.last_name is not None:
+        user.last_name = data.last_name.strip() if data.last_name.strip() else None
+
+    await db.commit()
+    await db.refresh(user)
     return user

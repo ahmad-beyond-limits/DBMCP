@@ -8,6 +8,8 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -30,9 +32,14 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      await api.register(username, password);
+      await api.register(
+        username.trim(),
+        password,
+        firstName.trim() || undefined,
+        lastName.trim() || undefined
+      );
       try {
-        await api.login(username, password);
+        await api.login(username.trim(), password);
         router.push("/dashboard");
       } catch (loginErr) {
         router.push("/login?registered=true");
@@ -59,7 +66,7 @@ export default function RegisterPage() {
     }}>
       <div className="frosted-panel" style={{
         width: "100%",
-        maxWidth: "420px",
+        maxWidth: "460px",
         padding: "clamp(2rem, 5vw, 2.75rem) clamp(1.5rem, 4vw, 2.25rem)",
         borderRadius: "var(--radius-xl)",
         background: "#FFFFFF",
@@ -128,7 +135,37 @@ export default function RegisterPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.15rem" }}>
+          {/* First Name & Last Name (Side by Side) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--text-secondary)" }}>
+                First Name
+              </label>
+              <input
+                type="text"
+                required
+                className="modern-input"
+                placeholder="e.g. Ali"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--text-secondary)" }}>
+                Last Name
+              </label>
+              <input
+                type="text"
+                required
+                className="modern-input"
+                placeholder="e.g. Hassan"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+              />
+            </div>
+          </div>
+
           <div>
             <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--text-secondary)" }}>
               Username

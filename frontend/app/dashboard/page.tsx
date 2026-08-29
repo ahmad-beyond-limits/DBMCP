@@ -15,6 +15,8 @@ import {
   FileText,
   Key,
   Search,
+  Pencil,
+  User as UserIcon,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -30,6 +32,13 @@ export default function DashboardPage() {
   const [filter, setFilter] = useState<"all" | "owner" | "member">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // User Profile Name Edit State
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [updatingProfile, setUpdatingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -42,11 +51,35 @@ export default function DashboardPage() {
         api.getWorkspaces(),
       ]);
       setUser(currentUser);
+      setEditFirstName(currentUser.first_name || "");
+      setEditLastName(currentUser.last_name || "");
       setWorkspaces(wsList);
     } catch (err: any) {
       router.push("/login");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editLastName.trim()) {
+      setProfileError("Last name is required.");
+      return;
+    }
+    setUpdatingProfile(true);
+    setProfileError(null);
+    try {
+      const updated = await api.updateMe({
+        first_name: editFirstName.trim() || undefined,
+        last_name: editLastName.trim() || undefined,
+      });
+      setUser(updated);
+      setShowProfileModal(false);
+    } catch (err: any) {
+      setProfileError(err.message || "Failed to update profile");
+    } finally {
+      setUpdatingProfile(false);
     }
   };
 
@@ -113,9 +146,25 @@ export default function DashboardPage() {
       }}>
         <div>
           <div className="slash-tag">POAIS WORKSPACE VAULT</div>
-          <h1 className="font-hero" style={{ fontSize: "clamp(2rem, 3.5vw, 2.75rem)", letterSpacing: "-0.04em", color: "var(--text-primary)" }}>
-            Welcome, {user?.username}
-          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
+            <h1 className="font-hero" style={{ fontSize: "clamp(2rem, 3.5vw, 2.75rem)", letterSpacing: "-0.04em", color: "var(--text-primary)" }}>
+              Welcome, {user?.last_name ? user.last_name : "User"}
+            </h1>
+            <button
+              onClick={() => {
+                setEditFirstName(user?.first_name || "");
+                setEditLastName(user?.last_name || "");
+                setProfileError(null);
+                setShowProfileModal(true);
+              }}
+              className="icon-circle-btn"
+              style={{ width: "32px", height: "32px", border: "1px solid rgba(40, 40, 40, 0.1)" }}
+              title="Update First & Last Name"
+              aria-label="Update Name"
+            >
+              <Pencil size={13} strokeWidth={1.5} />
+            </button>
+          </div>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginTop: "0.25rem", fontWeight: 400 }}>
             Manage your AI data workspaces, documents, and MCP connection policies.
           </p>
@@ -449,6 +498,112 @@ export default function DashboardPage() {
                   className="pill-btn pill-btn-solid"
                 >
                   {creating ? "Creating..." : "Create Workspace"}
+                  <ArrowRight size={14} strokeWidth={1.5} />
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Update Profile Name Modal */}
+      {showProfileModal && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(10, 10, 10, 0.4)",
+          backdropFilter: "blur(8px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 100,
+          padding: "1rem",
+        }}>
+          <div className="frosted-panel" style={{
+            width: "100%",
+            maxWidth: "460px",
+            background: "#FFFFFF",
+            padding: "2rem",
+            borderRadius: "var(--radius-lg)",
+            position: "relative",
+            boxShadow: "var(--shadow-xl)",
+            animation: "fadeIn 0.2s ease-out",
+          }}>
+            <button
+              onClick={() => setShowProfileModal(false)}
+              className="icon-circle-btn"
+              style={{
+                position: "absolute",
+                top: "1.25rem",
+                right: "1.25rem",
+                width: "32px",
+                height: "32px",
+              }}
+            >
+              <X size={14} strokeWidth={1.5} />
+            </button>
+
+            <div className="slash-tag">USER PROFILE</div>
+            <h2 style={{ fontSize: "1.35rem", fontWeight: 400, marginBottom: "1.5rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+              Profile Name
+            </h2>
+
+            {profileError && (
+              <div style={{
+                padding: "0.75rem 1rem",
+                borderRadius: "var(--radius-sm)",
+                background: "var(--status-deny-bg)",
+                color: "var(--status-deny)",
+                fontSize: "0.82rem",
+                marginBottom: "1.25rem",
+              }}>
+                {profileError}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateProfile}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", marginBottom: "1.75rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ali"
+                    value={editFirstName}
+                    onChange={(e) => setEditFirstName(e.target.value)}
+                    className="modern-input"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
+                    Last Name <span style={{ color: "#EF4444" }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Hassan"
+                    value={editLastName}
+                    onChange={(e) => setEditLastName(e.target.value)}
+                    className="modern-input"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  className="pill-btn pill-btn-glass"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingProfile || !editLastName.trim()}
+                  className="pill-btn pill-btn-solid"
+                >
+                  {updatingProfile ? "Saving..." : "Save Name"}
                   <ArrowRight size={14} strokeWidth={1.5} />
                 </button>
               </div>

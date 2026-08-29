@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, getApiBase } from "@/lib/api";
 import {
   AuditLog,
   ExtractedContent,
@@ -3144,13 +3144,13 @@ export default function WorkspaceDetailPage() {
                 <input
                   type="text"
                   readOnly
-                  value={`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp?token=${createdCredential.raw_token}`}
+                  value={`${getApiBase()}/mcp?token=${createdCredential.raw_token}`}
                   className="modern-input"
                   style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", background: "var(--bg-page)", flex: "1 1 200px" }}
                 />
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp?token=${createdCredential.raw_token}`);
+                    navigator.clipboard.writeText(`${getApiBase()}/mcp?token=${createdCredential.raw_token}`);
                     notify("success", "Claude.ai Connector URL copied!");
                   }}
                   className="pill-btn pill-btn-solid"
@@ -3211,7 +3211,7 @@ export default function WorkspaceDetailPage() {
                 <pre>{JSON.stringify({
                   mcpServers: {
                     [workspace.name.toLowerCase().replace(/\s+/g, "-")]: {
-                      url: `${process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com"}/mcp`,
+                      url: `${getApiBase()}/mcp`,
                       headers: {
                         Authorization: `Bearer ${createdCredential.raw_token}`,
                       },

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Cloud, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { getApiBase } from "@/lib/api";
 
 interface GatewayContextType {
   isReady: boolean;
@@ -25,8 +26,7 @@ export function GatewayProvider({ children }: { children: React.ReactNode }) {
   const [progress, setProgress] = useState(10);
   const [pendingRoute, setPendingRoute] = useState<string | null>(null);
 
-  const apiBase =
-    process.env.NEXT_PUBLIC_API_URL || "https://dbmcp.onrender.com";
+  const apiBase = getApiBase();
 
   // Check health on initial mount
   useEffect(() => {

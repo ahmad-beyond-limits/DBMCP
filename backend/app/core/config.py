@@ -68,7 +68,7 @@ class Settings(BaseSettings):
 
     # CORS
     ALLOWED_ORIGINS: str = Field(
-        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000",
+        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,https://poais-mcp.vercel.app,https://dbmcp.onrender.com",
         description="Comma-separated allowed origins",
     )
 

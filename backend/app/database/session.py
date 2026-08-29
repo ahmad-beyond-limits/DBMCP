@@ -88,3 +88,25 @@ async def init_db() -> None:
                     pass
         except Exception as e:
             logger.warning(f"Schema migration warning for workspaces.description: {e}")
+
+        # Automatic schema migration: ensure `first_name` and `last_name` columns exist on `users`
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(64)")
+                )
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(64)")
+                )
+                logger.info("Executed schema migration: ensure users.first_name and last_name columns exist.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN first_name VARCHAR(64)"))
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN last_name VARCHAR(64)"))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning for users name columns: {e}")
