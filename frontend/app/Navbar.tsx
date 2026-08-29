@@ -13,8 +13,10 @@ import {
   X,
   Home,
   Shield,
+  ShieldAlert,
   Key,
   Settings,
+  UserCheck,
 } from "lucide-react";
 
 export default function Navbar() {
@@ -22,11 +24,26 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isSuperuser, setIsSuperuser] = useState(false);
+  const [impersonateTarget, setImpersonateTarget] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("dbmcp_access_token") : null;
     setIsLoggedIn(!!token);
+
+    const target = typeof window !== "undefined" ? sessionStorage.getItem("admin_impersonate_target") : null;
+    setImpersonateTarget(target);
+
+    if (token) {
+      api.getMe().then((me) => {
+        setIsSuperuser(!!me.is_superuser);
+      }).catch(() => {
+        setIsSuperuser(false);
+      });
+    } else {
+      setIsSuperuser(false);
+    }
   }, [pathname]);
 
   // Close mobile menu on route change
@@ -56,6 +73,42 @@ export default function Navbar() {
       margin: "0 auto",
       padding: "0 clamp(0.75rem, 3vw, 1.5rem)",
     }}>
+      {/* Ghost Mode Impersonation Alert Banner */}
+      {impersonateTarget && (
+        <div style={{
+          background: "linear-gradient(90deg, #F59E0B 0%, #D97706 100%)",
+          color: "#FFFFFF",
+          borderRadius: "var(--radius-pill)",
+          padding: "0.45rem 1rem",
+          marginBottom: "0.5rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: "0.82rem",
+          fontWeight: 500,
+          boxShadow: "0 4px 14px rgba(217, 119, 6, 0.25)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "1rem" }}>🕵️</span>
+            <span>GHOST MODE: Viewing platform as <strong>@{impersonateTarget}</strong></span>
+          </div>
+          <button
+            onClick={() => api.exitImpersonation()}
+            className="pill-btn-sm"
+            style={{
+              background: "#FFFFFF",
+              color: "#B45309",
+              border: "none",
+              fontWeight: 600,
+              fontSize: "0.75rem",
+              padding: "0.2rem 0.65rem",
+            }}
+          >
+            Exit Impersonation ↩
+          </button>
+        </div>
+      )}
+
       <header style={{
         minHeight: "58px",
         borderRadius: "var(--radius-pill)",
@@ -178,6 +231,26 @@ export default function Navbar() {
                 <Settings size={14} strokeWidth={1.5} />
                 <span>Settings</span>
               </button>
+
+              {isSuperuser && (
+                <button
+                  onClick={() => checkAndNavigate("/admin")}
+                  className="pill-btn"
+                  style={{
+                    padding: "0.42rem 0.85rem",
+                    fontSize: "0.82rem",
+                    gap: "0.4rem",
+                    color: pathname.startsWith("/admin") ? "#4F46E5" : "#6366F1",
+                    background: pathname.startsWith("/admin") ? "rgba(99, 102, 241, 0.15)" : "rgba(99, 102, 241, 0.08)",
+                    border: "1px solid rgba(99, 102, 241, 0.3)",
+                    fontWeight: 500,
+                  }}
+                  title="Master Admin Console"
+                >
+                  <ShieldAlert size={14} strokeWidth={1.5} />
+                  <span>Admin</span>
+                </button>
+              )}
 
               <button
                 onClick={handleLogout}
@@ -362,6 +435,30 @@ export default function Navbar() {
                   <Settings size={16} strokeWidth={1.5} />
                   <span>Settings</span>
                 </button>
+
+                {isSuperuser && (
+                  <button
+                    onClick={() => handleMobileNav("/admin")}
+                    className="pill-tab"
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.6rem",
+                      padding: "0.75rem 1rem",
+                      borderRadius: "var(--radius-md)",
+                      background: pathname.startsWith("/admin") ? "rgba(99, 102, 241, 0.15)" : "rgba(99, 102, 241, 0.08)",
+                      border: "1px solid rgba(99, 102, 241, 0.3)",
+                      fontWeight: 500,
+                      color: "#4F46E5",
+                      fontSize: "0.9rem",
+                      textAlign: "left",
+                    }}
+                  >
+                    <ShieldAlert size={16} strokeWidth={1.5} />
+                    <span>Admin Console</span>
+                  </button>
+                )}
               </>
             )}
           </div>

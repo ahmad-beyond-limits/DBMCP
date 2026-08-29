@@ -65,6 +65,22 @@ async def get_current_user(
             detail="User associated with token not found",
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account has been suspended. Please contact platform administrator.",
+        )
+
+    return user
+
+
+async def get_current_admin_user(user: User = Depends(get_current_user)) -> User:
+    """Dependency to ensure the authenticated user has superadmin privileges."""
+    if not user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrative access required.",
+        )
     return user
 
 
@@ -119,6 +135,12 @@ async def login(data: UserLoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account has been suspended. Please contact platform administrator.",
         )
 
     access_token = create_access_token(user.id, {"username": user.username})

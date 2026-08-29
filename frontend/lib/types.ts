@@ -3,7 +3,41 @@ export interface User {
   username: string;
   first_name?: string;
   last_name?: string;
+  is_superuser?: boolean;
+  is_active?: boolean;
   created_at: string;
+}
+
+export interface AdminStats {
+  total_users: number;
+  active_users: number;
+  total_workspaces: number;
+  total_files: number;
+  total_credentials: number;
+  total_audit_logs: number;
+}
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  is_superuser: boolean;
+  is_active: boolean;
+  created_at: string;
+  workspaces_count: number;
+  files_count: number;
+}
+
+export interface AdminWorkspace {
+  id: string;
+  name: string;
+  description?: string;
+  owner_id: string;
+  owner_username: string;
+  created_at: string;
+  files_count: number;
+  credentials_count: number;
 }
 
 export interface Workspace {

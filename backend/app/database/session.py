@@ -89,24 +89,32 @@ async def init_db() -> None:
         except Exception as e:
             logger.warning(f"Schema migration warning for workspaces.description: {e}")
 
-        # Automatic schema migration: ensure `first_name` and `last_name` columns exist on `users`
+        # Automatic schema migration: ensure `is_superuser` and `is_active` columns exist on `users`
         try:
             if "postgresql" in settings.DATABASE_URL:
                 await conn.execute(
-                    text("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(64)")
+                    text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_superuser BOOLEAN DEFAULT FALSE")
                 )
                 await conn.execute(
-                    text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(64)")
+                    text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE")
                 )
-                logger.info("Executed schema migration: ensure users.first_name and last_name columns exist.")
+                # Ensure the first registered user or users matching 'admin' have superuser status
+                await conn.execute(
+                    text("UPDATE users SET is_superuser = TRUE WHERE username IN ('admin', 'superuser') OR id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)")
+                )
+                logger.info("Executed schema migration: ensure users.is_superuser and is_active exist.")
             elif settings.DATABASE_URL.startswith("sqlite"):
                 try:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN first_name VARCHAR(64)"))
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN is_superuser BOOLEAN DEFAULT 0"))
                 except Exception:
                     pass
                 try:
-                    await conn.execute(text("ALTER TABLE users ADD COLUMN last_name VARCHAR(64)"))
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1"))
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(text("UPDATE users SET is_superuser = 1 WHERE username IN ('admin', 'superuser') OR id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)"))
                 except Exception:
                     pass
         except Exception as e:
-            logger.warning(f"Schema migration warning for users name columns: {e}")
+            logger.warning(f"Schema migration warning for users admin columns: {e}")

@@ -1,4 +1,7 @@
 import {
+  AdminStats,
+  AdminUser,
+  AdminWorkspace,
   AuditLog,
   ExtractedContent,
   FileRecord,
@@ -328,6 +331,72 @@ class ApiClient {
       throw new Error(err.detail || `MCP request failed with ${res.status}`);
     }
     return res.json();
+  }
+
+  // Master Admin API Methods
+  async getAdminStats(): Promise<AdminStats> {
+    return this.request<AdminStats>("/admin/stats");
+  }
+
+  async getAdminUsers(): Promise<AdminUser[]> {
+    return this.request<AdminUser[]>("/admin/users");
+  }
+
+  async updateAdminUserStatus(userId: string, data: { is_active?: boolean; is_superuser?: boolean }) {
+    return this.request<{ status: string; message: string; is_active: boolean; is_superuser: boolean }>(
+      `/admin/users/${userId}/status`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async adminResetPassword(userId: string, new_password: string) {
+    return this.request<{ status: string; message: string }>(`/admin/users/${userId}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify({ new_password }),
+    });
+  }
+
+  async adminImpersonateUser(userId: string) {
+    const data = await this.request<{ status: string; access_token: string; target_username: string; target_user_id: string }>(
+      `/admin/users/${userId}/impersonate`,
+      {
+        method: "POST",
+      }
+    );
+    if (typeof window !== "undefined") {
+      const currentAdminToken = localStorage.getItem("dbmcp_access_token");
+      if (currentAdminToken) {
+        sessionStorage.setItem("admin_impersonate_backup", currentAdminToken);
+        sessionStorage.setItem("admin_impersonate_target", data.target_username);
+      }
+      localStorage.setItem("dbmcp_access_token", data.access_token);
+    }
+    return data;
+  }
+
+  async exitImpersonation() {
+    if (typeof window !== "undefined") {
+      const backupToken = sessionStorage.getItem("admin_impersonate_backup");
+      if (backupToken) {
+        localStorage.setItem("dbmcp_access_token", backupToken);
+        sessionStorage.removeItem("admin_impersonate_backup");
+        sessionStorage.removeItem("admin_impersonate_target");
+        window.location.href = "/admin";
+      }
+    }
+  }
+
+  async adminDeleteUser(userId: string) {
+    return this.request<{ status: string; message: string }>(`/admin/users/${userId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getAdminWorkspaces(): Promise<AdminWorkspace[]> {
+    return this.request<AdminWorkspace[]>("/admin/workspaces");
   }
 }
 
