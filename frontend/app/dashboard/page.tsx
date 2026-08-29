@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [newWorkspaceDesc, setNewWorkspaceDesc] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "owner" | "member">("all");
@@ -56,10 +57,14 @@ export default function DashboardPage() {
     setCreating(true);
     setError(null);
     try {
-      const created = await api.createWorkspace(newWorkspaceName.trim());
+      const created = await api.createWorkspace(
+        newWorkspaceName.trim(),
+        newWorkspaceDesc.trim() || undefined
+      );
       setWorkspaces((prev) => [created, ...prev]);
       setShowCreateModal(false);
       setNewWorkspaceName("");
+      setNewWorkspaceDesc("");
       router.push(`/workspaces/${created.id}`);
     } catch (err: any) {
       setError(err.message || "Failed to create workspace");
@@ -289,11 +294,26 @@ export default function DashboardPage() {
                   fontSize: "1.2rem",
                   fontWeight: 400,
                   color: "var(--text-primary)",
-                  marginBottom: "0.35rem",
+                  marginBottom: "0.25rem",
                   letterSpacing: "-0.02em",
                 }}>
                   {ws.name}
                 </h3>
+                {ws.description && (
+                  <p style={{
+                    fontSize: "0.84rem",
+                    color: "var(--text-secondary)",
+                    marginBottom: "0.6rem",
+                    lineHeight: 1.4,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                  }}>
+                    {ws.description}
+                  </p>
+                )}
                 <p style={{
                   fontSize: "0.78rem",
                   color: "var(--text-tertiary)",
@@ -344,12 +364,12 @@ export default function DashboardPage() {
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
-            maxWidth: "460px",
+            maxWidth: "480px",
             padding: "clamp(1.75rem, 4vw, 2.5rem)",
             position: "relative",
             background: "#FFFFFF",
-            borderRadius: "var(--radius-xl)",
             boxShadow: "var(--shadow-lg)",
+            borderRadius: "var(--radius-xl)",
           }}>
             <button
               onClick={() => setShowCreateModal(false)}
@@ -387,7 +407,7 @@ export default function DashboardPage() {
             )}
 
             <form onSubmit={handleCreateWorkspace}>
-              <div style={{ marginBottom: "1.75rem" }}>
+              <div style={{ marginBottom: "1.25rem" }}>
                 <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
                   Workspace Name
                 </label>
@@ -397,6 +417,20 @@ export default function DashboardPage() {
                   placeholder="e.g. Sales Analytics or Q3 Research"
                   value={newWorkspaceName}
                   onChange={(e) => setNewWorkspaceName(e.target.value)}
+                  className="modern-input"
+                />
+              </div>
+
+              <div style={{ marginBottom: "1.75rem" }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
+                  Description (Optional)
+                </label>
+                <input
+                  type="text"
+                  maxLength={255}
+                  placeholder="e.g. Customer revenue trends & quarterly metrics vault"
+                  value={newWorkspaceDesc}
+                  onChange={(e) => setNewWorkspaceDesc(e.target.value)}
                   className="modern-input"
                 />
               </div>

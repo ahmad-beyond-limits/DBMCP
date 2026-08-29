@@ -80,6 +80,19 @@ class PolicyEngine:
                     reason=f"Tool '{operation}' is not authorized for this MCP credential",
                 )
 
+            # Credential-level File Scope enforcement
+            allowed_file_ids = perms.get("allowed_file_ids")
+            if allowed_file_ids is not None and isinstance(allowed_file_ids, list):
+                if target_resource_id:
+                    res_id = resource.id if resource else target_resource_id
+                    res_orig_name = resource.original_filename if resource else None
+                    if res_id not in allowed_file_ids and (not res_orig_name or res_orig_name not in allowed_file_ids):
+                        return PolicyDecision(
+                            allowed=False,
+                            decision="DENY",
+                            reason=f"Access denied: Resource '{target_resource_id}' is excluded from this MCP credential's authorized file scope",
+                        )
+
         # 1. Operation-level check
         op_stmt = select(OperationPolicy).where(
             OperationPolicy.workspace_id == workspace_id,

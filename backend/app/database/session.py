@@ -71,3 +71,20 @@ async def init_db() -> None:
                     pass
         except Exception as e:
             logger.warning(f"Schema migration warning: {e}")
+
+        # Automatic schema migration: ensure `description` column exists on `workspaces`
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(
+                    text("ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS description VARCHAR(255)")
+                )
+                logger.info("Executed schema migration: ensure workspaces.description column exists.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(
+                        text("ALTER TABLE workspaces ADD COLUMN description VARCHAR(255)")
+                    )
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning for workspaces.description: {e}")

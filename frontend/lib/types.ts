@@ -7,6 +7,7 @@ export interface User {
 export interface Workspace {
   id: string;
   name: string;
+  description?: string;
   owner_id: string;
   is_active: boolean;
   role: "OWNER" | "MEMBER";

@@ -41,6 +41,7 @@ async def list_workspaces(
             WorkspaceResponse(
                 id=ws.id,
                 name=ws.name,
+                description=ws.description,
                 owner_id=ws.owner_id,
                 is_active=ws.is_active,
                 role=role,
@@ -63,6 +64,7 @@ async def create_workspace(
     """Create a new workspace and make the authenticated user OWNER."""
     new_ws = Workspace(
         name=data.name.strip(),
+        description=data.description.strip() if data.description else None,
         owner_id=user.id,
     )
     db.add(new_ws)
@@ -81,6 +83,7 @@ async def create_workspace(
     return WorkspaceResponse(
         id=new_ws.id,
         name=new_ws.name,
+        description=new_ws.description,
         owner_id=new_ws.owner_id,
         is_active=new_ws.is_active,
         role="OWNER",
@@ -105,6 +108,7 @@ async def get_workspace(
     return WorkspaceResponse(
         id=ws.id,
         name=ws.name,
+        description=ws.description,
         owner_id=ws.owner_id,
         is_active=ws.is_active,
         role=role,
@@ -128,6 +132,8 @@ async def update_workspace(
 
     if data.name is not None:
         ws.name = data.name.strip()
+    if data.description is not None:
+        ws.description = data.description.strip() if data.description else None
     if data.is_active is not None:
         ws.is_active = data.is_active
 
@@ -138,6 +144,7 @@ async def update_workspace(
     return WorkspaceResponse(
         id=ws.id,
         name=ws.name,
+        description=ws.description,
         owner_id=ws.owner_id,
         is_active=ws.is_active,
         role=role,

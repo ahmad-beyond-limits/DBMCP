@@ -50,6 +50,7 @@ import {
   Download,
   FileCode,
   Layers,
+  Save,
 } from "lucide-react";
 
 const POAIS_AI_SKILLS_MARKDOWN = `# POAIS: Policy-Oriented AI Space
@@ -160,6 +161,9 @@ export default function WorkspaceDetailPage() {
   const [createdCredential, setCreatedCredential] = useState<MCPCredentialCreated | null>(null);
   const [newMemberUsername, setNewMemberUsername] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("MEMBER");
+  const [editWsName, setEditWsName] = useState("");
+  const [editWsDesc, setEditWsDesc] = useState("");
+  const [updatingWs, setUpdatingWs] = useState(false);
 
   // Simplified 3-Step Upload Modal State
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -203,15 +207,9 @@ export default function WorkspaceDetailPage() {
   const [shareCanQuery, setShareCanQuery] = useState(true);
   const [shareCanEdit, setShareCanEdit] = useState(false);
 
-  // Edit Permissions Modal State
-  const [editPermsModalOpen, setEditPermsModalOpen] = useState(false);
-  const [editingCredId, setEditingCredId] = useState<string>("");
-  const [editingCredName, setEditingCredName] = useState<string>("");
-  const [editingCanRead, setEditingCanRead] = useState(true);
-  const [editingCanSearch, setEditingCanSearch] = useState(true);
-  const [editingCanQuery, setEditingCanQuery] = useState(true);
-  const [editingCanEdit, setEditingCanEdit] = useState(false);
+  const [editingCredId, setEditingCredId] = useState<string | null>(null);
   const [savingPerms, setSavingPerms] = useState(false);
+  const [isQuickUploading, setIsQuickUploading] = useState(false);
 
   // AI Agent Skills Guide Modal
   const [skillsModalOpen, setSkillsModalOpen] = useState(false);
@@ -249,6 +247,8 @@ export default function WorkspaceDetailPage() {
         api.getMembers(workspaceId),
       ]);
       setWorkspace(ws);
+      setEditWsName(ws.name);
+      setEditWsDesc(ws.description || "");
       setFiles(fList);
       setPolicies(pols);
       setMCPCredentials(creds);
@@ -266,6 +266,24 @@ export default function WorkspaceDetailPage() {
       notify("error", err.message || "Failed to load workspace");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateWorkspaceDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editWsName.trim()) return;
+    setUpdatingWs(true);
+    try {
+      const updated = await api.updateWorkspace(workspaceId, {
+        name: editWsName.trim(),
+        description: editWsDesc.trim() || undefined,
+      });
+      setWorkspace(updated);
+      notify("success", "Workspace details updated successfully");
+    } catch (err: any) {
+      notify("error", err.message || "Failed to update workspace details");
+    } finally {
+      setUpdatingWs(false);
     }
   };
 
@@ -514,7 +532,36 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  // Quick upload data file directly within MCP creation or edit modal
+  const handleQuickUploadForMcp = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsQuickUploading(true);
+    try {
+      const uploaded = await api.uploadFile(workspaceId, file);
+      notify("success", `File '${file.name}' uploaded and added to scope.`);
+      setFiles((prev) => [uploaded, ...prev]);
+      setSelectedFileIds((prev) => [...prev, uploaded.id]);
+      if (isDataFile(uploaded)) {
+        setActiveTransformFileId(uploaded.id);
+        loadDynamicFileSchema(uploaded.id);
+      }
+    } catch (err: any) {
+      notify("error", err.message || "Upload failed");
+    } finally {
+      setIsQuickUploading(false);
+      e.target.value = "";
+    }
+  };
+
   const handleOpenShareWizard = () => {
+    setEditingCredId(null);
+    setShareName("Claude Assistant");
+    setShareCanRead(true);
+    setShareCanSearch(true);
+    setShareCanQuery(true);
+    setShareCanEdit(false);
     setSelectedFileIds(files.map((f) => f.id));
     setShareStep(1);
     const firstDataFile = files.find(isDataFile);
@@ -536,6 +583,7 @@ export default function WorkspaceDetailPage() {
         search: shareCanSearch,
         query_dataset: shareCanQuery,
         edit_dataset: shareCanEdit,
+        allowed_file_ids: selectedFileIds,
       };
 
       const created = await api.createMCPCredential(workspaceId, shareName.trim(), 30, permissions);
@@ -601,6 +649,7 @@ export default function WorkspaceDetailPage() {
       setShareCanSearch(true);
       setShareCanQuery(true);
       setShareCanEdit(false);
+      setEditingCredId(null);
       notify("success", "Shareable POAIS MCP Link generated with custom permissions!");
     } catch (err: any) {
       notify("error", err.message || "Failed to generate link");
@@ -611,34 +660,82 @@ export default function WorkspaceDetailPage() {
 
   const handleOpenEditPermissions = (cred: MCPCredential) => {
     setEditingCredId(cred.id);
-    setEditingCredName(cred.name);
+    setShareName(cred.name);
     const p = cred.permissions || {};
-    setEditingCanRead(p.read_resource !== false);
-    setEditingCanSearch(p.search !== false);
-    setEditingCanQuery(p.query_dataset !== false);
-    setEditingCanEdit(p.edit_dataset === true);
-    setEditPermsModalOpen(true);
+    setShareCanRead(p.read_resource !== false && p.can_read !== false);
+    setShareCanSearch(p.search !== false && p.can_search !== false);
+    setShareCanQuery(p.query_dataset !== false && p.can_query !== false);
+    setShareCanEdit(p.edit_dataset === true || p.can_edit === true);
+
+    let activeFileIds: string[] = [];
+    if (Array.isArray(p.allowed_file_ids)) {
+      activeFileIds = p.allowed_file_ids;
+    } else {
+      activeFileIds = files.map((f) => f.id);
+    }
+    setSelectedFileIds(activeFileIds);
+
+    const firstDataFile = files.filter((f) => activeFileIds.includes(f.id)).find(isDataFile) || files.find(isDataFile);
+    if (firstDataFile) {
+      setActiveTransformFileId(firstDataFile.id);
+      loadDynamicFileSchema(firstDataFile.id);
+    }
+
+    setShareStep(1);
+    setShareWizardOpen(true);
   };
 
   const handleSavePermissions = async () => {
     if (!editingCredId) return;
     setSavingPerms(true);
     try {
+      const perms: Record<string, any> = {
+        read_resource: shareCanRead,
+        search: shareCanSearch,
+        query_dataset: shareCanQuery,
+        edit_dataset: shareCanEdit,
+        allowed_file_ids: selectedFileIds,
+      };
+
+      // Apply any column transformations if configured
+      const hasDataFilesSelected = files.filter((f) => selectedFileIds.includes(f.id)).some(isDataFile);
+      if (hasDataFilesSelected) {
+        for (const [col, action] of Object.entries(columnActions)) {
+          if (action === "REMOVE") {
+            try {
+              await api.createAnonymisationRule(workspaceId, "custom_column", col, "REMOVE");
+            } catch (e) {}
+          } else if (action === "MASK") {
+            try {
+              await api.createAnonymisationRule(workspaceId, "custom_column", col, "MASK");
+            } catch (e) {}
+          }
+        }
+
+        if (customColumnsToHide.trim()) {
+          const columns = customColumnsToHide.split(",").map((c) => c.trim()).filter(Boolean);
+          for (const col of columns) {
+            try {
+              await api.createAnonymisationRule(workspaceId, "custom_column", col, "REMOVE");
+            } catch (e) {}
+          }
+        }
+      }
+
       const updated = await api.updateMCPCredential(workspaceId, editingCredId, {
-        name: editingCredName.trim(),
-        permissions: {
-          read_resource: editingCanRead,
-          search: editingCanSearch,
-          query_dataset: editingCanQuery,
-          edit_dataset: editingCanEdit,
-        },
+        name: shareName.trim(),
+        permissions: perms,
       });
+
+      const updatedPolicies = await api.getPolicies(workspaceId);
+      setPolicies(updatedPolicies);
 
       setMCPCredentials((prev) =>
         prev.map((c) => (c.id === editingCredId ? { ...c, name: updated.name, permissions: updated.permissions } : c))
       );
-      setEditPermsModalOpen(false);
-      notify("success", "Permissions updated successfully.");
+      setShareWizardOpen(false);
+      setEditingCredId(null);
+      notify("success", "MCP Link permissions, file scope & transformation policy updated successfully.");
     } catch (err: any) {
       notify("error", err.message || "Failed to update permissions");
     } finally {
@@ -824,13 +921,15 @@ export default function WorkspaceDetailPage() {
             </span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div>
             <h1 className="font-hero" style={{ fontSize: "clamp(1.8rem, 3vw, 2.5rem)", letterSpacing: "-0.04em", color: "var(--text-primary)" }}>
               {workspace.name}
             </h1>
-            <span className={`badge-status ${workspace.is_active ? "badge-status-allow" : "badge-status-deny"}`}>
-              {workspace.is_active ? "Active Vault" : "Disabled"}
-            </span>
+            {workspace.description && (
+              <p style={{ fontSize: "0.92rem", color: "var(--text-secondary)", marginTop: "0.35rem", fontWeight: 400, maxWidth: "680px", lineHeight: 1.5 }}>
+                {workspace.description}
+              </p>
+            )}
           </div>
         </div>
 
@@ -843,28 +942,17 @@ export default function WorkspaceDetailPage() {
               setUploadStep(1);
               setUploadModalOpen(true);
             }}
-            className="pill-btn pill-btn-glass"
-            style={{ padding: "0.65rem 1.25rem", fontSize: "0.88rem" }}
+            className="pill-btn pill-btn-glass pill-btn-lg"
           >
-            <Upload size={15} strokeWidth={1.5} />
+            <Upload size={16} strokeWidth={1.5} />
             <span>Upload Document</span>
           </button>
 
           <button
-            onClick={() => {
-              setSelectedFileIds(files.map((f) => f.id));
-              setShareStep(1);
-              const firstDataFile = files.find(isDataFile);
-              if (firstDataFile) {
-                setActiveTransformFileId(firstDataFile.id);
-                loadDynamicFileSchema(firstDataFile.id);
-              }
-              setShareWizardOpen(true);
-            }}
-            className="pill-btn pill-btn-solid"
-            style={{ padding: "0.65rem 1.25rem", fontSize: "0.88rem" }}
+            onClick={handleOpenShareWizard}
+            className="pill-btn pill-btn-solid pill-btn-lg"
           >
-            <Share2 size={15} strokeWidth={1.5} />
+            <Share2 size={16} strokeWidth={1.5} />
             <span>Share MCP Link</span>
           </button>
         </div>
@@ -953,16 +1041,15 @@ export default function WorkspaceDetailPage() {
                           {file.status === "READY" ? "Ready for AI" : file.status}
                         </span>
                       </td>
-                      <td style={{ color: "var(--text-tertiary)", fontSize: "0.82rem" }}>
+                      <td style={{ color: "var(--text-tertiary)", fontSize: "0.82rem", whiteSpace: "nowrap" }}>
                         {new Date(file.created_at).toLocaleDateString()}
                       </td>
-                      <td style={{ textAlign: "right" }}>
-                        <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
+                      <td className="table-actions-cell">
+                        <div className="table-actions-group">
                           {file.file_type !== "PDF" && (
                             <button
                               onClick={() => handleViewContent(file)}
-                              className="pill-btn pill-btn-glass"
-                              style={{ padding: "0.3rem 0.8rem", fontSize: "0.78rem" }}
+                              className="pill-btn pill-btn-glass pill-btn-sm"
                             >
                               View Content
                             </button>
@@ -970,8 +1057,8 @@ export default function WorkspaceDetailPage() {
                           {workspace.role === "OWNER" && (
                             <button
                               onClick={() => handleDeleteFile(file.id)}
-                              className="pill-btn pill-btn-glass"
-                              style={{ padding: "0.3rem 0.6rem", color: "var(--status-deny)" }}
+                              className="pill-btn pill-btn-glass pill-btn-sm"
+                              style={{ color: "var(--status-deny)", padding: "0.3rem 0.6rem" }}
                               title="Delete file"
                             >
                               <Trash2 size={13} strokeWidth={1.5} />
@@ -1004,30 +1091,20 @@ export default function WorkspaceDetailPage() {
                   Create as many distinct MCP links as you need. Each link has dedicated document permissions, custom data masking policies, and AI mutation rights.
                 </p>
               </div>
-              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
                 <button
                   onClick={() => setSkillsModalOpen(true)}
-                  className="pill-btn pill-btn-glass"
-                  style={{ gap: "0.4rem" }}
+                  className="pill-btn pill-btn-glass pill-btn-lg"
                   title="View AI Agent instructions and operational directives"
                 >
-                  <BookOpen size={14} strokeWidth={1.5} />
+                  <BookOpen size={15} strokeWidth={1.5} />
                   <span>AI Skills Guide</span>
                 </button>
                 <button
-                  onClick={() => {
-                    setSelectedFileIds(files.map((f) => f.id));
-                    setShareStep(1);
-                    const firstDataFile = files.find(isDataFile);
-                    if (firstDataFile) {
-                      setActiveTransformFileId(firstDataFile.id);
-                      loadDynamicFileSchema(firstDataFile.id);
-                    }
-                    setShareWizardOpen(true);
-                  }}
-                  className="pill-btn pill-btn-solid"
+                  onClick={handleOpenShareWizard}
+                  className="pill-btn pill-btn-solid pill-btn-lg"
                 >
-                  <Plus size={15} strokeWidth={1.5} />
+                  <Plus size={16} strokeWidth={1.5} />
                   <span>Create New MCP Link</span>
                 </button>
               </div>
@@ -1058,12 +1135,22 @@ export default function WorkspaceDetailPage() {
                       <td style={{ fontWeight: 450, color: "var(--text-primary)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                           <Key size={15} strokeWidth={1.5} color="var(--text-primary)" />
-                          <span>{cred.name}</span>
+                          <span style={{ fontSize: "0.92rem", fontWeight: 500 }}>{cred.name}</span>
                         </div>
-                        <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.45rem", flexWrap: "wrap", alignItems: "center" }}>
                           <span style={{
                             fontSize: "0.68rem",
-                            padding: "0.1rem 0.45rem",
+                            padding: "0.15rem 0.5rem",
+                            borderRadius: "9999px",
+                            background: cred.permissions?.allowed_file_ids ? "rgba(79, 70, 229, 0.08)" : "rgba(46, 48, 50, 0.06)",
+                            color: cred.permissions?.allowed_file_ids ? "#4F46E5" : "var(--text-secondary)",
+                            fontWeight: cred.permissions?.allowed_file_ids ? 500 : 400,
+                          }}>
+                            {cred.permissions?.allowed_file_ids ? `Scope: ${cred.permissions.allowed_file_ids.length}/${files.length} Files` : `Scope: All Files (${files.length})`}
+                          </span>
+                          <span style={{
+                            fontSize: "0.68rem",
+                            padding: "0.15rem 0.5rem",
                             borderRadius: "9999px",
                             background: cred.permissions?.read_resource !== false ? "rgba(46, 48, 50, 0.06)" : "rgba(220, 38, 38, 0.08)",
                             color: cred.permissions?.read_resource !== false ? "var(--text-secondary)" : "var(--status-deny)",
@@ -1072,7 +1159,7 @@ export default function WorkspaceDetailPage() {
                           </span>
                           <span style={{
                             fontSize: "0.68rem",
-                            padding: "0.1rem 0.45rem",
+                            padding: "0.15rem 0.5rem",
                             borderRadius: "9999px",
                             background: cred.permissions?.search !== false ? "rgba(46, 48, 50, 0.06)" : "rgba(220, 38, 38, 0.08)",
                             color: cred.permissions?.search !== false ? "var(--text-secondary)" : "var(--status-deny)",
@@ -1081,7 +1168,7 @@ export default function WorkspaceDetailPage() {
                           </span>
                           <span style={{
                             fontSize: "0.68rem",
-                            padding: "0.1rem 0.45rem",
+                            padding: "0.15rem 0.5rem",
                             borderRadius: "9999px",
                             background: cred.permissions?.query_dataset !== false ? "rgba(46, 48, 50, 0.06)" : "rgba(220, 38, 38, 0.08)",
                             color: cred.permissions?.query_dataset !== false ? "var(--text-secondary)" : "var(--status-deny)",
@@ -1090,7 +1177,7 @@ export default function WorkspaceDetailPage() {
                           </span>
                           <span style={{
                             fontSize: "0.68rem",
-                            padding: "0.1rem 0.45rem",
+                            padding: "0.15rem 0.5rem",
                             borderRadius: "9999px",
                             background: cred.permissions?.edit_dataset ? "rgba(234, 179, 8, 0.15)" : "rgba(46, 48, 50, 0.06)",
                             color: cred.permissions?.edit_dataset ? "#B45309" : "var(--text-tertiary)",
@@ -1103,52 +1190,53 @@ export default function WorkspaceDetailPage() {
                       <td style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
                         {cred.credential_prefix}...
                       </td>
-                      <td style={{ color: "var(--text-tertiary)", fontSize: "0.82rem" }}>
+                      <td style={{ color: "var(--text-tertiary)", fontSize: "0.82rem", whiteSpace: "nowrap" }}>
                         {new Date(cred.created_at).toLocaleDateString()}
                       </td>
-                      <td>
+                      <td style={{ whiteSpace: "nowrap" }}>
                         <span className={`badge-status ${cred.revoked_at ? "badge-status-deny" : cred.is_active ? "badge-status-allow" : "badge-status-transform"}`}>
                           {cred.revoked_at ? "Revoked" : cred.is_active ? "Active" : "Expired"}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right" }}>
+                      <td className="table-actions-cell">
                         {workspace.role === "OWNER" && (
-                          <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                          <div className="table-actions-group">
                             <button
                               onClick={() => handleOpenEditPermissions(cred)}
-                              className="pill-btn pill-btn-glass"
-                              style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                              className="pill-btn pill-btn-glass pill-btn-sm"
+                              title="Edit link permissions and authorized files"
                             >
                               <Sliders size={12} strokeWidth={1.5} />
-                              Edit Permissions
+                              <span>Edit Permissions</span>
                             </button>
-                            {cred.is_active && (
+                            {cred.is_active ? (
                               <>
                                 <button
                                   onClick={() => handleRotateMCP(cred.id)}
-                                  className="pill-btn pill-btn-glass"
-                                  style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem" }}
+                                  className="pill-btn pill-btn-glass pill-btn-sm"
+                                  title="Rotate security token"
                                 >
-                                  Rotate Key
+                                  <RefreshCw size={11} strokeWidth={1.5} />
+                                  <span>Rotate</span>
                                 </button>
                                 <button
                                   onClick={() => handleRevokeMCP(cred.id)}
-                                  className="pill-btn pill-btn-glass"
-                                  style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem", color: "var(--status-deny)" }}
+                                  className="pill-btn pill-btn-glass pill-btn-sm"
+                                  style={{ color: "var(--status-deny)", borderColor: "rgba(194, 65, 12, 0.2)" }}
+                                  title="Revoke link access"
                                 >
-                                  Revoke
+                                  <span>Revoke</span>
                                 </button>
                               </>
-                            )}
-                            {!cred.is_active && (
+                            ) : (
                               <button
                                 onClick={() => handleDeleteMCP(cred.id)}
-                                className="pill-btn pill-btn-glass"
-                                style={{ padding: "0.25rem 0.7rem", fontSize: "0.75rem", color: "var(--status-deny)", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                                className="pill-btn pill-btn-glass pill-btn-sm"
+                                style={{ color: "var(--status-deny)" }}
                                 title="Permanently delete revoked link"
                               >
                                 <Trash2 size={12} strokeWidth={1.5} />
-                                Delete Link
+                                <span>Delete</span>
                               </button>
                             )}
                           </div>
@@ -1302,10 +1390,10 @@ export default function WorkspaceDetailPage() {
               <div className="frosted-panel" style={{ padding: "1.5rem 1.75rem", display: "flex", flexDirection: "column" }}>
                 <div className="slash-tag">RESOURCE SCOPE</div>
                 <h4 style={{ fontSize: "1.05rem", fontWeight: 500, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
-                  Accessible Files ({files.length})
+                  {isGlobal ? `Accessible Files (${files.length})` : `Accessible Files for ${selectedCred?.name} (${files.filter((f) => !selectedCred?.permissions?.allowed_file_ids || selectedCred.permissions.allowed_file_ids.includes(f.id)).length}/${files.length})`}
                 </h4>
                 <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "1.25rem" }}>
-                  Documents and datasets in this workspace that can be served via MCP.
+                  {isGlobal ? "All documents and datasets in this workspace that can be served via MCP." : "Exact documents and datasets this specific MCP link is permitted to access."}
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "280px", overflowY: "auto", flex: 1 }}>
@@ -1316,6 +1404,8 @@ export default function WorkspaceDetailPage() {
                   ) : (
                     files.map((f) => {
                       const isData = isDataFile(f);
+                      const isFileAllowed = isGlobal || !selectedCred?.permissions?.allowed_file_ids || selectedCred.permissions.allowed_file_ids.includes(f.id);
+
                       return (
                         <div
                           key={f.id}
@@ -1324,14 +1414,14 @@ export default function WorkspaceDetailPage() {
                             justifyContent: "space-between",
                             alignItems: "center",
                             padding: "0.6rem 0.85rem",
-                            background: "var(--bg-page)",
+                            background: isFileAllowed ? "var(--bg-page)" : "rgba(220, 38, 38, 0.03)",
                             borderRadius: "var(--radius-sm)",
-                            border: "1px solid rgba(40, 40, 40, 0.04)",
+                            border: isFileAllowed ? "1px solid rgba(40, 40, 40, 0.04)" : "1px solid rgba(220, 38, 38, 0.12)",
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
-                            <FileText size={14} strokeWidth={1.5} color="#2E3032" />
-                            <span style={{ fontSize: "0.84rem", fontWeight: 450, color: "var(--text-primary)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                            <FileText size={14} strokeWidth={1.5} color={isFileAllowed ? "#2E3032" : "var(--status-deny)"} />
+                            <span style={{ fontSize: "0.84rem", fontWeight: 450, color: isFileAllowed ? "var(--text-primary)" : "var(--text-secondary)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                               {f.original_filename}
                             </span>
                           </div>
@@ -1340,8 +1430,8 @@ export default function WorkspaceDetailPage() {
                             <span className="badge-status" style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem" }}>
                               {isData ? "TABLE" : "DOCUMENT"}
                             </span>
-                            <span className="badge-status badge-status-allow" style={{ fontSize: "0.65rem", padding: "0.1rem 0.4rem" }}>
-                              Accessible
+                            <span className={`badge-status ${isFileAllowed ? "badge-status-allow" : "badge-status-deny"}`} style={{ fontSize: "0.65rem", padding: "0.1rem 0.4rem" }}>
+                              {isFileAllowed ? "Accessible" : "Excluded"}
                             </span>
                           </div>
                         </div>
@@ -1349,6 +1439,21 @@ export default function WorkspaceDetailPage() {
                     })
                   )}
                 </div>
+
+                {selectedCred && (
+                  <div style={{ marginTop: "1rem", paddingTop: "0.75rem", borderTop: "1px solid rgba(40, 40, 40, 0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>
+                      Scope: {selectedCred.permissions?.allowed_file_ids ? `${selectedCred.permissions.allowed_file_ids.length} of ${files.length} Files` : "All Workspace Files"}
+                    </span>
+                    <button
+                      onClick={() => handleOpenEditPermissions(selectedCred)}
+                      className="pill-btn pill-btn-glass"
+                      style={{ padding: "0.25rem 0.75rem", fontSize: "0.74rem" }}
+                    >
+                      Manage File Scope
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* 3. Active Anonymisation & Column Redaction Matrix Card */}
@@ -1619,6 +1724,55 @@ export default function WorkspaceDetailPage() {
       {/* ========================================================================= */}
       {activeTab === "settings" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: "1.5rem" }}>
+          {/* Workspace General Profile (Owner only) */}
+          {workspace.role === "OWNER" && (
+            <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)", gridColumn: "1 / -1" }}>
+              <div className="slash-tag">GENERAL SETTINGS</div>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+                Workspace Profile &amp; Description
+              </h3>
+              <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.5rem", fontWeight: 400 }}>
+                Update the workspace name and operational description shown across your team and AI tools.
+              </p>
+
+              <form onSubmit={handleUpdateWorkspaceDetails} style={{ maxWidth: "560px" }}>
+                <div style={{ marginBottom: "1.25rem" }}>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
+                    Workspace Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="modern-input"
+                    value={editWsName}
+                    onChange={(e) => setEditWsName(e.target.value)}
+                  />
+                </div>
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
+                    Description (One Line)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={255}
+                    placeholder="e.g. Customer revenue trends & quarterly metrics vault"
+                    className="modern-input"
+                    value={editWsDesc}
+                    onChange={(e) => setEditWsDesc(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={updatingWs || !editWsName.trim()}
+                  className="pill-btn pill-btn-solid pill-btn-sm"
+                >
+                  <Save size={13} strokeWidth={1.5} />
+                  <span>{updatingWs ? "Saving..." : "Save Workspace Profile"}</span>
+                </button>
+              </form>
+            </div>
+          )}
+
           {/* Members */}
           <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)" }}>
             <div className="slash-tag">TEAM ACCESS</div>
@@ -1896,7 +2050,7 @@ export default function WorkspaceDetailPage() {
         }}>
           <div className="frosted-panel" style={{
             width: "100%",
-            maxWidth: shareStep === 2 && hasDataFilesSelected ? "98vw" : "560px",
+            maxWidth: shareStep === 2 && hasDataFilesSelected ? "98vw" : "650px",
             height: shareStep === 2 && hasDataFilesSelected ? "94vh" : "auto",
             maxHeight: "96vh",
             display: "flex",
@@ -1920,13 +2074,14 @@ export default function WorkspaceDetailPage() {
             }}>
               <div>
                 <div className="slash-tag" style={{ margin: 0, marginBottom: "0.2rem" }}>
+                  {editingCredId ? "EDIT MCP LINK • " : "NEW MCP LINK • "}
                   {hasDataFilesSelected
-                    ? `STEP ${shareStep} OF 2: ${shareStep === 1 ? "SELECT FILES" : "DATA & COLUMN TRANSFORMATION STUDIO"}`
+                    ? `STEP ${shareStep} OF 2: ${shareStep === 1 ? "FILE SELECTION & TOOL PERMISSIONS" : "DATA & COLUMN TRANSFORMATION STUDIO"}`
                     : "POAIS LINK CONFIGURATION"}
                 </div>
                 <h2 style={{ fontSize: "clamp(1.15rem, 2.5vw, 1.35rem)", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
                   {shareStep === 1
-                    ? "Configure AI Link & File Scope"
+                    ? (editingCredId ? `Edit Link & Scope: ${shareName}` : "Configure AI Link & File Scope")
                     : "Data & Column Transformation Studio"}
                 </h2>
               </div>
@@ -1964,27 +2119,47 @@ export default function WorkspaceDetailPage() {
                   </div>
 
                   <div style={{ marginBottom: "1.5rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-                      <label style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
-                        2. Select Files to Include ({selectedFileIds.length}/{files.length})
-                      </label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem", flexWrap: "wrap", gap: "0.4rem" }}>
+                      <div>
+                        <label style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", letterSpacing: "0.04em", display: "block" }}>
+                          2. Select Files to Include ({selectedFileIds.length}/{files.length} selected)
+                        </label>
+                        <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>
+                          Choose which workspace documents/datasets this MCP link can access
+                        </span>
+                      </div>
 
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
                         <button
                           type="button"
                           onClick={() => setSelectedFileIds(files.map((f) => f.id))}
-                          style={{ fontSize: "0.75rem", background: "none", border: "none", color: "var(--text-primary)", cursor: "pointer", fontWeight: 500 }}
+                          className="pill-btn pill-btn-glass"
+                          style={{ fontSize: "0.7rem", padding: "0.15rem 0.5rem" }}
                         >
                           Select All
                         </button>
-                        <span style={{ color: "var(--text-tertiary)" }}>•</span>
                         <button
                           type="button"
                           onClick={() => setSelectedFileIds([])}
-                          style={{ fontSize: "0.75rem", background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer" }}
+                          className="pill-btn pill-btn-glass"
+                          style={{ fontSize: "0.7rem", padding: "0.15rem 0.5rem" }}
                         >
-                          Deselect All
+                          Clear
                         </button>
+
+                        <label
+                          className="pill-btn pill-btn-glass"
+                          style={{ fontSize: "0.7rem", padding: "0.15rem 0.55rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.25rem", margin: 0 }}
+                        >
+                          <Plus size={11} strokeWidth={1.5} />
+                          <span>{isQuickUploading ? "Uploading..." : "+ Upload New File"}</span>
+                          <input
+                            type="file"
+                            disabled={isQuickUploading}
+                            style={{ display: "none" }}
+                            onChange={(e) => handleQuickUploadForMcp(e)}
+                          />
+                        </label>
                       </div>
                     </div>
 
@@ -2721,56 +2896,96 @@ export default function WorkspaceDetailPage() {
 
             {/* Modal Footer Controls */}
             <div style={{
-              padding: "1rem clamp(1rem, 3vw, 2rem)",
-              borderTop: "1px solid rgba(40, 40, 40, 0.04)",
+              padding: "0.85rem clamp(0.85rem, 2.5vw, 1.5rem)",
+              borderTop: "1px solid rgba(40, 40, 40, 0.06)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              background: "var(--bg-page)",
-              flexWrap: "wrap",
+              background: "#F7F7F8",
+              flexWrap: "nowrap",
               gap: "0.5rem",
+              overflowX: "auto",
             }}>
               {shareStep === 2 ? (
                 <button
                   type="button"
                   onClick={() => setShareStep(1)}
-                  className="pill-btn pill-btn-glass"
-                  style={{ gap: "0.4rem" }}
+                  className="pill-btn pill-btn-glass pill-btn-sm"
+                  style={{ flexShrink: 0 }}
                 >
-                  <ArrowLeft size={14} strokeWidth={1.5} />
+                  <ArrowLeft size={13} strokeWidth={1.5} />
                   <span>Back to File Selection</span>
                 </button>
               ) : (
                 <button
                   type="button"
-                  onClick={() => setShareWizardOpen(false)}
-                  className="pill-btn pill-btn-glass"
+                  onClick={() => {
+                    setShareWizardOpen(false);
+                    setEditingCredId(null);
+                  }}
+                  className="pill-btn pill-btn-glass pill-btn-sm"
+                  style={{ flexShrink: 0 }}
                 >
                   Cancel
                 </button>
               )}
 
-              {shareStep === 1 && hasDataFilesSelected ? (
-                <button
-                  type="button"
-                  disabled={selectedFileIds.length === 0 || !shareName.trim()}
-                  onClick={() => setShareStep(2)}
-                  className="pill-btn pill-btn-solid"
-                >
-                  <span>Next: Power Query Transformation</span>
-                  <ArrowRight size={14} strokeWidth={1.5} />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={generatingLink || selectedFileIds.length === 0 || !shareName.trim()}
-                  onClick={handleGenerateShareLink}
-                  className="pill-btn pill-btn-solid"
-                >
-                  <Key size={14} strokeWidth={1.5} />
-                  <span>{generatingLink ? "Generating Link..." : "Generate POAIS MCP Link"}</span>
-                </button>
-              )}
+              <div style={{ display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "nowrap", flexShrink: 0 }}>
+                {shareStep === 1 && hasDataFilesSelected && editingCredId && (
+                  <button
+                    type="button"
+                    disabled={savingPerms || selectedFileIds.length === 0 || !shareName.trim()}
+                    onClick={handleSavePermissions}
+                    className="pill-btn pill-btn-glass pill-btn-sm"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <Save size={13} strokeWidth={1.5} />
+                    <span>{savingPerms ? "Saving..." : "Save Scope Directly"}</span>
+                  </button>
+                )}
+
+                {shareStep === 1 && hasDataFilesSelected ? (
+                  <button
+                    type="button"
+                    disabled={selectedFileIds.length === 0 || !shareName.trim()}
+                    onClick={() => {
+                      const firstDataFile = files.filter((f) => selectedFileIds.includes(f.id)).find(isDataFile) || files.find(isDataFile);
+                      if (firstDataFile) {
+                        setActiveTransformFileId(firstDataFile.id);
+                        loadDynamicFileSchema(firstDataFile.id);
+                      }
+                      setShareStep(2);
+                    }}
+                    className="pill-btn pill-btn-solid pill-btn-sm"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <span>Next: Power Query &amp; Data Studio</span>
+                    <ArrowRight size={13} strokeWidth={1.5} />
+                  </button>
+                ) : editingCredId ? (
+                  <button
+                    type="button"
+                    disabled={savingPerms || selectedFileIds.length === 0 || !shareName.trim()}
+                    onClick={handleSavePermissions}
+                    className="pill-btn pill-btn-solid pill-btn-sm"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <Save size={13} strokeWidth={1.5} />
+                    <span>{savingPerms ? "Saving Changes..." : "Save Permissions & Scope"}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={generatingLink || selectedFileIds.length === 0 || !shareName.trim()}
+                    onClick={handleGenerateShareLink}
+                    className="pill-btn pill-btn-solid pill-btn-sm"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <Key size={13} strokeWidth={1.5} />
+                    <span>{generatingLink ? "Generating Link..." : "Generate POAIS MCP Link"}</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -3074,198 +3289,7 @@ export default function WorkspaceDetailPage() {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL: EDIT MCP LINK PERMISSIONS & CAPABILITIES                          */}
-      {/* ========================================================================= */}
-      {editPermsModalOpen && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: "rgba(46, 48, 50, 0.4)",
-          backdropFilter: "blur(14px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 160,
-          padding: "1rem",
-        }}>
-          <div className="frosted-panel" style={{
-            width: "100%",
-            maxWidth: "540px",
-            background: "#FFFFFF",
-            boxShadow: "var(--shadow-lg)",
-            borderRadius: "var(--radius-xl)",
-            padding: "clamp(1.5rem, 3vw, 2rem)",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-              <div>
-                <div className="slash-tag" style={{ margin: 0, marginBottom: "0.2rem" }}>LINK SECURITY POLICY</div>
-                <h2 style={{ fontSize: "1.3rem", fontWeight: 400, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-                  Edit MCP Link Permissions
-                </h2>
-              </div>
-              <button
-                onClick={() => setEditPermsModalOpen(false)}
-                className="icon-circle-btn"
-                style={{ width: "32px", height: "32px" }}
-              >
-                <X size={15} strokeWidth={1.5} />
-              </button>
-            </div>
 
-            {/* Link Name */}
-            <div style={{ marginBottom: "1.25rem" }}>
-              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.35rem", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
-                Link Name
-              </label>
-              <input
-                type="text"
-                className="modern-input"
-                value={editingCredName}
-                onChange={(e) => setEditingCredName(e.target.value)}
-              />
-            </div>
-
-            {/* Permissions */}
-            <div style={{ marginBottom: "1.75rem" }}>
-              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.45rem", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
-                Authorized MCP Tools
-              </label>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {/* Read Documents */}
-                <div
-                  onClick={() => setEditingCanRead(!editingCanRead)}
-                  style={{
-                    padding: "0.75rem 0.9rem",
-                    borderRadius: "var(--radius-md)",
-                    background: editingCanRead ? "#FFFFFF" : "var(--bg-page)",
-                    border: editingCanRead ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(40, 40, 40, 0.04)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    {editingCanRead ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" />}
-                    <div>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Read Documents (read_resource)</div>
-                      <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>Access text/summary of allowed documents</div>
-                    </div>
-                  </div>
-                  <span className={`badge-status ${editingCanRead ? "badge-status-allow" : "badge-status-deny"}`}>
-                    {editingCanRead ? "Allowed" : "Blocked"}
-                  </span>
-                </div>
-
-                {/* Full-Text Search */}
-                <div
-                  onClick={() => setEditingCanSearch(!editingCanSearch)}
-                  style={{
-                    padding: "0.75rem 0.9rem",
-                    borderRadius: "var(--radius-md)",
-                    background: editingCanSearch ? "#FFFFFF" : "var(--bg-page)",
-                    border: editingCanSearch ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(40, 40, 40, 0.04)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    {editingCanSearch ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" />}
-                    <div>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Keyword Search (search)</div>
-                      <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>Perform semantic and keyword search across documents</div>
-                    </div>
-                  </div>
-                  <span className={`badge-status ${editingCanSearch ? "badge-status-allow" : "badge-status-deny"}`}>
-                    {editingCanSearch ? "Allowed" : "Blocked"}
-                  </span>
-                </div>
-
-                {/* Query Data Tables */}
-                <div
-                  onClick={() => setEditingCanQuery(!editingCanQuery)}
-                  style={{
-                    padding: "0.75rem 0.9rem",
-                    borderRadius: "var(--radius-md)",
-                    background: editingCanQuery ? "#FFFFFF" : "var(--bg-page)",
-                    border: editingCanQuery ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(40, 40, 40, 0.04)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    {editingCanQuery ? <CheckSquare size={16} strokeWidth={1.5} color="#2E3032" /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" />}
-                    <div>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 450, color: "var(--text-primary)" }}>Query Tables & Schema (query_dataset)</div>
-                      <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>Execute structured table filtering and aggregations</div>
-                    </div>
-                  </div>
-                  <span className={`badge-status ${editingCanQuery ? "badge-status-allow" : "badge-status-deny"}`}>
-                    {editingCanQuery ? "Allowed" : "Blocked"}
-                  </span>
-                </div>
-
-                {/* Edit / Mutate Data */}
-                <div
-                  onClick={() => setEditingCanEdit(!editingCanEdit)}
-                  style={{
-                    padding: "0.75rem 0.9rem",
-                    borderRadius: "var(--radius-md)",
-                    background: editingCanEdit ? "rgba(234, 179, 8, 0.08)" : "var(--bg-page)",
-                    border: editingCanEdit ? "1px solid rgba(234, 179, 8, 0.3)" : "1px solid rgba(40, 40, 40, 0.04)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    {editingCanEdit ? <CheckSquare size={16} strokeWidth={1.5} color="#B45309" /> : <Square size={16} strokeWidth={1.5} color="var(--text-tertiary)" />}
-                    <div>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 450, color: editingCanEdit ? "#B45309" : "var(--text-primary)" }}>
-                        AI Data Mutation / Edit (edit_dataset)
-                      </div>
-                      <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>
-                        Allow AI to update, insert, or modify records in dataset files
-                      </div>
-                    </div>
-                  </div>
-                  <span className={`badge-status ${editingCanEdit ? "badge-status-transform" : "badge-status-deny"}`}>
-                    {editingCanEdit ? "Enabled" : "Disabled"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-              <button
-                type="button"
-                onClick={() => setEditPermsModalOpen(false)}
-                className="pill-btn pill-btn-glass"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={savingPerms}
-                onClick={handleSavePermissions}
-                className="pill-btn pill-btn-solid"
-              >
-                {savingPerms ? "Saving Changes..." : "Save Permissions"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* MODAL: AI AGENT SKILLS & OPERATIONAL GUIDE                                */}

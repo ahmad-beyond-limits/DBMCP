@@ -53,6 +53,7 @@ class Workspace(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

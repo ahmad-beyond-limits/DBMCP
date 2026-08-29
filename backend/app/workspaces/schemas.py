@@ -5,10 +5,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class WorkspaceCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=128, description="Workspace name")
+    description: Optional[str] = Field(None, max_length=255, description="One line workspace description")
 
 
 class WorkspaceUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=128)
+    description: Optional[str] = Field(None, max_length=255)
     is_active: Optional[bool] = None
 
 
@@ -33,6 +35,7 @@ class WorkspaceResponse(BaseModel):
 
     id: str
     name: str
+    description: Optional[str] = None
     owner_id: str
     is_active: bool
     role: Optional[str] = "OWNER"

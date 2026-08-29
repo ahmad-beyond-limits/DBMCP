@@ -111,10 +111,10 @@ class ApiClient {
     return this.request<Workspace[]>("/workspaces");
   }
 
-  async createWorkspace(name: string): Promise<Workspace> {
+  async createWorkspace(name: string, description?: string): Promise<Workspace> {
     return this.request<Workspace>("/workspaces", {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, description }),
     });
   }
 
@@ -122,7 +122,7 @@ class ApiClient {
     return this.request<Workspace>(`/workspaces/${id}`);
   }
 
-  async updateWorkspace(id: string, data: { name?: string; is_active?: boolean }): Promise<Workspace> {
+  async updateWorkspace(id: string, data: { name?: string; description?: string; is_active?: boolean }): Promise<Workspace> {
     return this.request<Workspace>(`/workspaces/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
