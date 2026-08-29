@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Cloud, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { Cloud, CheckCircle2, Loader2, Sparkles, X } from "lucide-react";
 import { getApiBase } from "@/lib/api";
 
 interface GatewayContextType {
@@ -119,13 +119,11 @@ export function GatewayProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isWaking, apiBase, pendingRoute, router]);
 
-  // Action called when user clicks Login, Register, or Get Started
+  // Action called when user clicks Login, Register, or navigation
   const checkAndNavigate = (targetUrl: string) => {
     if (isReady) {
-      // Backend is already alive, navigate immediately with 0 delay!
       router.push(targetUrl);
     } else {
-      // Backend is cold, show friendly waking progress modal
       setPendingRoute(targetUrl);
       setProgress(15);
       setIsWaking(true);
@@ -161,7 +159,30 @@ export function GatewayProvider({ children }: { children: React.ReactNode }) {
             borderRadius: "var(--radius-xl)",
             textAlign: "center",
             background: "#ffffff",
+            position: "relative",
           }}>
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setIsWaking(false);
+                if (pendingRoute) {
+                  router.push(pendingRoute);
+                  setPendingRoute(null);
+                }
+              }}
+              className="icon-circle-btn"
+              style={{
+                position: "absolute",
+                top: "1.25rem",
+                right: "1.25rem",
+                width: "32px",
+                height: "32px",
+              }}
+              title="Close modal"
+              aria-label="Close"
+            >
+              <X size={14} strokeWidth={1.5} />
+            </button>
             {/* Pulsing Cloud Icon */}
             <div style={{
               width: "56px",
@@ -235,10 +256,25 @@ export function GatewayProvider({ children }: { children: React.ReactNode }) {
               fontSize: "0.75rem",
               color: "var(--text-muted)",
               fontFamily: "JetBrains Mono, monospace",
+              marginBottom: "1.25rem",
             }}>
               <span>Spinning up server...</span>
               <span>{Math.min(progress, 100)}%</span>
             </div>
+
+            <button
+              onClick={() => {
+                setIsWaking(false);
+                if (pendingRoute) {
+                  router.push(pendingRoute);
+                  setPendingRoute(null);
+                }
+              }}
+              className="pill-btn pill-btn-glass"
+              style={{ width: "100%", justifyContent: "center", fontSize: "0.84rem" }}
+            >
+              Continue to App Anyway
+            </button>
           </div>
         </div>
       )}

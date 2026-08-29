@@ -121,6 +121,25 @@ class ApiClient {
     });
   }
 
+  async changePassword(current_password: string, new_password: string): Promise<{ status: string; message: string }> {
+    return this.request<{ status: string; message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ current_password, new_password }),
+    });
+  }
+
+  async deleteAccount(password: string): Promise<{ status: string; message: string }> {
+    const res = await this.request<{ status: string; message: string }>("/auth/delete-account", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("dbmcp_access_token");
+      localStorage.removeItem("dbmcp_refresh_token");
+    }
+    return res;
+  }
+
   // Workspaces
   async getWorkspaces(): Promise<Workspace[]> {
     return this.request<Workspace[]>("/workspaces");

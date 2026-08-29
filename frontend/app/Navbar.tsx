@@ -14,6 +14,7 @@ import {
   Home,
   Shield,
   Key,
+  Settings,
 } from "lucide-react";
 
 export default function Navbar() {
@@ -160,6 +161,25 @@ export default function Navbar() {
               </button>
 
               <button
+                onClick={() => checkAndNavigate("/settings")}
+                className="pill-btn"
+                style={{
+                  padding: "0.42rem 0.85rem",
+                  fontSize: "0.82rem",
+                  gap: "0.4rem",
+                  color: pathname.startsWith("/settings") ? "#1E2022" : "var(--text-secondary)",
+                  background: pathname.startsWith("/settings") ? "rgba(255, 255, 255, 0.95)" : "rgba(255, 255, 255, 0.5)",
+                  border: pathname.startsWith("/settings") ? "1px solid rgba(40, 40, 40, 0.12)" : "1px solid rgba(255, 255, 255, 0.6)",
+                  boxShadow: pathname.startsWith("/settings") ? "0 2px 8px rgba(0, 0, 0, 0.04)" : "none",
+                  fontWeight: pathname.startsWith("/settings") ? 500 : 450,
+                }}
+                title="Account Settings"
+              >
+                <Settings size={14} strokeWidth={1.5} />
+                <span>Settings</span>
+              </button>
+
+              <button
                 onClick={handleLogout}
                 className="pill-btn pill-btn-glass"
                 style={{
@@ -298,27 +318,51 @@ export default function Navbar() {
             </button>
 
             {isLoggedIn && (
-              <button
-                onClick={() => handleMobileNav("/dashboard")}
-                className="pill-tab"
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.6rem",
-                  padding: "0.75rem 1rem",
-                  borderRadius: "var(--radius-md)",
-                  background: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)",
-                  border: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "1px solid rgba(40, 40, 40, 0.08)" : "1px solid transparent",
-                  fontWeight: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? 500 : 400,
-                  color: "var(--text-primary)",
-                  fontSize: "0.9rem",
-                  textAlign: "left",
-                }}
-              >
-                <LayoutDashboard size={16} strokeWidth={1.5} />
-                <span>Workspaces</span>
-              </button>
+              <>
+                <button
+                  onClick={() => handleMobileNav("/dashboard")}
+                  className="pill-tab"
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.6rem",
+                    padding: "0.75rem 1rem",
+                    borderRadius: "var(--radius-md)",
+                    background: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)",
+                    border: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? "1px solid rgba(40, 40, 40, 0.08)" : "1px solid transparent",
+                    fontWeight: pathname.startsWith("/dashboard") || pathname.startsWith("/workspaces") ? 500 : 400,
+                    color: "var(--text-primary)",
+                    fontSize: "0.9rem",
+                    textAlign: "left",
+                  }}
+                >
+                  <LayoutDashboard size={16} strokeWidth={1.5} />
+                  <span>Workspaces</span>
+                </button>
+
+                <button
+                  onClick={() => handleMobileNav("/settings")}
+                  className="pill-tab"
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.6rem",
+                    padding: "0.75rem 1rem",
+                    borderRadius: "var(--radius-md)",
+                    background: pathname.startsWith("/settings") ? "#FFFFFF" : "rgba(255, 255, 255, 0.4)",
+                    border: pathname.startsWith("/settings") ? "1px solid rgba(40, 40, 40, 0.08)" : "1px solid transparent",
+                    fontWeight: pathname.startsWith("/settings") ? 500 : 400,
+                    color: "var(--text-primary)",
+                    fontSize: "0.9rem",
+                    textAlign: "left",
+                  }}
+                >
+                  <Settings size={16} strokeWidth={1.5} />
+                  <span>Settings</span>
+                </button>
+              </>
             )}
           </div>
 

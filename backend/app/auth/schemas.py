@@ -39,3 +39,12 @@ class UserResponse(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     created_at: datetime
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., description="Current password for verification")
+    new_password: str = Field(..., min_length=6, max_length=128, description="New password (min 6 characters)")
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(..., description="User password for confirming account deletion")

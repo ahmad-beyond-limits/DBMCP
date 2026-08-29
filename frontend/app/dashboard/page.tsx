@@ -292,20 +292,46 @@ export default function DashboardPage() {
             <FolderGit2 size={24} strokeWidth={1.5} />
           </div>
           <h3 style={{ fontSize: "1.3rem", fontWeight: 400, marginBottom: "0.4rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-            {searchQuery ? "No matching workspaces found" : "No workspaces yet"}
+            {searchQuery
+              ? "No matching workspaces"
+              : filter === "member"
+              ? "No shared workspaces yet"
+              : filter === "owner"
+              ? "No owned workspaces"
+              : "No workspaces yet"}
           </h3>
           <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", maxWidth: "420px", margin: "0 auto 1.75rem auto", lineHeight: 1.6 }}>
             {searchQuery
-              ? "Try adjusting your search query or clear the filter."
+              ? `No workspaces found matching "${searchQuery}". Try adjusting your keywords or clearing the search.`
+              : filter === "member"
+              ? "Workspaces that other team members share with you will appear here."
+              : filter === "owner"
+              ? "You haven't created any workspaces yet. Create one to begin managing AI access policies."
               : "Create your first workspace to begin uploading documents and creating AI MCP links."}
           </p>
-          {!searchQuery && (
+          {searchQuery ? (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="pill-btn pill-btn-glass"
+            >
+              Clear Search
+            </button>
+          ) : filter === "member" ? (
+            workspaces.length > 0 && (
+              <button
+                onClick={() => setFilter("all")}
+                className="pill-btn pill-btn-glass"
+              >
+                View All Workspaces
+              </button>
+            )
+          ) : (
             <button
               onClick={() => setShowCreateModal(true)}
               className="pill-btn pill-btn-solid"
             >
               <Plus size={15} strokeWidth={1.5} />
-              Create Your First Workspace
+              {workspaces.length === 0 ? "Create Your First Workspace" : "Create Workspace"}
             </button>
           )}
         </div>

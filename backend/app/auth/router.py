@@ -4,6 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.schemas import (
+    ChangePasswordRequest,
+    DeleteAccountRequest,
     TokenRefreshRequest,
     TokenResponse,
     UserLoginRequest,
@@ -20,8 +22,9 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.database.models import User
+from app.database.models import FileRecord, User, Workspace
 from app.database.session import get_db
+from app.storage.supabase_storage import get_storage_backend
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security_bearer = HTTPBearer(auto_error=False)
@@ -180,3 +183,69 @@ async def update_current_user_profile(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.post("/change-password")
+async def change_password(
+    data: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Change the authenticated user's password."""
+    if not verify_password(data.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    if len(data.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters long",
+        )
+
+    user.password_hash = hash_password(data.new_password)
+    await db.commit()
+    return {"status": "success", "message": "Password changed successfully."}
+
+
+@router.delete("/me")
+@router.post("/delete-account")
+async def delete_user_account(
+    data: DeleteAccountRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete user account and wipe all owned workspaces, storage files, credentials, and policies."""
+    # Verify password before destructive wipe
+    if not verify_password(data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect password. Account deletion aborted.",
+        )
+
+    # 1. Find all workspaces owned by this user
+    ws_result = await db.execute(select(Workspace).where(Workspace.owner_id == user.id))
+    owned_workspaces = ws_result.scalars().all()
+    ws_ids = [ws.id for ws in owned_workspaces]
+
+    # 2. Purge physical stored files associated with all owned workspaces
+    if ws_ids:
+        files_result = await db.execute(select(FileRecord).where(FileRecord.workspace_id.in_(ws_ids)))
+        files = files_result.scalars().all()
+        storage = get_storage_backend()
+        for f in files:
+            try:
+                if f.storage_path:
+                    await storage.delete(f.storage_path)
+            except Exception:
+                pass
+
+    # 3. Delete user record (Database cascades delete to all workspaces, memberships, files, policies, credentials, logs)
+    await db.delete(user)
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": "User account and all associated workspaces, documents, tokens, and data have been permanently wiped.",
+    }
