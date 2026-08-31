@@ -59,20 +59,20 @@ import {
 } from "lucide-react";
 
 const POAIS_AI_SKILLS_MARKDOWN = `# POAIS: Policy-Oriented AI Space
-## AI Agent Skills, Verification Directives & Operational Protocol
+## AI Agent Skills, Autonomous Workflows & Operational Directives
 
 You are connected to a POAIS (Policy-Oriented AI Space) Data Workspace via the Model Context Protocol (MCP).
 Use these instructions to interact accurately, securely, and effectively with workspace resources under deterministic policy enforcement.
 
 ---
 
-## 🛠️ Complete MCP Tool Suite & Capabilities
+## 🛠️ Complete Workspace MCP Tool Suite
 
 1. \`workspace_info()\`
    - Inspect workspace name, active policies, security boundary status, and available tools.
 
 2. \`list_resources()\`
-   - Discover all accessible files (CSV, Excel .xlsx, PDF, Word .docx, JSON) permitted for your session.
+   - Discover all accessible files (CSV, Excel .xlsx, PDF, Word .docx, JSON, Images) permitted for your session.
 
 3. \`get_resource_metadata(resource_id)\`
    - Check file size, detected MIME type, formatting, and processing status.
@@ -96,41 +96,48 @@ Use these instructions to interact accurately, securely, and effectively with wo
 8. \`read_resource(resource_id)\`
    - Read extracted document text with automatic real-time PII anonymisation and policy redaction applied.
 
-## ⚡ MANDATORY OPERATIONAL DIRECTIVES FOR AI AGENTS
+---
+
+## ⚡ MANDATORY OPERATIONAL DIRECTIVES & AUTONOMOUS WORKFLOWS
 
 ### 1. RECONFIRM & VERIFY EVERY DATA MUTATION (CRITICAL)
 - **MANDATORY RULE**: Whenever you execute \`edit_dataset\` (action: \`update\`, \`insert\`, or \`delete\`), you MUST IMMEDIATELY execute a follow-up \`query_dataset\` on that same \`resource_id\` using the updated filter criteria.
 - **VERIFICATION WORKFLOW**:
   1. Call \`edit_dataset(...)\` to perform the requested modification.
-  2. Call \`query_dataset(resource_id=..., filters=...)\` to fetch the updated records from disk.
+  2. Call \`query_dataset(resource_id=..., filters=...)\` to fetch the updated records from storage.
   3. Verify that the values returned by \`query_dataset\` match the intended changes.
   4. Only after positive verification, confirm the result to the user with the exact updated values and affected record count.
 - Never report that data has been changed without performing this verification query.
 
-### 2. SEQUENTIAL & ACCURATE MULTI-FILE ACCESS
+### 2. AUTONOMOUS EXTERNAL LINK INGESTION & DEEP ANALYSIS
+- When a user shares a Google Drive, Dropbox, or web link and asks you to analyze, understand, or summarize it:
+  1. Ingest the resource into the workspace so it is securely indexed and queryable.
+  2. Call \`read_resource()\` for documents or \`get_dataset_schema()\` / \`query_dataset(limit=5)\` for tabular data to inspect structure and contents.
+  3. Deliver a comprehensive report containing executive summary, key findings, distributions, and actionable insights.
+
+### 3. CONFIRM DESTRUCTIVE OPERATIONS
+- When asked to delete records or purge datasets, confirm the exact targets and counts to prevent accidental data destruction.
+
+### 4. SEQUENTIAL & ACCURATE MULTI-FILE ACCESS
 - When a task involves multiple files or datasets in the workspace, access and process them **one by one accurately**.
 - Avoid rushing or conflating records from disparate sources. Inspect each file individually, verify its structure, and extract necessary data before moving to the next.
 
-### 3. TRANSPARENT UNREADABLE FILE HANDLING
-- If you are unable to read or parse any file (even if you have access permission to the workspace or file listing):
+### 5. TRANSPARENT UNREADABLE FILE HANDLING
+- If you are unable to read or parse any file:
   - **Explicitly and immediately inform the user** that the file cannot be read.
-  - **Clearly state the exact reason why** (e.g., corrupted file structure, unsupported binary format, empty/unextracted content, network timeout, or policy denial).
+  - **Clearly state the exact reason why** (e.g., corrupted file structure, unsupported binary format, empty content, network timeout, or policy denial).
   - Never silently ignore unreadable files or pretend data was processed when it was not.
 
-### 4. ZERO ASSUMPTIONS & ABSOLUTE CLARITY
+### 6. ZERO ASSUMPTIONS & ABSOLUTE CLARITY
 - **Always make everything clear and explicit to the user.**
 - **NEVER MAKE ASSUMPTIONS** about column meanings, missing values, date formats, or business metrics. Assumptions lead to critical errors and data degradation.
 - If data is ambiguous, incomplete, or contradictory, state the facts directly to the user and request clarification rather than guessing.
 
-### 5. ALWAYS INSPECT DATASET SCHEMA BEFORE QUERYING
+### 7. ALWAYS INSPECT DATASET SCHEMA BEFORE QUERYING
 - Do not guess or assume column names or types.
 - Always call \`get_dataset_schema(resource_id)\` first when working with a new dataset to inspect exact column headers, case-sensitivity, and detected types.
 
-### 6. PRECISE FILTERING & CLEAN ENCODING
-- Ensure filter values match the column data type (e.g. integer \`101\` vs string \`"101"\`).
-- For text fields, use exact matching. If a query returns no rows, check case and whitespace.
-
-### 7. RESPECT POLICY BOUNDARIES & PRIVACY REDACTIONS
+### 8. RESPECT POLICY BOUNDARIES & PRIVACY REDACTIONS
 - If a resource returns \`Policy Error: Access Denied\` or a field contains \`[REDACTED]\` / \`[MASKED]\`, this is an intentional workspace privacy rule configured by the owner.
 - Explain the policy constraint clearly to the user instead of attempting to bypass it.
 `;
@@ -186,7 +193,7 @@ export default function WorkspaceDetailPage() {
   // 🌟 Advanced Power Query / Excel Spreadsheet "Share MCP Link" Wizard State 🌟
   const [shareWizardOpen, setShareWizardOpen] = useState(false);
   const [shareStep, setShareStep] = useState<1 | 2>(1);
-  const [shareName, setShareName] = useState("Claude Assistant");
+  const [shareName, setShareName] = useState("AI Agent Assistant");
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   
   // Power Query Transformation States (Dynamically populated from the real file content)
@@ -623,7 +630,7 @@ export default function WorkspaceDetailPage() {
 
   const handleOpenShareWizard = () => {
     setEditingCredId(null);
-    setShareName("Claude Assistant");
+    setShareName("AI Agent Assistant");
     setShareCanRead(true);
     setShareCanSearch(true);
     setShareCanQuery(true);
@@ -710,7 +717,7 @@ export default function WorkspaceDetailPage() {
       setPlaygroundToken(created.raw_token);
       setShareWizardOpen(false);
       setShareStep(1);
-      setShareName("Claude Assistant");
+      setShareName("AI Agent Assistant");
       setShareCanRead(true);
       setShareCanSearch(true);
       setShareCanQuery(true);
@@ -1199,7 +1206,7 @@ export default function WorkspaceDetailPage() {
                 {mcpCredentials.length === 0 ? (
                   <tr>
                     <td colSpan={5} style={{ textAlign: "center", padding: "4rem", color: "var(--text-tertiary)" }}>
-                      No links created yet. Click &quot;Create New MCP Link&quot; above to connect Claude Desktop or an AI agent.
+                      No links created yet. Click &quot;Create New MCP Link&quot; above to connect an AI assistant or agent.
                     </td>
                   </tr>
                 ) : (
@@ -2359,7 +2366,7 @@ export default function WorkspaceDetailPage() {
                     <input
                       type="text"
                       className="modern-input"
-                      placeholder="e.g. Claude Support Bot or Financial Analyst"
+                      placeholder="e.g. AI Support Assistant or Financial Analyst Agent"
                       value={shareName}
                       onChange={(e) => setShareName(e.target.value)}
                     />
@@ -3429,10 +3436,10 @@ export default function WorkspaceDetailPage() {
               </p>
             </div>
 
-            {/* Claude.ai Web Remote Connector URL */}
+            {/* Direct AI Web Connector URL */}
             <div style={{ marginBottom: "1.25rem" }}>
               <div style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", marginBottom: "0.35rem", letterSpacing: "0.04em" }}>
-                1. Claude.ai Web Remote Connector URL
+                1. Direct AI Web Connector URL
               </div>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 <input
@@ -3445,7 +3452,7 @@ export default function WorkspaceDetailPage() {
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(`${getApiBase()}/mcp?token=${createdCredential.raw_token}`);
-                    notify("success", "Claude.ai Connector URL copied!");
+                    notify("success", "AI Web Connector URL copied!");
                   }}
                   className="pill-btn pill-btn-solid"
                   style={{ padding: "0 1.15rem" }}
@@ -3455,7 +3462,7 @@ export default function WorkspaceDetailPage() {
                 </button>
               </div>
               <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "0.3rem" }}>
-                Paste this into Claude.ai with <strong>Authentication: None</strong> to connect directly and securely.
+                Paste this into any web-based AI assistant with <strong>Authentication: None</strong> to connect directly and securely.
               </div>
             </div>
 
@@ -3488,10 +3495,10 @@ export default function WorkspaceDetailPage() {
               </div>
             </div>
 
-            {/* Claude Desktop Config Snippet */}
+            {/* AI Client JSON Config */}
             <div style={{ marginBottom: "1.75rem" }}>
               <div style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.35rem", letterSpacing: "0.04em" }}>
-                3. Claude Desktop / Cursor JSON Config
+                3. AI Client JSON Configuration
               </div>
               <div style={{
                 padding: "0.85rem 1.1rem",

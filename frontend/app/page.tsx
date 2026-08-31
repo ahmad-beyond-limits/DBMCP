@@ -69,7 +69,7 @@ export default function LandingPage() {
               marginBottom: "2.25rem",
               fontWeight: 400,
             }}>
-              POAIS (Policy-Oriented AI Space) securely connects Claude Desktop, Cursor, and custom LLM agents to your internal Excel tables, CSVs, and documents with deterministic data masking and forensic query logging.
+              POAIS (Policy-Oriented AI Space) securely connects AI assistants, autonomous agents, and LLM tools to your internal Excel tables, CSVs, and documents with deterministic data masking and forensic query logging.
             </p>
 
             <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -273,7 +273,7 @@ export default function LandingPage() {
             Give your AI agents safe data access today.
           </h2>
           <p style={{ color: "rgba(255, 255, 255, 0.7)", fontSize: "0.92rem", lineHeight: 1.5, fontWeight: 400 }}>
-            Create an isolated workspace, upload documents, and generate custom MCP links for Claude Desktop or Cursor.
+            Create an isolated workspace, upload documents, and generate custom MCP links for your AI assistants and agents.
           </p>
         </div>
 

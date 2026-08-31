@@ -6,6 +6,11 @@ import Navbar from "./Navbar";
 export const metadata: Metadata = {
   title: "POAIS | Policy-Oriented AI Space",
   description: "Policy-Oriented AI Space (POAIS) - The Secure, Policy-Enforced Data Gateway for AI Agents & Model Context Protocol (MCP).",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

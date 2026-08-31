@@ -212,12 +212,17 @@ async def rotate_account_credential(
 
 
 @router.delete("/mcp-credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def revoke_account_credential(
+async def revoke_or_delete_account_credential(
     credential_id: str,
+    permanent: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Revokes an Account MCP credential."""
+    """
+    Revokes or permanently deletes an Account MCP credential.
+    If permanent=True or if the credential is already revoked, it permanently deletes the credential.
+    Otherwise, it marks it as revoked.
+    """
     stmt = select(MCPCredential).where(
         MCPCredential.id == credential_id,
         MCPCredential.user_id == current_user.id,
@@ -227,19 +232,33 @@ async def revoke_account_credential(
     if not cred:
         raise HTTPException(status_code=404, detail="Account MCP credential not found")
 
-    cred.revoked_at = utc_now()
-    await db.commit()
-
-    await AuditService.log_event(
-        db=db,
-        user_id=current_user.id,
-        workspace_id=None,
-        operation="REVOKE_ACCOUNT_MCP_KEY",
-        actor_type="USER",
-        credential_id=cred.id,
-        decision="ALLOW",
-        reason=f"User revoked Account MCP key '{cred.name}' ({cred.credential_prefix})",
-    )
+    if permanent or cred.revoked_at is not None:
+        key_name = cred.name
+        key_prefix = cred.credential_prefix
+        await db.delete(cred)
+        await db.commit()
+        await AuditService.log_event(
+            db=db,
+            user_id=current_user.id,
+            workspace_id=None,
+            operation="DELETE_ACCOUNT_MCP_KEY",
+            actor_type="USER",
+            decision="ALLOW",
+            reason=f"User permanently deleted revoked Account MCP key '{key_name}' ({key_prefix})",
+        )
+    else:
+        cred.revoked_at = utc_now()
+        await db.commit()
+        await AuditService.log_event(
+            db=db,
+            user_id=current_user.id,
+            workspace_id=None,
+            operation="REVOKE_ACCOUNT_MCP_KEY",
+            actor_type="USER",
+            credential_id=cred.id,
+            decision="ALLOW",
+            reason=f"User revoked Account MCP key '{cred.name}' ({cred.credential_prefix})",
+        )
 
 
 @router.get("/mcp-activity", response_model=List[AccountActivityResponse])

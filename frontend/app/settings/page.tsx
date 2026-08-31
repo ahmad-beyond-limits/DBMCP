@@ -41,7 +41,95 @@ import {
   Sliders,
   Search,
   Key,
+  Download,
 } from "lucide-react";
+
+const POAIS_ACCOUNT_AI_SKILLS_MARKDOWN = `# POAIS: Policy-Oriented AI Space
+## Account Master AI Agent Skills, Autonomous Workflows & Operational Protocol
+
+You are connected to POAIS as an **Autonomous Account Master AI Operator** via the Model Context Protocol (MCP).
+Use these instructions to manage workspaces, ingest data, execute analytics, and operate autonomously while upholding strict privacy, security, and verification guarantees.
+
+---
+
+## 🛠️ Complete Account Master MCP Tool Suite
+
+1. \`account_info()\`
+   - Retrieve authenticated user ID, username, and workspace summary statistics.
+
+2. \`list_workspaces()\`
+   - Discover all accessible workspaces across the account with member roles and file counts.
+
+3. \`create_workspace(name, description)\`
+   - Autonomously provision new isolated workspaces for projects, teams, or datasets.
+
+4. \`get_workspace(workspace_id)\`
+   - Inspect workspace details, permissions, and active privacy policies.
+
+5. \`list_files(workspace_id)\`
+   - List all indexed documents (PDF, DOCX, TXT, JSON, Images) and structured tables (CSV, Excel .xlsx).
+
+6. \`import_cloud_link(url, workspace_id, custom_filename, description)\`
+   - **Autonomous Link Ingestion Engine**: Ingest and index shared Google Drive, Dropbox, or public document/data links directly into a workspace.
+
+7. \`upload_file(workspace_id, filename, content, description)\`
+   - Ingest raw text, markdown, CSV, or JSON directly into a target workspace.
+
+8. \`read_file_content(resource_id)\`
+   - Read extracted document text or JSON with real-time PII anonymisation and column masking applied.
+
+9. \`query_dataset(resource_id, columns, filters, limit, aggregation)\`
+   - Execute exact-match filtering, custom column projections, and aggregations over tabular datasets.
+
+10. \`edit_dataset(resource_id, action, filters, updates, new_row)\`
+    - Safely modify dataset records: \`update\`, \`insert\`, or \`delete\`.
+
+11. \`delete_file(resource_id)\`
+    - Remove a document or dataset file from a workspace.
+
+12. \`list_workspace_mcp_links(workspace_id)\`
+    - Inspect active delegated MCP credentials for a specific workspace.
+
+13. \`generate_workspace_mcp_link(workspace_id, name, permissions, expires_in_days)\`
+    - Delegate scoped, revocable MCP tokens for specialized AI tasks or subagents.
+
+14. \`revoke_workspace_mcp_link(credential_id)\`
+    - Revoke a delegated workspace MCP credential.
+
+---
+
+## ⚡ AUTONOMOUS WORKFLOWS & OPERATIONAL DIRECTIVES
+
+### 1. AUTONOMOUS EXTERNAL LINK INGESTION & DEEP ANALYSIS (CRITICAL)
+- When a user shares a Google Drive, Dropbox, or external web link and asks you to:
+  - *"Analyze this link"*, *"Understand this document"*, *"Extract insights from this sheet"*, or *"Inspect this dataset"*:
+- **MANDATORY 4-STEP AUTONOMOUS WORKFLOW**:
+  1. **Identify or Create Target Workspace**: Call \`list_workspaces()\` to pick an appropriate workspace (or call \`create_workspace()\` if a dedicated space is needed).
+  2. **Ingest the Link**: Call \`import_cloud_link(url=..., workspace_id=...)\` to download, process, and index the cloud resource.
+  3. **Inspect Content & Schema**: Call \`read_file_content()\` for text documents or \`query_dataset(limit=5)\` for tabular files to understand the schema and distributions.
+  4. **Deliver Structured Analysis**: Present an executive summary, key metrics, discovered patterns, and actionable takeaways clearly to the user.
+
+### 2. RECONFIRM & VERIFY EVERY STATE MUTATION (CRITICAL)
+- **MANDATORY VERIFICATION DIRECTIVE**:
+  - Whenever you execute a state-changing operation (\`edit_dataset\`, \`create_workspace\`, \`upload_file\`, \`import_cloud_link\`, or \`delete_file\`), you MUST IMMEDIATELY programmatically verify that the action succeeded before reporting to the user:
+    - After \`edit_dataset\`: Call \`query_dataset()\` to confirm that the row was added, updated, or removed.
+    - After \`create_workspace\`: Call \`get_workspace()\` to confirm the workspace exists.
+    - After \`import_cloud_link\` / \`upload_file\`: Call \`list_files()\` to verify the file status is \`READY\`.
+- **Never claim a task is completed without programmatic verification.**
+
+### 3. CONFIRM DESTRUCTIVE OPERATIONS
+- When asked to delete a file (\`delete_file\`) or purge multiple records (\`edit_dataset\` action \`delete\`):
+  - If the user's intent is broad or ambiguous, confirm the exact targets and record counts to prevent accidental data loss.
+
+### 4. ZERO ASSUMPTIONS & EXPLICIT CLARITY
+- **Never guess column names, data types, missing values, or metrics.**
+- Always inspect the actual schema and sample rows first.
+- If data is inconsistent or ambiguous, highlight the exact discrepancy to the user and offer recommendations.
+
+### 5. RESPECT PRIVACY POLICIES & BOUNDARIES
+- Redaction rules (\`[MASKED]\`, \`[REDACTED]\`) and dropped columns are enforced by POAIS privacy policies.
+- Acknowledge redacted fields transparently and analyze all permitted data thoroughly.
+`;
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -81,12 +169,14 @@ export default function SettingsPage() {
   const [createdKeyResult, setCreatedKeyResult] = useState<AccountMCPCredentialCreated | null>(null);
   const [rotatingKeyId, setRotatingKeyId] = useState<string | null>(null);
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+  const [deletingKeyId, setDeletingKeyId] = useState<string | null>(null);
   const [copiedPrefixId, setCopiedPrefixId] = useState<string | null>(null);
 
   // One-time Reveal Copy State
   const [copiedToken, setCopiedToken] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
+  const [copiedSkills, setCopiedSkills] = useState(false);
 
   // Account Activity State
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -242,6 +332,21 @@ export default function SettingsPage() {
       alert(err.message || "Failed to revoke key.");
     } finally {
       setRevokingKeyId(null);
+    }
+  };
+
+  const handleDeleteRevokedKey = async (id: string) => {
+    if (!confirm("Permanently delete this revoked MCP key record? This action cannot be undone.")) {
+      return;
+    }
+    setDeletingKeyId(id);
+    try {
+      await api.deleteAccountMCPCredential(id);
+      await loadAccountCredentials();
+    } catch (err: any) {
+      alert(err.message || "Failed to delete revoked key.");
+    } finally {
+      setDeletingKeyId(null);
     }
   };
 
@@ -537,36 +642,55 @@ export default function SettingsPage() {
                       </div>
 
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        {cred.is_active && (
-                          <button
-                            type="button"
-                            onClick={() => handleRotateKey(cred.id)}
-                            disabled={rotatingKeyId === cred.id}
-                            className="pill-btn pill-btn-glass pill-btn-sm"
-                            style={{ gap: "0.35rem" }}
-                            title="Rotate key: generates a new raw token and revokes the old one"
-                          >
-                            <RotateCw size={12} className={rotatingKeyId === cred.id ? "animate-spin" : ""} />
-                            <span>{rotatingKeyId === cred.id ? "Rotating..." : "Rotate"}</span>
-                          </button>
-                        )}
+                        {cred.is_active ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleRotateKey(cred.id)}
+                              disabled={rotatingKeyId === cred.id}
+                              className="pill-btn pill-btn-glass pill-btn-sm"
+                              style={{ gap: "0.35rem" }}
+                              title="Rotate key: generates a new raw token and revokes the old one"
+                            >
+                              <RotateCw size={12} className={rotatingKeyId === cred.id ? "animate-spin" : ""} />
+                              <span>{rotatingKeyId === cred.id ? "Rotating..." : "Rotate"}</span>
+                            </button>
 
-                        {cred.is_active && (
+                            <button
+                              type="button"
+                              onClick={() => handleRevokeKey(cred.id)}
+                              disabled={revokingKeyId === cred.id}
+                              className="pill-btn pill-btn-sm"
+                              style={{
+                                background: "rgba(239, 68, 68, 0.06)",
+                                color: "#DC2626",
+                                border: "1px solid rgba(239, 68, 68, 0.18)",
+                                fontWeight: 500,
+                                gap: "0.35rem",
+                              }}
+                            >
+                              <Trash2 size={12} />
+                              <span>{revokingKeyId === cred.id ? "Revoking..." : "Revoke"}</span>
+                            </button>
+                          </>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => handleRevokeKey(cred.id)}
-                            disabled={revokingKeyId === cred.id}
+                            onClick={() => handleDeleteRevokedKey(cred.id)}
+                            disabled={deletingKeyId === cred.id}
                             className="pill-btn pill-btn-sm"
                             style={{
-                              background: "rgba(239, 68, 68, 0.06)",
+                              background: "rgba(239, 68, 68, 0.08)",
                               color: "#DC2626",
-                              border: "1px solid rgba(239, 68, 68, 0.18)",
+                              border: "1px solid rgba(239, 68, 68, 0.2)",
                               fontWeight: 500,
                               gap: "0.35rem",
+                              fontSize: "0.75rem",
                             }}
+                            title="Permanently remove this revoked key record"
                           >
                             <Trash2 size={12} />
-                            <span>{revokingKeyId === cred.id ? "Revoking..." : "Revoke"}</span>
+                            <span>{deletingKeyId === cred.id ? "Deleting..." : "Delete Key"}</span>
                           </button>
                         )}
                       </div>
@@ -1579,6 +1703,71 @@ export default function SettingsPage() {
                     null,
                     2
                   )}</pre>
+                </div>
+              </div>
+
+              {/* Section 4: AI Agent Skills File & Autonomous Directives */}
+              <div style={{ marginBottom: "0.5rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.45rem", flexWrap: "wrap", gap: "0.4rem" }}>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
+                    4. AI Agent Skills & Operational Directives
+                  </div>
+                  <div style={{ display: "flex", gap: "0.35rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(POAIS_ACCOUNT_AI_SKILLS_MARKDOWN);
+                        setCopiedSkills(true);
+                        setTimeout(() => setCopiedSkills(false), 2000);
+                      }}
+                      className="pill-btn pill-btn-glass"
+                      style={{ padding: "0.2rem 0.65rem", fontSize: "0.74rem", gap: "0.3rem" }}
+                    >
+                      {copiedSkills ? <Check size={12} strokeWidth={1.5} /> : <Copy size={12} strokeWidth={1.5} />}
+                      <span>{copiedSkills ? "Copied Skills!" : "Copy Skills Prompt"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const blob = new Blob([POAIS_ACCOUNT_AI_SKILLS_MARKDOWN], { type: "text/markdown" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "POAIS_ACCOUNT_AGENT_SKILLS.md";
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="pill-btn pill-btn-glass"
+                      style={{ padding: "0.2rem 0.65rem", fontSize: "0.74rem", gap: "0.3rem" }}
+                    >
+                      <Download size={12} strokeWidth={1.5} />
+                      <span>Download .md</span>
+                    </button>
+                  </div>
+                </div>
+                <div style={{
+                  padding: "0.85rem 1rem",
+                  background: "var(--bg-page)",
+                  border: "1px solid rgba(40, 40, 40, 0.05)",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: "0.76rem",
+                  color: "var(--text-secondary)",
+                  lineHeight: 1.5,
+                }}>
+                  <div style={{ fontWeight: 500, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
+                    ⚡ Key AI Autonomous Directives & Best Practices:
+                  </div>
+                  <ul style={{ margin: "0 0 0 1.1rem", padding: 0, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                    <li>
+                      <strong>Autonomous Link Ingestion & Analysis:</strong> When given Google Drive, Dropbox, or web links, the AI is instructed to autonomously ingest the data with <code>import_cloud_link</code>, inspect its schema, run analytical queries, and deliver an executive report.
+                    </li>
+                    <li>
+                      <strong>Mandatory Self-Verification:</strong> Whenever the AI executes <code>edit_dataset</code>, <code>create_workspace</code>, or file actions, it is strictly required to verify persistence with a query before replying.
+                    </li>
+                    <li>
+                      <strong>Confirmation & Zero Assumptions:</strong> Destructive operations require confirmation; columns and data types must always be inspected first.
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>

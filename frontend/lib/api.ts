@@ -438,6 +438,12 @@ class ApiClient {
     });
   }
 
+  async deleteAccountMCPCredential(credentialId: string): Promise<{ status: string }> {
+    return this.request<{ status: string }>(`/account/mcp-credentials/${credentialId}?permanent=true`, {
+      method: "DELETE",
+    });
+  }
+
   async getAccountMCPActivity(limit: number = 50): Promise<AccountMCPActivity[]> {
     return this.request<AccountMCPActivity[]>(`/account/mcp-activity?limit=${limit}`);
   }

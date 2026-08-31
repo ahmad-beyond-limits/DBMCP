@@ -237,7 +237,7 @@ export default function DashboardPage() {
             {totalKeys}
           </div>
           <div style={{ fontSize: "0.78rem", color: "var(--text-tertiary)", marginTop: "0.5rem" }}>
-            Connected Claude &amp; Cursor tokens
+            Active connected AI tokens
           </div>
         </div>
       </div>
