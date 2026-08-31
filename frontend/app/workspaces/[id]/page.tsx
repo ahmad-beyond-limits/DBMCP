@@ -51,6 +51,11 @@ import {
   FileCode,
   Layers,
   Save,
+  Image as ImageIcon,
+  Link2,
+  Globe,
+  CloudDownload,
+  HardDrive,
 } from "lucide-react";
 
 const POAIS_AI_SKILLS_MARKDOWN = `# POAIS: Policy-Oriented AI Space
@@ -165,12 +170,18 @@ export default function WorkspaceDetailPage() {
   const [editWsDesc, setEditWsDesc] = useState("");
   const [updatingWs, setUpdatingWs] = useState(false);
 
-  // Simplified 3-Step Upload Modal State
+  // Simplified 3-Step Upload & Cloud Link Import Modal State
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadMode, setUploadMode] = useState<"local" | "cloud_link">("local");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadDescription, setUploadDescription] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadStep, setUploadStep] = useState<1 | 2 | 3>(1);
+
+  // Cloud Link Importer State (Google Drive, Dropbox, Web URLs)
+  const [cloudUrl, setCloudUrl] = useState("");
+  const [cloudCustomName, setCloudCustomName] = useState("");
+  const [importingCloud, setImportingCloud] = useState(false);
 
   // 🌟 Advanced Power Query / Excel Spreadsheet "Share MCP Link" Wizard State 🌟
   const [shareWizardOpen, setShareWizardOpen] = useState(false);
@@ -484,6 +495,61 @@ export default function WorkspaceDetailPage() {
       ext.endsWith(".xls") ||
       ext.endsWith(".json")
     );
+  };
+
+  // Helper to distinguish image files
+  const isImageFile = (file: FileRecord) => {
+    const ext = (file.original_filename || "").toLowerCase();
+    const type = (file.file_type || "").toUpperCase();
+    return (
+      type === "IMAGE" ||
+      type === "PNG" ||
+      type === "JPG" ||
+      type === "JPEG" ||
+      type === "WEBP" ||
+      type === "GIF" ||
+      type === "SVG" ||
+      ext.endsWith(".png") ||
+      ext.endsWith(".jpg") ||
+      ext.endsWith(".jpeg") ||
+      ext.endsWith(".webp") ||
+      ext.endsWith(".gif") ||
+      ext.endsWith(".svg")
+    );
+  };
+
+  // Helper to detect cloud provider for live badge
+  const detectCloudProvider = (url: string) => {
+    const u = url.toLowerCase();
+    if (u.includes("drive.google.com")) return { name: "Google Drive", icon: "📁", badge: "Google Drive File" };
+    if (u.includes("docs.google.com/document")) return { name: "Google Docs", icon: "📄", badge: "Google Doc (Auto PDF)" };
+    if (u.includes("docs.google.com/spreadsheets")) return { name: "Google Sheets", icon: "📊", badge: "Google Sheet (Auto CSV)" };
+    if (u.includes("docs.google.com/presentation")) return { name: "Google Slides", icon: "📑", badge: "Google Slides (Auto PDF)" };
+    if (u.includes("dropbox.com") || u.includes("dl.dropboxusercontent.com")) return { name: "Dropbox", icon: "📦", badge: "Dropbox Shared File" };
+    if (u.startsWith("http://") || u.startsWith("https://")) return { name: "Direct Cloud Link", icon: "🌐", badge: "Direct Web / S3 Link" };
+    return null;
+  };
+
+  // Cloud Link Importer Flow (Google Drive / Dropbox / Direct URLs)
+  const handleImportCloudLink = async () => {
+    if (!cloudUrl.trim()) return;
+    setImportingCloud(true);
+    try {
+      const imported = await api.importCloudLink(workspaceId, cloudUrl.trim(), cloudCustomName.trim() || undefined);
+      notify("success", `Cloud file '${imported.original_filename}' successfully converted to MCP Resource!`);
+      setFiles((prev) => [imported, ...prev]);
+      setSelectedFileIds((prev) => [...prev, imported.id]);
+      if (isDataFile(imported)) {
+        setActiveTransformFileId(imported.id);
+      }
+      setUploadModalOpen(false);
+      setCloudUrl("");
+      setCloudCustomName("");
+    } catch (err: any) {
+      notify("error", err.message || "Failed to import cloud link");
+    } finally {
+      setImportingCloud(false);
+    }
   };
 
   // File Upload Flow
@@ -1024,12 +1090,21 @@ export default function WorkspaceDetailPage() {
                     <tr key={file.id}>
                       <td style={{ fontWeight: 450, color: "var(--text-primary)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                          <FileText size={16} strokeWidth={1.5} color={isDataFile(file) ? "#2E3032" : "#989B9D"} />
+                          {isImageFile(file) ? (
+                            <ImageIcon size={16} strokeWidth={1.5} color="#4F46E5" />
+                          ) : isDataFile(file) ? (
+                            <Table size={16} strokeWidth={1.5} color="#2E3032" />
+                          ) : (
+                            <FileText size={16} strokeWidth={1.5} color="#989B9D" />
+                          )}
                           <span>{file.original_filename}</span>
                         </div>
                       </td>
                       <td>
-                        <span className="badge-status">
+                        <span className="badge-status" style={{
+                          background: isImageFile(file) ? "rgba(99, 102, 241, 0.1)" : undefined,
+                          color: isImageFile(file) ? "#4F46E5" : undefined,
+                        }}>
                           {file.file_type}
                         </span>
                       </td>
@@ -1046,14 +1121,12 @@ export default function WorkspaceDetailPage() {
                       </td>
                       <td className="table-actions-cell">
                         <div className="table-actions-group">
-                          {file.file_type !== "PDF" && (
-                            <button
-                              onClick={() => handleViewContent(file)}
-                              className="pill-btn pill-btn-glass pill-btn-sm"
-                            >
-                              View Content
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleViewContent(file)}
+                            className="pill-btn pill-btn-glass pill-btn-sm"
+                          >
+                            View Content
+                          </button>
                           {workspace.role === "OWNER" && (
                             <button
                               onClick={() => handleDeleteFile(file.id)}
@@ -1868,32 +1941,36 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 3-STEP UPLOAD MODAL                                                       */}
+      {/* 3-STEP UPLOAD & CLOUD LINK IMPORTER MODAL                                 */}
       {/* ========================================================================= */}
       {uploadModalOpen && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: "rgba(46, 48, 50, 0.35)",
-          backdropFilter: "blur(12px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 150,
-          padding: "1rem",
-        }}>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setUploadModalOpen(false);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 10, 0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "clamp(1rem, 2.5vw, 2rem)",
+            overflowY: "auto",
+          }}
+        >
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: "520px",
-            padding: "clamp(1.75rem, 4vw, 2.5rem) clamp(1.25rem, 3vw, 2.25rem)",
+            padding: "clamp(1.5rem, 3.5vw, 2.25rem)",
             position: "relative",
             background: "#FFFFFF",
-            boxShadow: "var(--shadow-lg)",
+            boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)",
             borderRadius: "var(--radius-xl)",
-            maxHeight: "92vh",
+            maxHeight: "88vh",
             overflowY: "auto",
           }}>
             <button
@@ -1905,127 +1982,296 @@ export default function WorkspaceDetailPage() {
                 right: "1.25rem",
                 width: "32px",
                 height: "32px",
+                zIndex: 10,
               }}
+              title="Close modal"
             >
               <X size={14} strokeWidth={1.5} />
             </button>
 
-            <div className="slash-tag">DOCUMENT INGESTION</div>
+            <div className="slash-tag">RESOURCE INGESTION</div>
             <h2 style={{ fontSize: "1.35rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-              Upload Document to Workspace
+              Add Content to Workspace
             </h2>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "1.75rem", lineHeight: 1.5, fontWeight: 400 }}>
-              Follow simple steps to add files for your AI agents to query.
+            <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "1.25rem", lineHeight: 1.5, fontWeight: 400 }}>
+              Upload local documents and images or convert Google Drive &amp; Dropbox links into MCP resources.
             </p>
 
-            {/* Step 1: File selection */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#2E3032", color: "#FFFFFF", fontSize: "0.72rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  1
-                </span>
-                <span style={{ fontSize: "0.8rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
-                  Choose Your File
-                </span>
-              </div>
-
-              {!uploadFile ? (
-                <label style={{
+            {/* Mode Switcher Tabs */}
+            <div style={{
+              display: "flex",
+              gap: "0.35rem",
+              marginBottom: "1.5rem",
+              background: "var(--bg-page)",
+              padding: "0.25rem",
+              borderRadius: "var(--radius-pill)",
+              border: "1px solid rgba(40, 40, 40, 0.05)",
+            }}>
+              <button
+                type="button"
+                onClick={() => setUploadMode("local")}
+                style={{
+                  flex: 1,
                   display: "flex",
-                  flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  padding: "2rem 1rem",
-                  border: "1px dashed rgba(40, 40, 40, 0.12)",
-                  borderRadius: "var(--radius-md)",
-                  background: "var(--bg-page)",
+                  gap: "0.45rem",
+                  padding: "0.45rem 0.85rem",
+                  borderRadius: "var(--radius-pill)",
+                  border: "none",
+                  background: uploadMode === "local" ? "#2E3032" : "transparent",
+                  color: uploadMode === "local" ? "#FFFFFF" : "var(--text-secondary)",
+                  fontWeight: uploadMode === "local" ? 500 : 400,
+                  fontSize: "0.8rem",
                   cursor: "pointer",
+                  boxShadow: uploadMode === "local" ? "0 2px 6px rgba(0, 0, 0, 0.1)" : "none",
                   transition: "all 0.15s ease",
-                  textAlign: "center",
-                }}>
-                  <Upload size={22} strokeWidth={1.5} color="var(--text-primary)" style={{ marginBottom: "0.5rem" }} />
-                  <span style={{ fontWeight: 450, fontSize: "0.9rem", color: "var(--text-primary)" }}>
-                    Click to browse or drag file here
-                  </span>
-                  <span style={{ fontSize: "0.78rem", color: "var(--text-tertiary)", marginTop: "0.25rem" }}>
-                    Excel (.xlsx, .xls), CSV, JSON, PDF, DOCX, TXT (up to 50MB)
-                  </span>
-                  <input
-                    type="file"
-                    accept=".pdf,.docx,.txt,.csv,.json,.xlsx,.xls"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setUploadFile(e.target.files[0]);
-                      }
-                    }}
-                    style={{ display: "none" }}
-                  />
-                </label>
-              ) : (
-                <div style={{
+                }}
+              >
+                <Upload size={13} strokeWidth={1.5} />
+                <span>Upload Local File</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setUploadMode("cloud_link")}
+                style={{
+                  flex: 1,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "0.85rem 1.1rem",
-                  background: "var(--bg-page)",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid rgba(40, 40, 40, 0.05)",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                    <FileText size={18} strokeWidth={1.5} color="var(--text-primary)" />
-                    <div>
-                      <div style={{ fontWeight: 450, fontSize: "0.88rem", color: "var(--text-primary)" }}>{uploadFile.name}</div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>{(uploadFile.size / 1024).toFixed(1)} KB</div>
-                    </div>
+                  justifyContent: "center",
+                  gap: "0.45rem",
+                  padding: "0.45rem 0.85rem",
+                  borderRadius: "var(--radius-pill)",
+                  border: "none",
+                  background: uploadMode === "cloud_link" ? "#2E3032" : "transparent",
+                  color: uploadMode === "cloud_link" ? "#FFFFFF" : "var(--text-secondary)",
+                  fontWeight: uploadMode === "cloud_link" ? 500 : 400,
+                  fontSize: "0.8rem",
+                  cursor: "pointer",
+                  boxShadow: uploadMode === "cloud_link" ? "0 2px 6px rgba(0, 0, 0, 0.1)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <CloudDownload size={13} strokeWidth={1.5} />
+                <span>Drive &amp; Dropbox Link</span>
+              </button>
+            </div>
+
+            {/* ========================================================================= */}
+            {/* TAB 1: LOCAL FILE UPLOAD (DOCUMENTS & IMAGES)                             */}
+            {/* ========================================================================= */}
+            {uploadMode === "local" && (
+              <div>
+                {/* Step 1: File selection */}
+                <div style={{ marginBottom: "1.35rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                    <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#2E3032", color: "#FFFFFF", fontSize: "0.72rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      1
+                    </span>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+                      Choose Document or Image File
+                    </span>
                   </div>
+
+                  {!uploadFile ? (
+                    <label style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "1.75rem 1rem",
+                      border: "1px dashed rgba(40, 40, 40, 0.14)",
+                      borderRadius: "var(--radius-md)",
+                      background: "var(--bg-page)",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                      textAlign: "center",
+                    }}>
+                      <Upload size={20} strokeWidth={1.5} color="var(--text-primary)" style={{ marginBottom: "0.45rem" }} />
+                      <span style={{ fontWeight: 450, fontSize: "0.88rem", color: "var(--text-primary)" }}>
+                        Click to browse or drag file here
+                      </span>
+                      <span style={{ fontSize: "0.76rem", color: "var(--text-tertiary)", marginTop: "0.25rem" }}>
+                        Excel, CSV, JSON, PDF, DOCX, TXT, PNG, JPG, WEBP, SVG (up to 50MB)
+                      </span>
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt,.csv,.json,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.gif,.svg"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            setUploadFile(e.target.files[0]);
+                          }
+                        }}
+                        style={{ display: "none" }}
+                      />
+                    </label>
+                  ) : (
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "0.75rem 1rem",
+                      background: "var(--bg-page)",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid rgba(40, 40, 40, 0.05)",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                        <FileText size={16} strokeWidth={1.5} color="var(--text-primary)" />
+                        <div>
+                          <div style={{ fontWeight: 450, fontSize: "0.85rem", color: "var(--text-primary)" }}>{uploadFile.name}</div>
+                          <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>{(uploadFile.size / 1024).toFixed(1)} KB</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setUploadFile(null)}
+                        style={{ background: "transparent", border: "none", color: "var(--text-tertiary)", cursor: "pointer" }}
+                      >
+                        <X size={14} strokeWidth={1.5} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Step 2: Description for AI */}
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.45rem" }}>
+                    <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#2E3032", color: "#FFFFFF", fontSize: "0.72rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      2
+                    </span>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+                      Add Description for AI (Optional)
+                    </span>
+                  </div>
+                  <textarea
+                    className="modern-input"
+                    placeholder="e.g. Q3 Sales Data - AI can use this for revenue calculations and customer summaries."
+                    value={uploadDescription}
+                    onChange={(e) => setUploadDescription(e.target.value)}
+                    style={{ height: "60px", resize: "none", fontSize: "0.82rem" }}
+                  />
+                </div>
+
+                {/* Step 3: Action */}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
                   <button
-                    onClick={() => setUploadFile(null)}
-                    style={{ background: "transparent", border: "none", color: "var(--text-tertiary)", cursor: "pointer" }}
+                    type="button"
+                    onClick={() => setUploadModalOpen(false)}
+                    className="pill-btn pill-btn-glass"
                   >
-                    <X size={15} strokeWidth={1.5} />
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!uploadFile || uploading}
+                    onClick={handleExecuteUpload}
+                    className="pill-btn pill-btn-solid"
+                  >
+                    {uploading ? "Processing..." : "Upload & Save"}
+                    <ArrowRight size={13} strokeWidth={1.5} />
                   </button>
                 </div>
-              )}
-            </div>
-
-            {/* Step 2: Description for AI */}
-            <div style={{ marginBottom: "1.75rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#2E3032", color: "#FFFFFF", fontSize: "0.72rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  2
-                </span>
-                <span style={{ fontSize: "0.8rem", fontWeight: 450, textTransform: "uppercase", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
-                  Add Description for AI (Optional)
-                </span>
               </div>
-              <textarea
-                className="modern-input"
-                placeholder="e.g. Q3 Sales Data - AI can use this for revenue calculations and customer summaries."
-                value={uploadDescription}
-                onChange={(e) => setUploadDescription(e.target.value)}
-                style={{ height: "70px", resize: "none", fontSize: "0.85rem" }}
-              />
-            </div>
+            )}
 
-            {/* Step 3: Action */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-              <button
-                type="button"
-                onClick={() => setUploadModalOpen(false)}
-                className="pill-btn pill-btn-glass"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!uploadFile || uploading}
-                onClick={handleExecuteUpload}
-                className="pill-btn pill-btn-solid"
-              >
-                {uploading ? "Processing Document..." : "Upload & Save"}
-                <ArrowRight size={13} strokeWidth={1.5} />
-              </button>
-            </div>
+            {/* ========================================================================= */}
+            {/* TAB 2: GOOGLE DRIVE & DROPBOX CLOUD LINK IMPORTER                        */}
+            {/* ========================================================================= */}
+            {uploadMode === "cloud_link" && (
+              <div>
+                <div style={{ marginBottom: "1.25rem" }}>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+                    Paste Shared Cloud Link
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      placeholder="https://drive.google.com/file/d/... or https://www.dropbox.com/s/..."
+                      value={cloudUrl}
+                      onChange={(e) => setCloudUrl(e.target.value)}
+                      className="modern-input"
+                      style={{ paddingLeft: "2.2rem" }}
+                      autoFocus
+                    />
+                    <Link2 size={15} color="var(--text-tertiary)" style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)" }} />
+                  </div>
+
+                  {/* Live Provider Detection Badge */}
+                  {(() => {
+                    const detected = detectCloudProvider(cloudUrl);
+                    if (detected) {
+                      return (
+                        <div style={{
+                          marginTop: "0.55rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          padding: "0.25rem 0.65rem",
+                          borderRadius: "var(--radius-pill)",
+                          background: "rgba(46, 48, 50, 0.06)",
+                          color: "var(--text-primary)",
+                          border: "1px solid rgba(40, 40, 40, 0.1)",
+                          fontSize: "0.75rem",
+                          fontWeight: 500,
+                        }}>
+                          <span>{detected.icon}</span>
+                          <span>Provider: <strong>{detected.badge}</strong></span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ fontSize: "0.74rem", color: "var(--text-tertiary)", marginTop: "0.35rem" }}>
+                        Supports Google Drive files, Google Docs/Sheets/Slides, Dropbox, and direct URLs.
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 450, textTransform: "uppercase", marginBottom: "0.4rem", color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
+                    Custom Resource Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Q4_Executive_Report.pdf or customer_dataset.csv"
+                    value={cloudCustomName}
+                    onChange={(e) => setCloudCustomName(e.target.value)}
+                    className="modern-input"
+                  />
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", marginTop: "0.25rem" }}>
+                    Leave blank to automatically extract the original filename from the cloud provider.
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setUploadModalOpen(false)}
+                    className="pill-btn pill-btn-glass"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!cloudUrl.trim() || importingCloud}
+                    onClick={handleImportCloudLink}
+                    className="pill-btn pill-btn-solid"
+                  >
+                    {importingCloud ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        <span>Converting Link to MCP...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CloudDownload size={13} strokeWidth={1.5} />
+                        <span>Convert Link to MCP Resource</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2034,20 +2280,24 @@ export default function WorkspaceDetailPage() {
       {/* 🌟 ABOX SHARE MCP LINK WIZARD (TRANSFORMATION ONLY FOR TABULAR DATA)       */}
       {/* ========================================================================= */}
       {shareWizardOpen && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: "rgba(46, 48, 50, 0.4)",
-          backdropFilter: "blur(14px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 160,
-          padding: "clamp(0.5rem, 2vw, 1.5rem)",
-        }}>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShareWizardOpen(false);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 10, 0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "clamp(0.5rem, 2vw, 1.5rem)",
+            overflowY: "auto",
+          }}
+        >
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: shareStep === 2 && hasDataFilesSelected ? "98vw" : "650px",
@@ -2995,20 +3245,24 @@ export default function WorkspaceDetailPage() {
       {/* MODAL: VIEW EXTRACTED CONTENT (NON-PDF ONLY)                              */}
       {/* ========================================================================= */}
       {selectedFileContent && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: "rgba(46, 48, 50, 0.35)",
-          backdropFilter: "blur(12px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 150,
-          padding: "1rem",
-        }}>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedFileContent(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 10, 0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "clamp(1rem, 2.5vw, 2rem)",
+            overflowY: "auto",
+          }}
+        >
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: "800px",
@@ -3035,16 +3289,36 @@ export default function WorkspaceDetailPage() {
               <X size={14} strokeWidth={1.5} />
             </button>
 
-            <div className="slash-tag">PARSED CONTENT</div>
+            <div className="slash-tag">
+              {selectedFileContent.structured_data?.is_image ? "IMAGE RESOURCE" : "PARSED CONTENT"}
+            </div>
             <h3 style={{ fontSize: "1.35rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
               {selectedFileName}
             </h3>
 
-            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-              <span className="badge-status badge-status-allow">Indexed</span>
-              <span className="badge-status badge-status-transform">
-                Detected PII: {selectedFileContent.detected_entities?.length || 0}
-              </span>
+            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+              <span className="badge-status badge-status-allow">Indexed for MCP</span>
+              {selectedFileContent.structured_data?.is_image ? (
+                <>
+                  <span className="badge-status" style={{ background: "rgba(99, 102, 241, 0.1)", color: "#4F46E5" }}>
+                    {selectedFileContent.structured_data.format || "IMAGE"}
+                  </span>
+                  {selectedFileContent.structured_data.width && (
+                    <span className="badge-status" style={{ background: "rgba(0,0,0,0.05)", color: "var(--text-secondary)" }}>
+                      {selectedFileContent.structured_data.width} × {selectedFileContent.structured_data.height} px
+                    </span>
+                  )}
+                  {selectedFileContent.structured_data.mode && (
+                    <span className="badge-status" style={{ background: "rgba(0,0,0,0.05)", color: "var(--text-secondary)" }}>
+                      Mode: {selectedFileContent.structured_data.mode}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="badge-status badge-status-transform">
+                  Detected PII: {selectedFileContent.detected_entities?.length || 0}
+                </span>
+              )}
             </div>
 
             <div style={{
@@ -3093,30 +3367,50 @@ export default function WorkspaceDetailPage() {
       {/* MODAL: ONE-TIME TOKEN REVEAL                                              */}
       {/* ========================================================================= */}
       {createdCredential && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: "rgba(46, 48, 50, 0.35)",
-          backdropFilter: "blur(12px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 200,
-          padding: "1rem",
-        }}>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setCreatedCredential(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 10, 0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "clamp(1rem, 2.5vw, 2rem)",
+            overflowY: "auto",
+          }}
+        >
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: "620px",
             padding: "clamp(1.75rem, 4vw, 2.5rem) clamp(1.25rem, 3vw, 2.25rem)",
+            position: "relative",
             background: "#FFFFFF",
-            boxShadow: "var(--shadow-lg)",
+            boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)",
             borderRadius: "var(--radius-xl)",
-            maxHeight: "92vh",
+            maxHeight: "88vh",
             overflowY: "auto",
           }}>
+            <button
+              onClick={() => setCreatedCredential(null)}
+              className="icon-circle-btn"
+              style={{
+                position: "absolute",
+                top: "1.25rem",
+                right: "1.25rem",
+                width: "32px",
+                height: "32px",
+                zIndex: 10,
+              }}
+              title="Close modal"
+            >
+              <X size={14} strokeWidth={1.5} />
+            </button>
             <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
               <div className="slash-tag" style={{ justifyContent: "center" }}>POAIS MCP LINK READY</div>
               <h3 style={{ fontSize: "1.45rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
@@ -3295,20 +3589,24 @@ export default function WorkspaceDetailPage() {
       {/* MODAL: AI AGENT SKILLS & OPERATIONAL GUIDE                                */}
       {/* ========================================================================= */}
       {skillsModalOpen && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: "rgba(46, 48, 50, 0.4)",
-          backdropFilter: "blur(14px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 160,
-          padding: "clamp(0.5rem, 2vw, 1.5rem)",
-        }}>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSkillsModalOpen(false);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 10, 0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "clamp(0.5rem, 2vw, 1.5rem)",
+            overflowY: "auto",
+          }}
+        >
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: "760px",

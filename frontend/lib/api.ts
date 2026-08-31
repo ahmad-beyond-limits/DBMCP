@@ -202,6 +202,13 @@ class ApiClient {
     });
   }
 
+  async importCloudLink(workspaceId: string, url: string, customName?: string): Promise<FileRecord> {
+    return this.request<FileRecord>(`/workspaces/${workspaceId}/files/import-link`, {
+      method: "POST",
+      body: JSON.stringify({ url, custom_name: customName || null }),
+    });
+  }
+
   async getFileContent(workspaceId: string, fileId: string): Promise<ExtractedContent> {
     return this.request<ExtractedContent>(`/workspaces/${workspaceId}/files/${fileId}/content`);
   }

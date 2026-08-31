@@ -7,7 +7,7 @@ from app.auth.router import get_current_user
 from app.core.rate_limit import rate_limit
 from app.database.models import ExtractedContent, FileRecord, User
 from app.database.session import get_db
-from app.resources.schemas import ExtractedContentResponse, FileRecordResponse
+from app.resources.schemas import ExtractedContentResponse, FileRecordResponse, ImportLinkRequest
 from app.resources.service import ResourceService
 from app.workspaces.service import WorkspaceService
 
@@ -47,6 +47,29 @@ async def upload_file(
     """Upload and process a file to the workspace."""
     await WorkspaceService.verify_access(db, workspace_id, user.id)
     return await ResourceService.upload_and_process(db, workspace_id, user.id, file)
+
+
+@router.post(
+    "/import-link",
+    response_model=FileRecordResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit(max_requests=20, window_seconds=60, scope="file_import"))],
+)
+async def import_cloud_link(
+    workspace_id: str,
+    data: ImportLinkRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import and extract a file from Google Drive, Dropbox, or direct URL into workspace MCP."""
+    await WorkspaceService.verify_access(db, workspace_id, user.id)
+    return await ResourceService.import_from_cloud_link(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=user.id,
+        url=data.url,
+        custom_name=data.custom_name,
+    )
 
 
 @router.get("/{file_id}", response_model=FileRecordResponse)

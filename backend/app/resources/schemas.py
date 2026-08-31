@@ -29,3 +29,8 @@ class ExtractedContentResponse(BaseModel):
     detected_entities: Optional[List[Dict[str, Any]]] = None
     summary: Optional[str] = None
     created_at: datetime
+
+
+class ImportLinkRequest(BaseModel):
+    url: str
+    custom_name: Optional[str] = None

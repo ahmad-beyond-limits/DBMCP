@@ -58,6 +58,9 @@ class ContentExtractor:
         elif ft in ["XLSX", "XLS"]:
             plain_text, structured_data = cls._extract_xlsx(content)
 
+        elif ft in ["IMAGE", "PNG", "JPG", "JPEG", "WEBP", "GIF", "SVG"]:
+            plain_text, structured_data = cls._extract_image(content, filename)
+
         else:
             plain_text = content.decode("utf-8", errors="replace")
 
@@ -231,3 +234,76 @@ class ContentExtractor:
             logger.error(f"Error parsing Excel workbook: {e}", exc_info=True)
             fallback_text = "[Excel document content uploaded - raw binary ready]"
             return fallback_text, {"raw": fallback_text, "table_detected": False}
+
+    @classmethod
+    def _extract_image(cls, content: bytes, filename: str) -> Tuple[str, Dict[str, Any]]:
+        """Extract metadata, dimensions, color modes, and structured info from image files."""
+        fn_lower = filename.lower()
+        
+        # 1. Handle SVG Vector Graphics
+        if fn_lower.endswith(".svg") or content.strip().startswith(b"<svg") or b"<svg" in content[:200]:
+            try:
+                svg_text = content.decode("utf-8", errors="replace")
+                # Extract text content if present in <text> tags
+                import re
+                text_matches = re.findall(r"<text[^>]*>([^<]+)</text>", svg_text, re.IGNORECASE)
+                extracted_words = " ".join(text_matches).strip()
+                
+                plain_text = f"[SVG VECTOR IMAGE: {filename}]\n"
+                if extracted_words:
+                    plain_text += f"Extracted Text/Labels: {extracted_words}\n"
+                plain_text += f"File Size: {round(len(content)/1024, 2)} KB\nFormat: Scalable Vector Graphics (SVG)"
+
+                structured_data = {
+                    "is_image": True,
+                    "is_vector": True,
+                    "format": "SVG",
+                    "filename": filename,
+                    "size_kb": round(len(content) / 1024, 2),
+                    "extracted_text": extracted_words if extracted_words else None,
+                }
+                return plain_text, structured_data
+            except Exception as e:
+                logger.warning(f"Error reading SVG content: {e}")
+
+        # 2. Handle Binary Raster Images (PNG, JPG, WEBP, GIF)
+        try:
+            from PIL import Image
+            img = Image.open(io.BytesIO(content))
+            width, height = img.size
+            img_format = img.format or "IMAGE"
+            mode = img.mode
+            aspect_ratio = round(width / height, 3) if height > 0 else 1.0
+            size_kb = round(len(content) / 1024, 2)
+
+            plain_text = (
+                f"[IMAGE RESOURCE: {filename}]\n"
+                f"Format: {img_format}\n"
+                f"Resolution: {width} x {height} pixels (Aspect Ratio: {aspect_ratio})\n"
+                f"Color Mode: {mode}\n"
+                f"File Size: {size_kb} KB\n"
+                f"Description: Visual image asset indexed for policy-governed MCP tool execution and reference."
+            )
+
+            structured_data = {
+                "is_image": True,
+                "is_vector": False,
+                "filename": filename,
+                "format": img_format,
+                "width": width,
+                "height": height,
+                "aspect_ratio": aspect_ratio,
+                "mode": mode,
+                "size_kb": size_kb,
+            }
+            return plain_text, structured_data
+
+        except Exception as e:
+            logger.warning(f"Error parsing image file {filename}: {e}")
+            plain_text = f"[IMAGE FILE: {filename} ({round(len(content)/1024, 2)} KB)]"
+            return plain_text, {
+                "is_image": True,
+                "filename": filename,
+                "size_kb": round(len(content) / 1024, 2),
+                "error": str(e),
+            }

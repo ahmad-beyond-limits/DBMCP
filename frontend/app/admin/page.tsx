@@ -614,17 +614,24 @@ export default function AdminDashboardPage() {
 
       {/* Modal: Admin Force Reset Password */}
       {resetModalUser && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(10, 10, 10, 0.45)",
-          backdropFilter: "blur(10px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 200,
-          padding: "1rem",
-        }}>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setResetModalUser(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 10, 0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1rem",
+            overflowY: "auto",
+          }}
+        >
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: "440px",
@@ -637,7 +644,7 @@ export default function AdminDashboardPage() {
             <button
               onClick={() => setResetModalUser(null)}
               className="icon-circle-btn"
-              style={{ position: "absolute", top: "1.25rem", right: "1.25rem", width: "32px", height: "32px" }}
+              style={{ position: "absolute", top: "1.25rem", right: "1.25rem", width: "32px", height: "32px", zIndex: 10 }}
             >
               <X size={14} />
             </button>
@@ -689,17 +696,24 @@ export default function AdminDashboardPage() {
 
       {/* Modal: Admin Delete User Account */}
       {deleteModalUser && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(10, 10, 10, 0.45)",
-          backdropFilter: "blur(10px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 200,
-          padding: "1rem",
-        }}>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteModalUser(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 10, 0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1rem",
+            overflowY: "auto",
+          }}
+        >
           <div className="frosted-panel" style={{
             width: "100%",
             maxWidth: "460px",
