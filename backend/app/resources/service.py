@@ -224,9 +224,12 @@ class ResourceService:
         user_id: str,
         url: str,
         custom_name: Optional[str] = None,
+        custom_filename: Optional[str] = None,
+        **kwargs,
     ) -> FileRecord:
         """Fetches file from cloud link (Google Drive, Dropbox, direct URL), processes & extracts into MCP."""
-        content, filename, content_type = await CloudLinkImporter.fetch_and_stream(url, custom_name)
+        resolved_name = (custom_filename or custom_name or "").strip() or None
+        content, filename, content_type = await CloudLinkImporter.fetch_and_stream(url, resolved_name)
         ext, file_type = cls.get_extension_and_type(filename)
         file_size = len(content)
 

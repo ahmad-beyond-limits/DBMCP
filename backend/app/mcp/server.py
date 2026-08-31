@@ -1144,15 +1144,17 @@ class MCPServer:
 
             elif tool_name == "read_file_content":
                 require_perm("read_data", "Read documents and data")
-                return await cls._account_read_file_content(db, context, args.get("workspace_id"), args.get("file_id"))
+                target_file_id = args.get("file_id") or args.get("resource_id")
+                return await cls._account_read_file_content(db, context, args.get("workspace_id"), target_file_id)
 
             elif tool_name == "query_dataset":
                 require_perm("query_dataset", "Query tabular datasets")
+                target_file_id = args.get("file_id") or args.get("resource_id")
                 return await cls._account_query_dataset(
                     db=db,
                     context=context,
                     workspace_id=args.get("workspace_id"),
-                    file_id=args.get("file_id"),
+                    file_id=target_file_id,
                     columns=args.get("columns"),
                     filters=args.get("filters"),
                     limit=args.get("limit", 50),
@@ -1161,11 +1163,12 @@ class MCPServer:
 
             elif tool_name == "edit_dataset":
                 require_perm("edit_dataset", "Mutate and edit dataset rows")
+                target_file_id = args.get("file_id") or args.get("resource_id")
                 return await cls._account_edit_dataset(
                     db=db,
                     context=context,
                     workspace_id=args.get("workspace_id"),
-                    file_id=args.get("file_id"),
+                    file_id=target_file_id,
                     action=args.get("action", "update"),
                     filters=args.get("filters"),
                     updates=args.get("updates"),
@@ -1174,7 +1177,8 @@ class MCPServer:
 
             elif tool_name == "delete_file":
                 require_perm("delete_files", "Permanently delete files")
-                return await cls._account_delete_file(db, context, args.get("workspace_id"), args.get("file_id"))
+                target_file_id = args.get("file_id") or args.get("resource_id")
+                return await cls._account_delete_file(db, context, args.get("workspace_id"), target_file_id)
 
             elif tool_name == "list_workspace_mcp_links":
                 require_perm("manage_mcp_keys", "Manage MCP keys and credentials")
@@ -1533,14 +1537,17 @@ class MCPServer:
 
     @classmethod
     async def _account_read_file_content(cls, db: AsyncSession, context: AuthenticatedMCPContext, workspace_id: str, file_id: str) -> Dict[str, Any]:
+        if not file_id:
+            raise ValueError("file_id (or resource_id) is required.")
+        file_id_str = str(file_id).strip()
         ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
         f_stmt = select(FileRecord).where(
             FileRecord.workspace_id == ws.id,
-            or_(FileRecord.id == file_id, FileRecord.original_filename.ilike(file_id)),
+            or_(FileRecord.id == file_id_str, FileRecord.original_filename == file_id_str),
         )
         file_rec = (await db.execute(f_stmt)).scalar_one_or_none()
         if not file_rec:
-            raise ValueError(f"File '{file_id}' not found in workspace '{ws.name}'.")
+            raise ValueError(f"File '{file_id_str}' not found in workspace '{ws.name}'.")
 
         ext_stmt = select(ExtractedContent).where(ExtractedContent.file_id == file_rec.id)
         extracted = (await db.execute(ext_stmt)).scalar_one_or_none()
@@ -1583,14 +1590,17 @@ class MCPServer:
         limit: int = 50,
         aggregation: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        if not file_id:
+            raise ValueError("file_id (or resource_id) is required.")
+        file_id_str = str(file_id).strip()
         ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
         f_stmt = select(FileRecord).where(
             FileRecord.workspace_id == ws.id,
-            or_(FileRecord.id == file_id, FileRecord.original_filename.ilike(file_id)),
+            or_(FileRecord.id == file_id_str, FileRecord.original_filename == file_id_str),
         )
         file_rec = (await db.execute(f_stmt)).scalar_one_or_none()
         if not file_rec:
-            raise ValueError(f"Dataset file '{file_id}' not found in workspace '{ws.name}'.")
+            raise ValueError(f"Dataset file '{file_id_str}' not found in workspace '{ws.name}'.")
 
         ext_stmt = select(ExtractedContent).where(ExtractedContent.file_id == file_rec.id)
         extracted = (await db.execute(ext_stmt)).scalar_one_or_none()
@@ -1650,6 +1660,9 @@ class MCPServer:
         updates: Optional[Dict[str, Any]] = None,
         new_row: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        if not file_id:
+            raise ValueError("file_id (or resource_id) is required.")
+        file_id_str = str(file_id).strip()
         ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
         # Create temporary mock workspace context to reuse dataset editor
         ws_context = AuthenticatedMCPContext(
@@ -1664,7 +1677,7 @@ class MCPServer:
         return await cls._edit_dataset(
             db=db,
             context=ws_context,
-            resource_id=file_id,
+            resource_id=file_id_str,
             action=action,
             filters=filters,
             updates=updates,
@@ -1673,14 +1686,17 @@ class MCPServer:
 
     @classmethod
     async def _account_delete_file(cls, db: AsyncSession, context: AuthenticatedMCPContext, workspace_id: str, file_id: str) -> Dict[str, Any]:
+        if not file_id:
+            raise ValueError("file_id (or resource_id) is required.")
+        file_id_str = str(file_id).strip()
         ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
         f_stmt = select(FileRecord).where(
             FileRecord.workspace_id == ws.id,
-            or_(FileRecord.id == file_id, FileRecord.original_filename.ilike(file_id)),
+            or_(FileRecord.id == file_id_str, FileRecord.original_filename == file_id_str),
         )
         file_rec = (await db.execute(f_stmt)).scalar_one_or_none()
         if not file_rec:
-            raise ValueError(f"File '{file_id}' not found in workspace '{ws.name}'.")
+            raise ValueError(f"File '{file_id_str}' not found in workspace '{ws.name}'.")
 
         filename = file_rec.original_filename
         await ResourceService.delete_file(db, ws.id, file_rec.id, user_id=context.user_id)
