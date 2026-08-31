@@ -68,6 +68,17 @@ class ContentExtractor:
         detected = PIIDetector.detect_entities(plain_text)
         return plain_text, structured_data, detected
 
+    @staticmethod
+    def _sanitize_cell_val(val: Any) -> Any:
+        """Neutralizes formula injection characters (=, +, -, @, \t, \r) in text cells."""
+        if isinstance(val, str) and len(val) > 0 and val[0] in ("=", "+", "-", "@", "\t", "\r"):
+            try:
+                float(val)
+                return val
+            except ValueError:
+                return "'" + val
+        return val
+
     @classmethod
     def _extract_csv(cls, content: bytes) -> Tuple[str, Dict[str, Any]]:
         text_stream = io.StringIO(content.decode("utf-8", errors="replace"))
@@ -76,9 +87,10 @@ class ContentExtractor:
         columns = reader.fieldnames or []
         schema = {}
         for row in reader:
-            rows.append(row)
+            sanitized_row = {k: cls._sanitize_cell_val(v) for k, v in row.items()}
+            rows.append(sanitized_row)
             if len(rows) <= 500:
-                for k, v in row.items():
+                for k, v in sanitized_row.items():
                     if k not in schema:
                         try:
                             float(v)

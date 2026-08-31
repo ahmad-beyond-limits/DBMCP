@@ -1,7 +1,9 @@
 import io
+import ipaddress
 import logging
 import os
 import re
+import socket
 import urllib.parse
 from typing import Optional, Tuple
 import httpx
@@ -28,6 +30,61 @@ MIME_TO_EXT = {
 
 
 class CloudLinkImporter:
+    @staticmethod
+    def validate_safe_url(url: str) -> None:
+        """
+        Guards against Server-Side Request Forgery (SSRF).
+        Ensures the URL uses HTTP/HTTPS and resolves strictly to public, non-private IP addresses.
+        """
+        parsed = urllib.parse.urlparse(url.strip())
+        if parsed.scheme.lower() not in ("http", "https"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported URL protocol '{parsed.scheme}'. Only HTTP and HTTPS are allowed.",
+            )
+
+        hostname = parsed.hostname
+        if not hostname:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid URL: Missing hostname.",
+            )
+
+        # Prohibit explicit localhost names
+        if hostname.lower() in ("localhost", "127.0.0.1", "0.0.0.0", "::1", "metadata.google.internal"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Access to local or cloud internal metadata endpoints is prohibited.",
+            )
+
+        try:
+            # Resolve DNS
+            addr_info = socket.getaddrinfo(hostname, None)
+            for entry in addr_info:
+                ip_str = entry[4][0]
+                ip = ipaddress.ip_address(ip_str)
+                if (
+                    ip.is_private
+                    or ip.is_loopback
+                    or ip.is_link_local
+                    or ip.is_reserved
+                    or ip.is_multicast
+                    or ip.is_unspecified
+                ):
+                    logger.warning(f"SSRF block: Hostname '{hostname}' resolved to private/forbidden IP {ip_str}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Access to private, local, or internal cloud network addresses is forbidden.",
+                    )
+        except (socket.gaierror, socket.herror, ValueError) as e:
+            if isinstance(e, HTTPException):
+                raise
+            logger.warning(f"SSRF validation DNS resolution error for '{hostname}': {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unable to resolve host '{hostname}'. Please check the URL.",
+            )
+
     @staticmethod
     def detect_provider(url: str) -> str:
         """Detect the cloud hosting provider from URL pattern."""
@@ -122,7 +179,10 @@ class CloudLinkImporter:
         Fetches the cloud file content, verifies file size, and resolves filename & content-type.
         Returns: (content_bytes, resolved_filename, content_type)
         """
+        # Enforce strict SSRF protection before initiating any network request
+        cls.validate_safe_url(url)
         direct_url, suggested_name, default_ext = cls.transform_to_download_url(url)
+        cls.validate_safe_url(direct_url)
         max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
         headers = {

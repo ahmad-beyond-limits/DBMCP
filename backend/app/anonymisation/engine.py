@@ -56,18 +56,20 @@ class AnonymisationEngine:
         key = f"{settings.WORKSPACE_HASH_SECRET}:{workspace_id}".encode("utf-8")
         h = hmac.new(key, clean_val.encode("utf-8"), hashlib.sha256).hexdigest()
         
-        # Derive 3-digit index (1 to 999)
-        idx = (int(h[:8], 16) % 999) + 1
+        # Derive 6-character hex token (16.7 million unique collision-resistant IDs per workspace)
+        token_id = h[:6].upper()
         
         prefix = "Person"
-        if entity_type in ["organization", "company"]:
+        if entity_type in ["organization", "company", "org"]:
             prefix = "Org"
-        elif entity_type in ["email", "username"]:
+        elif entity_type in ["email", "username", "user"]:
             prefix = "User"
-        elif entity_type in ["location", "city"]:
+        elif entity_type in ["location", "city", "address", "loc"]:
             prefix = "Loc"
+        elif entity_type in ["id", "identifier", "ssn", "account"]:
+            prefix = "Entity"
             
-        return f"{prefix}_{idx:03d}"
+        return f"{prefix}_{token_id}"
 
     @classmethod
     def transform_value(

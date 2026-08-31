@@ -1556,11 +1556,10 @@ class MCPServer:
 
         # Apply anonymisation
         text_content = extracted.plain_text or ""
-        anonymized_text, _ = await AnonymisationEngine.anonymize_text(
-            db=db,
-            workspace_id=ws.id,
+        anonymized_text = AnonymisationEngine.apply_to_text(
             text=text_content,
-            entities=extracted.detected_entities or [],
+            rules={},
+            workspace_id=ws.id,
         )
 
         await AuditService.log_event(

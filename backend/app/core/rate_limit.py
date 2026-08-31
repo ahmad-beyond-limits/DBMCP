@@ -49,12 +49,25 @@ class InMemoryRateLimiter(RateLimiterInterface):
 limiter = InMemoryRateLimiter()
 
 
+def get_client_ip(request: Request) -> str:
+    """Extracts client IP honoring Cloudflare and standard reverse proxy headers."""
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip:
+        return cf_ip.strip()
+
+    x_forwarded_for = request.headers.get("X-Forwarded-For")
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0].strip()
+
+    return request.client.host if request.client else "unknown"
+
+
 def rate_limit(max_requests: int, window_seconds: int, scope: str = "default"):
     """
     FastAPI dependency for endpoint rate limiting based on client IP / actor key.
     """
     async def dependency(request: Request):
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_client_ip(request)
         key = f"{scope}:{client_ip}"
         if not limiter.is_allowed(key, max_requests, window_seconds):
             raise HTTPException(
