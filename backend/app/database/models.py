@@ -50,6 +50,7 @@ class User(Base):
     # Relationships
     workspaces = relationship("Workspace", back_populates="owner", cascade="all, delete-orphan")
     memberships = relationship("WorkspaceMember", back_populates="user", cascade="all, delete-orphan")
+    account_credentials = relationship("MCPCredential", foreign_keys="MCPCredential.user_id", back_populates="user", cascade="all, delete-orphan")
 
 
 class Workspace(Base):
@@ -171,27 +172,30 @@ class MCPCredential(Base):
     __tablename__ = "mcp_credentials"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    workspace_id: Mapped[str] = mapped_column(String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), index=True, nullable=False)
+    scope_type: Mapped[str] = mapped_column(String(32), default="WORKSPACE", nullable=False)  # "WORKSPACE" or "ACCOUNT"
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True)
+    workspace_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), index=True, nullable=True)
     credential_prefix: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     secret_hash: Mapped[str] = mapped_column(String(255), nullable=False)  # HMAC-SHA256 hash
     name: Mapped[str] = mapped_column(String(128), default="Default MCP Key", nullable=False)
-    permissions: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, default=dict)  # {"can_read": True, "can_search": True, "can_query": True, "can_edit": False}
+    permissions: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     workspace = relationship("Workspace", back_populates="mcp_credentials")
+    user = relationship("User", back_populates="account_credentials")
 
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    workspace_id: Mapped[str] = mapped_column(String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), index=True, nullable=False)
+    workspace_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), index=True, nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
     actor_type: Mapped[str] = mapped_column(String(32), nullable=False)  # USER, MCP_CLIENT
     credential_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    user_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     operation: Mapped[str] = mapped_column(String(64), nullable=False)
     resource_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     resource_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)

@@ -17,10 +17,13 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 @dataclass
 class AuthenticatedMCPContext:
-    workspace_id: str
+    scope_type: str  # "WORKSPACE" or "ACCOUNT"
     credential_id: str
     credential_prefix: str
-    workspace_name: str
+    workspace_id: Optional[str] = None
+    workspace_name: Optional[str] = None
+    user_id: Optional[str] = None
+    username: Optional[str] = None
     authenticated: bool = True
     policy_version: int = 1
     permissions: Optional[dict] = None
@@ -36,7 +39,7 @@ class MCPAuthService:
         """
         Validates raw MCP bearer token against hashed database credentials.
         Returns AuthenticatedMCPContext strictly derived from the verified token.
-        Never reveals specific failure details to caller to prevent enumeration.
+        Supports both Workspace-scoped and Account-Level Master credentials.
         """
         clean_token = raw_token.strip()
         generic_error = HTTPException(
@@ -49,13 +52,18 @@ class MCPAuthService:
             logger.warning("MCP auth failure: Malformed token structure")
             raise generic_error
 
-        # Format: mcp_live_<prefix>_<secret>
+        # Format: mcp_live_<prefix>_<secret> or mcp_live_acc_<prefix>_<secret>
         parts = clean_token.split("_")
         if len(parts) < 4:
             logger.warning("MCP auth failure: Invalid token format")
             raise generic_error
 
-        prefix = f"{parts[0]}_{parts[1]}_{parts[2]}"
+        if clean_token.startswith("mcp_live_acc_"):
+            # mcp_live_acc_<hex>_<secret>
+            prefix = f"{parts[0]}_{parts[1]}_{parts[2]}_{parts[3]}"
+        else:
+            # mcp_live_<prefix>_<secret>
+            prefix = f"{parts[0]}_{parts[1]}_{parts[2]}"
 
         # Look up by prefix
         stmt = select(MCPCredential).where(MCPCredential.credential_prefix == prefix)
@@ -70,6 +78,7 @@ class MCPAuthService:
             await AuditService.log_event(
                 db=db,
                 workspace_id=cred.workspace_id,
+                user_id=cred.user_id,
                 operation="MCP_AUTH_FAILURE",
                 actor_type="MCP_CLIENT",
                 credential_id=cred.id,
@@ -85,6 +94,7 @@ class MCPAuthService:
             await AuditService.log_event(
                 db=db,
                 workspace_id=cred.workspace_id,
+                user_id=cred.user_id,
                 operation="MCP_AUTH_FAILURE",
                 actor_type="MCP_CLIENT",
                 credential_id=cred.id,
@@ -94,11 +104,12 @@ class MCPAuthService:
             logger.warning(f"MCP auth failure: Credential {cred.id} has expired")
             raise generic_error
 
-        # Verify hash
+        # Verify cryptographic hash
         if not verify_mcp_token(clean_token, cred.secret_hash):
             await AuditService.log_event(
                 db=db,
                 workspace_id=cred.workspace_id,
+                user_id=cred.user_id,
                 operation="MCP_AUTH_FAILURE",
                 actor_type="MCP_CLIENT",
                 credential_id=cred.id,
@@ -108,34 +119,70 @@ class MCPAuthService:
             logger.warning(f"MCP auth failure: Hash mismatch for credential {cred.id}")
             raise generic_error
 
-        # Fetch workspace to verify it is active
+        # Update last_used_at
+        cred.last_used_at = now
+        await db.commit()
+
+        # Handle Account-Level Master Token
+        if cred.scope_type == "ACCOUNT" or cred.user_id is not None:
+            from app.database.models import User
+            user_stmt = select(User).where(User.id == cred.user_id)
+            user = (await db.execute(user_stmt)).scalar_one_or_none()
+            if not user or not user.is_active:
+                logger.warning(f"MCP auth failure: User {cred.user_id} is inactive or deleted")
+                raise generic_error
+
+            await AuditService.log_event(
+                db=db,
+                user_id=user.id,
+                workspace_id=None,
+                operation="MCP_AUTH_SUCCESS",
+                actor_type="MCP_CLIENT",
+                credential_id=cred.id,
+                decision="ALLOW",
+                reason=f"Authenticated with Account Master MCP key '{cred.name}'",
+                request_metadata={"credential_prefix": cred.credential_prefix, "scope": "ACCOUNT"},
+            )
+
+            return AuthenticatedMCPContext(
+                scope_type="ACCOUNT",
+                credential_id=cred.id,
+                credential_prefix=cred.credential_prefix,
+                workspace_id=None,
+                workspace_name=None,
+                user_id=user.id,
+                username=user.username,
+                authenticated=True,
+                permissions=cred.permissions or {},
+            )
+
+        # Handle Workspace-Scoped Token
         ws_stmt = select(Workspace).where(Workspace.id == cred.workspace_id)
         ws = (await db.execute(ws_stmt)).scalar_one_or_none()
         if not ws or not ws.is_active:
             logger.warning(f"MCP auth failure: Workspace {cred.workspace_id} is inactive or deleted")
             raise generic_error
 
-        # Update last_used_at
-        cred.last_used_at = now
-        await db.commit()
-
-        # Audit successful authentication
         await AuditService.log_event(
             db=db,
-            workspace_id=cred.workspace_id,
+            workspace_id=ws.id,
+            user_id=ws.owner_id,
             operation="MCP_AUTH_SUCCESS",
             actor_type="MCP_CLIENT",
             credential_id=cred.id,
             decision="ALLOW",
             reason="Authenticated with valid workspace MCP credential",
-            request_metadata={"credential_prefix": cred.credential_prefix},
+            request_metadata={"credential_prefix": cred.credential_prefix, "scope": "WORKSPACE"},
         )
 
         return AuthenticatedMCPContext(
+            scope_type="WORKSPACE",
             workspace_id=ws.id,
             credential_id=cred.id,
             credential_prefix=cred.credential_prefix,
             workspace_name=ws.name,
+            user_id=ws.owner_id,
+            username=None,
             authenticated=True,
             permissions=cred.permissions or {},
         )

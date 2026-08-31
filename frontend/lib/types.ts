@@ -157,3 +157,42 @@ export interface AuditLog {
   request_metadata?: any;
   timestamp: string;
 }
+
+export interface AccountMCPPermissions {
+  manage_workspaces: boolean;
+  upload_files: boolean;
+  read_data: boolean;
+  query_dataset: boolean;
+  edit_dataset: boolean;
+  delete_files: boolean;
+  manage_mcp_keys: boolean;
+}
+
+export interface AccountMCPCredential {
+  id: string;
+  name: string;
+  credential_prefix: string;
+  scope_type: "ACCOUNT";
+  permissions: AccountMCPPermissions;
+  created_at: string;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  last_used_at?: string | null;
+  is_active: boolean;
+}
+
+export interface AccountMCPCredentialCreated extends AccountMCPCredential {
+  raw_token: string;
+}
+
+export interface AccountMCPActivity {
+  id: string;
+  timestamp: string;
+  operation: string;
+  actor_type: string;
+  credential_id?: string | null;
+  workspace_id?: string | null;
+  decision: "ALLOW" | "DENY" | "ALLOW_WITH_TRANSFORMATION";
+  reason?: string | null;
+  request_metadata?: any;
+}

@@ -118,3 +118,31 @@ async def init_db() -> None:
                     pass
         except Exception as e:
             logger.warning(f"Schema migration warning for users admin columns: {e}")
+
+        # Automatic schema migration: ensure `scope_type` and `user_id` columns exist on `mcp_credentials`, and workspace_id can be NULL
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(
+                    text("ALTER TABLE mcp_credentials ADD COLUMN IF NOT EXISTS scope_type VARCHAR(32) DEFAULT 'WORKSPACE'")
+                )
+                await conn.execute(
+                    text("ALTER TABLE mcp_credentials ADD COLUMN IF NOT EXISTS user_id VARCHAR(36)")
+                )
+                await conn.execute(
+                    text("ALTER TABLE mcp_credentials ALTER COLUMN workspace_id DROP NOT NULL")
+                )
+                await conn.execute(
+                    text("ALTER TABLE audit_logs ALTER COLUMN workspace_id DROP NOT NULL")
+                )
+                logger.info("Executed schema migration: ensure mcp_credentials.scope_type, user_id exist and workspace_id is nullable.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(text("ALTER TABLE mcp_credentials ADD COLUMN scope_type VARCHAR(32) DEFAULT 'WORKSPACE'"))
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(text("ALTER TABLE mcp_credentials ADD COLUMN user_id VARCHAR(36)"))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning for mcp_credentials scope columns: {e}")

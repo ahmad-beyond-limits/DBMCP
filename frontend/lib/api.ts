@@ -1,4 +1,8 @@
 import {
+  AccountMCPActivity,
+  AccountMCPCredential,
+  AccountMCPCredentialCreated,
+  AccountMCPPermissions,
   AdminStats,
   AdminUser,
   AdminWorkspace,
@@ -404,6 +408,38 @@ class ApiClient {
 
   async getAdminWorkspaces(): Promise<AdminWorkspace[]> {
     return this.request<AdminWorkspace[]>("/admin/workspaces");
+  }
+
+  // Account-Level Master MCP Management
+  async getAccountMCPCredentials(): Promise<AccountMCPCredential[]> {
+    return this.request<AccountMCPCredential[]>("/account/mcp-credentials");
+  }
+
+  async createAccountMCPCredential(data: {
+    name: string;
+    permissions?: Partial<AccountMCPPermissions>;
+    expires_in_days?: number | null;
+  }): Promise<AccountMCPCredentialCreated> {
+    return this.request<AccountMCPCredentialCreated>("/account/mcp-credentials", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async rotateAccountMCPCredential(credentialId: string): Promise<AccountMCPCredentialCreated> {
+    return this.request<AccountMCPCredentialCreated>(`/account/mcp-credentials/${credentialId}/rotate`, {
+      method: "POST",
+    });
+  }
+
+  async revokeAccountMCPCredential(credentialId: string): Promise<{ status: string }> {
+    return this.request<{ status: string }>(`/account/mcp-credentials/${credentialId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getAccountMCPActivity(limit: number = 50): Promise<AccountMCPActivity[]> {
+    return this.request<AccountMCPActivity[]>(`/account/mcp-activity?limit=${limit}`);
   }
 }
 

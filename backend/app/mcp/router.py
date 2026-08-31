@@ -444,9 +444,9 @@ async def handle_mcp_rpc(
             },
         )
 
-    # 2. List Tools (Allowed without credentials to advertise available capabilities)
+    # 2. List Tools (Allowed without credentials to advertise available capabilities, customizes if account token)
     elif method in ["tools/list", "list_tools"]:
-        tools = await MCPServer.list_tools()
+        tools = await MCPServer.list_tools(context)
         return JSONRPCResponse(id=rpc_req.id, result={"tools": tools})
 
     # 3. List Resources (Permits AI clients to discover data and skills guide)

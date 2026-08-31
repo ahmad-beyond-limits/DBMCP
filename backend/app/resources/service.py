@@ -124,6 +124,61 @@ class ResourceService:
         return file_record
 
     @classmethod
+    async def upload_from_bytes(
+        cls,
+        db: AsyncSession,
+        workspace_id: str,
+        user_id: str,
+        filename: str,
+        content: bytes,
+        content_type: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> FileRecord:
+        """Stores binary from bytes directly, extracts content, and creates records."""
+        ext, file_type = cls.get_extension_and_type(filename)
+        file_size = len(content)
+
+        storage = get_storage_backend()
+        storage_filename = f"{workspace_id}/{uuid.uuid4()}{ext}"
+        actual_content_type = content_type or "application/octet-stream"
+
+        stored_path = await storage.upload(storage_filename, content, actual_content_type)
+
+        file_record = FileRecord(
+            workspace_id=workspace_id,
+            original_filename=filename,
+            storage_path=stored_path,
+            content_type=actual_content_type,
+            file_size=file_size,
+            file_type=file_type,
+            status="PROCESSING",
+            uploaded_by=user_id,
+        )
+        db.add(file_record)
+        await db.flush()
+
+        try:
+            plain_text, structured_data, detected_entities = await ContentExtractor.extract(
+                content, file_type, filename=filename
+            )
+            extracted = ExtractedContent(
+                file_id=file_record.id,
+                workspace_id=workspace_id,
+                plain_text=plain_text,
+                structured_data=structured_data,
+                detected_entities=detected_entities,
+                summary=description or f"Extracted {len(plain_text)} chars, {len(detected_entities)} entities detected.",
+            )
+            db.add(extracted)
+            file_record.status = "READY"
+        except Exception as e:
+            file_record.status = "FAILED"
+
+        await db.commit()
+        await db.refresh(file_record)
+        return file_record
+
+    @classmethod
     async def delete_file(
         cls,
         db: AsyncSession,
