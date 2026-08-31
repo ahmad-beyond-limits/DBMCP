@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import logging
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -706,14 +707,53 @@ class MCPServer:
             reason="Resource read successfully with policy enforcement",
         )
 
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": safe_content,
-                }
-            ]
-        }
+        return await cls._build_file_content_response(file_rec, safe_content)
+
+    @classmethod
+    async def _build_file_content_response(
+        cls,
+        file_rec: FileRecord,
+        text_content: str,
+    ) -> Dict[str, Any]:
+        """
+        Builds a rich MCP content response for AI models.
+        Returns text content for documents and tabular data.
+        For image assets (PNG, JPG, JPEG, WEBP, GIF, SVG), streams both textual metadata and standard Base64 image payload so vision AI can view and inspect it.
+        """
+        content_items: List[Dict[str, Any]] = [
+            {"type": "text", "text": text_content or f"[{file_rec.file_type} File: {file_rec.original_filename}]"}
+        ]
+
+        fn_lower = file_rec.original_filename.lower()
+        is_img = file_rec.file_type == "IMAGE" or any(
+            fn_lower.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"]
+        )
+
+        if is_img and file_rec.storage_path:
+            try:
+                storage = get_storage_backend()
+                raw_bytes = await storage.download(file_rec.storage_path)
+                if raw_bytes and len(raw_bytes) > 0 and len(raw_bytes) <= 15 * 1024 * 1024:
+                    ext = os.path.splitext(file_rec.original_filename)[1].lower()
+                    mime_map = {
+                        ".png": "image/png",
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".webp": "image/webp",
+                        ".gif": "image/gif",
+                        ".svg": "image/svg+xml",
+                    }
+                    mime_type = mime_map.get(ext, file_rec.content_type or "image/jpeg")
+                    b64_data = base64.b64encode(raw_bytes).decode("utf-8")
+                    content_items.append({
+                        "type": "image",
+                        "data": b64_data,
+                        "mimeType": mime_type,
+                    })
+            except Exception as e:
+                logger.warning(f"Unable to load raw image data for {file_rec.original_filename}: {e}")
+
+        return {"content": content_items}
 
     @classmethod
     async def _get_dataset_schema(
@@ -1575,7 +1615,7 @@ class MCPServer:
             reason=f"Account MCP key read content of '{file_rec.original_filename}'",
         )
 
-        return {"content": [{"type": "text", "text": anonymized_text}]}
+        return await cls._build_file_content_response(file_rec, anonymized_text)
 
     @classmethod
     async def _account_query_dataset(
