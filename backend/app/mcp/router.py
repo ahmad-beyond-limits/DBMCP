@@ -67,6 +67,10 @@ async def list_mcp_credentials(
                 "search": True,
                 "query_dataset": True,
                 "edit_dataset": True,
+                "read_notes": True,
+                "create_note": True,
+                "update_note": True,
+                "delete_note": False,
             },
         )
         for c in creds
@@ -99,6 +103,10 @@ async def create_mcp_credential(
         "search": True,
         "query_dataset": True,
         "edit_dataset": True,
+        "read_notes": True,
+        "create_note": True,
+        "update_note": True,
+        "delete_note": False,
     }
     assigned_permissions = dict(data.permissions) if data.permissions else default_permissions
 

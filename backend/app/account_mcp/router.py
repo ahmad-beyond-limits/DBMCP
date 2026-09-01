@@ -94,6 +94,10 @@ async def create_account_credential(
         "edit_dataset": False,
         "delete_files": False,
         "manage_mcp_keys": True,
+        "read_notes": True,
+        "create_note": True,
+        "update_note": True,
+        "delete_note": False,
     }
 
     cred = MCPCredential(

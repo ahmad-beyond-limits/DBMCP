@@ -11,6 +11,7 @@ from app.auth.router import router as auth_router
 from app.core.config import settings
 from app.database.session import init_db
 from app.mcp.router import router as mcp_router
+from app.notes.router import router as notes_router
 from app.policies.router import router as policies_router
 from app.resources.router import router as resources_router
 from app.workspaces.router import router as workspaces_router
@@ -89,6 +90,7 @@ app.include_router(auth_router)
 app.include_router(account_mcp_router)
 app.include_router(admin_router)
 app.include_router(workspaces_router)
+app.include_router(notes_router)
 app.include_router(resources_router)
 app.include_router(policies_router)
 app.include_router(mcp_router)

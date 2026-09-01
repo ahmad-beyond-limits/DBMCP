@@ -25,6 +25,9 @@ async def list_workspaces(
     db: AsyncSession = Depends(get_db),
 ):
     """List all workspaces the authenticated user belongs to (as owner or member)."""
+    # Guarantee user has their default "Notes" workspace provisioned
+    await WorkspaceService.ensure_user_default_workspace(db, user.id)
+
     # Workspaces where user is owner or member
     stmt = (
         select(Workspace, WorkspaceMember.role)
@@ -48,6 +51,7 @@ async def list_workspaces(
                 files_count=counts["files_count"],
                 policies_count=counts["policies_count"],
                 credentials_count=counts["credentials_count"],
+                notes_count=counts.get("notes_count", 0),
                 created_at=ws.created_at,
                 updated_at=ws.updated_at,
             )
@@ -90,6 +94,7 @@ async def create_workspace(
         files_count=0,
         policies_count=0,
         credentials_count=0,
+        notes_count=0,
         created_at=new_ws.created_at,
         updated_at=new_ws.updated_at,
     )
@@ -115,6 +120,7 @@ async def get_workspace(
         files_count=counts["files_count"],
         policies_count=counts["policies_count"],
         credentials_count=counts["credentials_count"],
+        notes_count=counts.get("notes_count", 0),
         created_at=ws.created_at,
         updated_at=ws.updated_at,
     )

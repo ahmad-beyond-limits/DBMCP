@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.service import AuditService
 from app.core.config import settings
-from app.database.models import ExtractedContent, FileRecord
+from app.database.models import ExtractedContent, FileRecord, Workspace
 from app.resources.cloud_importer import CloudLinkImporter
 from app.resources.extractor import ContentExtractor
 from app.storage.supabase_storage import get_storage_backend
@@ -47,6 +47,7 @@ class ResourceService:
         workspace_id: str,
         user_id: str,
         upload_file: UploadFile,
+        note_id: Optional[str] = None,
     ) -> FileRecord:
         """Stores binary in storage backend, extracts content, and creates database records."""
         filename = upload_file.filename or "unknown"
@@ -61,8 +62,14 @@ class ResourceService:
                 detail=f"File exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE_MB}MB",
             )
 
+        ws = await db.get(Workspace, workspace_id)
+        is_notes_ws = bool(ws and (getattr(ws, "is_default_notes", False) or ws.name.lower() == "notes"))
+
         storage = get_storage_backend()
-        storage_filename = f"{workspace_id}/{uuid.uuid4()}{ext}"
+        if note_id and is_notes_ws:
+            storage_filename = f"{workspace_id}/notes/{note_id}/{uuid.uuid4()}{ext}"
+        else:
+            storage_filename = f"{workspace_id}/{uuid.uuid4()}{ext}"
         content_type = upload_file.content_type or "application/octet-stream"
 
         # 1. Save binary in storage backend
@@ -71,6 +78,7 @@ class ResourceService:
         # 2. Create FileRecord
         file_record = FileRecord(
             workspace_id=workspace_id,
+            note_id=note_id,
             original_filename=filename,
             storage_path=stored_path,
             content_type=content_type,

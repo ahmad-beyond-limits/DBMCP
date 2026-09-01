@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import (
     FileRecord,
     MCPCredential,
+    Note,
     ResourcePolicy,
     User,
     Workspace,
@@ -38,6 +39,52 @@ class WorkspaceService:
         if owner_id == user_id:
             return "OWNER"
         return None
+
+    @classmethod
+    async def ensure_user_default_workspace(cls, db: AsyncSession, user_id: str) -> Workspace:
+        """
+        Ensures the user has a default 'Notes' workspace.
+        Creates one automatically if it does not exist.
+        """
+        stmt = (
+            select(Workspace)
+            .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+            .where(
+                WorkspaceMember.user_id == user_id,
+                Workspace.name.ilike("Notes"),
+            )
+        )
+        notes_ws = (await db.execute(stmt)).scalar_one_or_none()
+        if notes_ws:
+            return notes_ws
+
+        # Check by owner_id directly
+        stmt_owner = select(Workspace).where(
+            Workspace.owner_id == user_id,
+            Workspace.name.ilike("Notes"),
+        )
+        owner_ws = (await db.execute(stmt_owner)).scalar_one_or_none()
+        if owner_ws:
+            return owner_ws
+
+        # Create default Notes workspace
+        default_ws = Workspace(
+            name="Notes",
+            description="Personal notes, knowledge base, and AI scratchpad",
+            owner_id=user_id,
+        )
+        db.add(default_ws)
+        await db.flush()
+
+        membership = WorkspaceMember(
+            workspace_id=default_ws.id,
+            user_id=user_id,
+            role="OWNER",
+        )
+        db.add(membership)
+        await db.commit()
+        await db.refresh(default_ws)
+        return default_ws
 
     @classmethod
     async def verify_access(
@@ -77,7 +124,7 @@ class WorkspaceService:
 
     @staticmethod
     async def get_workspace_counts(db: AsyncSession, workspace_id: str) -> dict:
-        """Fetch summary counts for files, policies, credentials."""
+        """Fetch summary counts for files, policies, credentials, and notes."""
         files_q = await db.execute(
             select(func.count(FileRecord.id)).where(FileRecord.workspace_id == workspace_id)
         )
@@ -90,8 +137,12 @@ class WorkspaceService:
                 MCPCredential.revoked_at.is_(None),
             )
         )
+        notes_q = await db.execute(
+            select(func.count(Note.id)).where(Note.workspace_id == workspace_id)
+        )
         return {
             "files_count": files_q.scalar() or 0,
             "policies_count": policies_q.scalar() or 0,
             "credentials_count": creds_q.scalar() or 0,
+            "notes_count": notes_q.scalar() or 0,
         }

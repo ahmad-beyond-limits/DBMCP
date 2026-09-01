@@ -42,5 +42,6 @@ class WorkspaceResponse(BaseModel):
     files_count: Optional[int] = 0
     policies_count: Optional[int] = 0
     credentials_count: Optional[int] = 0
+    notes_count: Optional[int] = 0
     created_at: datetime
     updated_at: datetime

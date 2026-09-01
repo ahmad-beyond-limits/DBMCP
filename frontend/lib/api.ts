@@ -11,6 +11,7 @@ import {
   FileRecord,
   MCPCredential,
   MCPCredentialCreated,
+  Note,
   User,
   Workspace,
   WorkspaceMember,
@@ -446,6 +447,66 @@ class ApiClient {
 
   async getAccountMCPActivity(limit: number = 50): Promise<AccountMCPActivity[]> {
     return this.request<AccountMCPActivity[]>(`/account/mcp-activity?limit=${limit}`);
+  }
+
+  // Workspace Notes
+  async getNotes(
+    workspaceId: string,
+    params?: { search?: string; tag?: string }
+  ): Promise<{ notes: Note[]; total: number }> {
+    const query = new URLSearchParams();
+    if (params?.search) query.append("search", params.search);
+    if (params?.tag) query.append("tag", params.tag);
+    const qs = query.toString();
+    return this.request<{ notes: Note[]; total: number }>(
+      `/workspaces/${workspaceId}/notes${qs ? `?${qs}` : ""}`
+    );
+  }
+
+  async createNote(
+    workspaceId: string,
+    data: { title: string; content?: string; tags?: string[]; referenced_file_ids?: string[] }
+  ): Promise<Note> {
+    return this.request<Note>(`/workspaces/${workspaceId}/notes`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getNote(workspaceId: string, noteId: string): Promise<Note> {
+    return this.request<Note>(`/workspaces/${workspaceId}/notes/${noteId}`);
+  }
+
+  async updateNote(
+    workspaceId: string,
+    noteId: string,
+    data: { title?: string; content?: string; append_content?: string; tags?: string[]; referenced_file_ids?: string[] }
+  ): Promise<Note> {
+    return this.request<Note>(`/workspaces/${workspaceId}/notes/${noteId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteNote(workspaceId: string, noteId: string): Promise<void> {
+    await this.request<void>(`/workspaces/${workspaceId}/notes/${noteId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async uploadNoteFile(workspaceId: string, noteId: string, file: File): Promise<FileRecord> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return this.request<FileRecord>(`/workspaces/${workspaceId}/notes/${noteId}/files`, {
+      method: "POST",
+      body: formData,
+    });
+  }
+
+  async deleteNoteFile(workspaceId: string, noteId: string, fileId: string): Promise<void> {
+    await this.request<void>(`/workspaces/${workspaceId}/notes/${noteId}/files/${fileId}`, {
+      method: "DELETE",
+    });
   }
 }
 

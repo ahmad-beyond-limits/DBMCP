@@ -42,6 +42,9 @@ import {
   Search,
   Key,
   Download,
+  StickyNote,
+  BookOpen,
+  Edit3,
 } from "lucide-react";
 
 const POAIS_ACCOUNT_AI_SKILLS_MARKDOWN = `# POAIS: Policy-Oriented AI Space
@@ -164,6 +167,10 @@ export default function SettingsPage() {
     edit_dataset: false,
     delete_files: false,
     manage_mcp_keys: true,
+    read_notes: true,
+    create_note: true,
+    update_note: true,
+    delete_note: false,
   });
   const [creatingKey, setCreatingKey] = useState(false);
   const [createdKeyResult, setCreatedKeyResult] = useState<AccountMCPCredentialCreated | null>(null);
@@ -376,6 +383,10 @@ export default function SettingsPage() {
         edit_dataset: true,
         delete_files: true,
         manage_mcp_keys: true,
+        read_notes: true,
+        create_note: true,
+        update_note: true,
+        delete_note: true,
       });
     } else if (preset === "assistant") {
       setNewKeyPermissions({
@@ -386,6 +397,10 @@ export default function SettingsPage() {
         edit_dataset: false,
         delete_files: false,
         manage_mcp_keys: true,
+        read_notes: true,
+        create_note: true,
+        update_note: true,
+        delete_note: false,
       });
     } else if (preset === "analyst") {
       setNewKeyPermissions({
@@ -396,6 +411,10 @@ export default function SettingsPage() {
         edit_dataset: false,
         delete_files: false,
         manage_mcp_keys: false,
+        read_notes: true,
+        create_note: false,
+        update_note: false,
+        delete_note: false,
       });
     }
   };
@@ -410,6 +429,10 @@ export default function SettingsPage() {
       edit_dataset: enabled,
       delete_files: enabled,
       manage_mcp_keys: enabled,
+      read_notes: enabled,
+      create_note: enabled,
+      update_note: enabled,
+      delete_note: enabled,
     });
   };
 
@@ -471,6 +494,30 @@ export default function SettingsPage() {
       label: "Manage Workspace MCP Keys",
       desc: "Generate or revoke scoped workspace MCP credentials for specialized tasks.",
       icon: <Key size={16} strokeWidth={1.5} />,
+    },
+    {
+      key: "read_notes",
+      label: "Read & Search Notes",
+      desc: "Discover, list, and read structured notes and knowledge scratchpads across workspaces.",
+      icon: <BookOpen size={16} strokeWidth={1.5} />,
+    },
+    {
+      key: "create_note",
+      label: "Create Notes & Scratchpads",
+      desc: "Capture meeting notes, summaries, and records with @document mentions.",
+      icon: <StickyNote size={16} strokeWidth={1.5} />,
+    },
+    {
+      key: "update_note",
+      label: "Edit & Append Notes",
+      desc: "Modify note titles, content, tags, and append fresh findings or action items.",
+      icon: <Edit3 size={16} strokeWidth={1.5} />,
+    },
+    {
+      key: "delete_note",
+      label: "Delete Notes",
+      desc: "Permanently remove notes from workspaces.",
+      icon: <Trash2 size={16} strokeWidth={1.5} />,
     },
   ];
 
@@ -877,6 +924,74 @@ export default function SettingsPage() {
                         }}>
                           <Key size={12} strokeWidth={1.75} style={{ color: "var(--text-secondary)" }} />
                           <span>Delegate Keys</span>
+                        </span>
+                      )}
+                      {perms.read_notes && (
+                        <span style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          background: "rgba(46, 48, 50, 0.04)",
+                          border: "1px solid rgba(46, 48, 50, 0.08)",
+                          color: "var(--text-primary)",
+                          padding: "0.2rem 0.6rem",
+                          borderRadius: "var(--radius-pill)",
+                          fontSize: "0.72rem",
+                          fontWeight: 500,
+                        }}>
+                          <BookOpen size={12} strokeWidth={1.75} style={{ color: "var(--text-secondary)" }} />
+                          <span>Read Notes</span>
+                        </span>
+                      )}
+                      {perms.create_note && (
+                        <span style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          background: "rgba(46, 48, 50, 0.04)",
+                          border: "1px solid rgba(46, 48, 50, 0.08)",
+                          color: "var(--text-primary)",
+                          padding: "0.2rem 0.6rem",
+                          borderRadius: "var(--radius-pill)",
+                          fontSize: "0.72rem",
+                          fontWeight: 500,
+                        }}>
+                          <StickyNote size={12} strokeWidth={1.75} style={{ color: "var(--text-secondary)" }} />
+                          <span>Create Notes</span>
+                        </span>
+                      )}
+                      {perms.update_note && (
+                        <span style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          background: "rgba(46, 48, 50, 0.04)",
+                          border: "1px solid rgba(46, 48, 50, 0.08)",
+                          color: "var(--text-primary)",
+                          padding: "0.2rem 0.6rem",
+                          borderRadius: "var(--radius-pill)",
+                          fontSize: "0.72rem",
+                          fontWeight: 500,
+                        }}>
+                          <Edit3 size={12} strokeWidth={1.75} style={{ color: "var(--text-secondary)" }} />
+                          <span>Edit Notes</span>
+                        </span>
+                      )}
+                      {perms.delete_note && (
+                        <span style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          background: "rgba(220, 38, 38, 0.08)",
+                          border: "1px solid rgba(220, 38, 38, 0.2)",
+                          color: "#DC2626",
+                          padding: "0.2rem 0.6rem",
+                          borderRadius: "var(--radius-pill)",
+                          fontSize: "0.72rem",
+                          fontWeight: 500,
+                        }}>
+                          <Trash2 size={12} strokeWidth={1.75} style={{ color: "#DC2626" }} />
+                          <span>Delete Notes</span>
                         </span>
                       )}
                     </div>

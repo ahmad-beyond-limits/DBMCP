@@ -25,6 +25,7 @@ from app.core.security import (
 from app.database.models import FileRecord, User, Workspace
 from app.database.session import get_db
 from app.storage.supabase_storage import get_storage_backend
+from app.workspaces.service import WorkspaceService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security_bearer = HTTPBearer(auto_error=False)
@@ -111,6 +112,9 @@ async def register(data: UserRegisterRequest, db: AsyncSession = Depends(get_db)
     await db.commit()
     await db.refresh(new_user)
 
+    # Provision default Notes workspace
+    await WorkspaceService.ensure_user_default_workspace(db, new_user.id)
+
     access_token = create_access_token(new_user.id, {"username": new_user.username})
     refresh_token = create_refresh_token(new_user.id)
 
@@ -142,6 +146,9 @@ async def login(data: UserLoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account has been suspended. Please contact platform administrator.",
         )
+
+    # Ensure default Notes workspace is provisioned
+    await WorkspaceService.ensure_user_default_workspace(db, user.id)
 
     access_token = create_access_token(user.id, {"username": user.username})
     refresh_token = create_refresh_token(user.id)

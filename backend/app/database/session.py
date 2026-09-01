@@ -134,7 +134,6 @@ async def init_db() -> None:
                 await conn.execute(
                     text("ALTER TABLE audit_logs ALTER COLUMN workspace_id DROP NOT NULL")
                 )
-                logger.info("Executed schema migration: ensure mcp_credentials.scope_type, user_id exist and workspace_id is nullable.")
             elif settings.DATABASE_URL.startswith("sqlite"):
                 try:
                     await conn.execute(text("ALTER TABLE mcp_credentials ADD COLUMN scope_type VARCHAR(32) DEFAULT 'WORKSPACE'"))
@@ -146,3 +145,35 @@ async def init_db() -> None:
                     pass
         except Exception as e:
             logger.warning(f"Schema migration warning for mcp_credentials scope columns: {e}")
+
+        # Automatic schema migration: ensure `note_id` column exists on `files`
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(
+                    text("ALTER TABLE files ADD COLUMN IF NOT EXISTS note_id VARCHAR(36) REFERENCES notes(id) ON DELETE CASCADE")
+                )
+                logger.info("Executed schema migration: ensure files.note_id column exists.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(text("ALTER TABLE files ADD COLUMN note_id VARCHAR(36)"))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning for files.note_id: {e}")
+
+        # Automatic schema migration: ensure `referenced_file_ids` column exists on `notes`
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(
+                    text("ALTER TABLE notes ADD COLUMN IF NOT EXISTS referenced_file_ids JSONB DEFAULT '[]'")
+                )
+                logger.info("Executed schema migration: ensure notes.referenced_file_ids column exists.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(text("ALTER TABLE notes ADD COLUMN referenced_file_ids JSON DEFAULT '[]'"))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning for notes.referenced_file_ids: {e}")
+
+

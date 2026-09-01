@@ -11,6 +11,10 @@ class AccountMCPPermissions(BaseModel):
     edit_dataset: bool = Field(False, description="Insert, update, or delete rows in tabular datasets")
     delete_files: bool = Field(False, description="Delete files and resources from workspaces")
     manage_mcp_keys: bool = Field(True, description="Generate and revoke workspace-scoped MCP keys")
+    read_notes: bool = Field(True, description="Search, list, and read structured notes across workspaces")
+    create_note: bool = Field(True, description="Create structured notes and scratchpads with document mentions")
+    update_note: bool = Field(True, description="Update, edit, or append to existing notes across workspaces")
+    delete_note: bool = Field(False, description="Delete notes from workspaces")
 
 
 class CreateAccountMCPRequest(BaseModel):

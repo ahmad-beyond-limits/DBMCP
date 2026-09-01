@@ -50,8 +50,23 @@ export interface Workspace {
   files_count: number;
   policies_count: number;
   credentials_count: number;
+  notes_count?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface Note {
+  id: string;
+  workspace_id: string;
+  title: string;
+  content: string;
+  tags?: string[];
+  referenced_file_ids?: string[];
+  referenced_files?: FileRecord[];
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  files?: FileRecord[];
 }
 
 export interface WorkspaceMember {
@@ -166,6 +181,10 @@ export interface AccountMCPPermissions {
   edit_dataset: boolean;
   delete_files: boolean;
   manage_mcp_keys: boolean;
+  read_notes: boolean;
+  create_note: boolean;
+  update_note: boolean;
+  delete_note: boolean;
 }
 
 export interface AccountMCPCredential {

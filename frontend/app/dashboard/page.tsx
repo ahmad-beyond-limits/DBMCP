@@ -17,6 +17,7 @@ import {
   Search,
   Pencil,
   User as UserIcon,
+  StickyNote,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -114,6 +115,14 @@ export default function DashboardPage() {
     const matchesSearch = ws.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           ws.id.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
+  });
+
+  const sortedWorkspaces = [...filteredWorkspaces].sort((a, b) => {
+    const aIsNotes = a.name.toLowerCase() === "notes";
+    const bIsNotes = b.name.toLowerCase() === "notes";
+    if (aIsNotes && !bIsNotes) return -1;
+    if (!aIsNotes && bIsNotes) return 1;
+    return 0;
   });
 
   const totalFiles = workspaces.reduce((acc, ws) => acc + (ws.files_count || 0), 0);
@@ -341,83 +350,310 @@ export default function DashboardPage() {
           gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
           gap: "1.25rem",
         }}>
-          {filteredWorkspaces.map((ws) => (
-            <Link
-              key={ws.id}
-              href={`/workspaces/${ws.id}`}
-              className="frosted-panel"
-              style={{
-                textDecoration: "none",
-                padding: "clamp(1.5rem, 3.5vw, 2rem)",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-                minHeight: "210px",
-              }}
-            >
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
-                  <div className="icon-circle-btn" style={{ width: "42px", height: "42px" }}>
-                    <FolderGit2 size={18} strokeWidth={1.5} />
-                  </div>
-                  <span className="badge-status" style={{ background: ws.role === "OWNER" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.04)" }}>
-                    {ws.role === "OWNER" ? "Owner" : "Member"}
-                  </span>
-                </div>
+          {sortedWorkspaces.map((ws) => {
+            const isNotesWs = ws.name.toLowerCase() === "notes";
 
-                <h3 style={{
-                  fontSize: "1.2rem",
-                  fontWeight: 400,
-                  color: "var(--text-primary)",
-                  marginBottom: "0.25rem",
-                  letterSpacing: "-0.02em",
-                }}>
-                  {ws.name}
-                </h3>
-                {ws.description && (
-                  <p style={{
-                    fontSize: "0.84rem",
-                    color: "var(--text-secondary)",
-                    marginBottom: "0.6rem",
-                    lineHeight: 1.4,
+            if (isNotesWs) {
+              return (
+                <Link
+                  key={ws.id}
+                  href={`/workspaces/${ws.id}`}
+                  className="frosted-panel notes-workspace-card"
+                  style={{
+                    textDecoration: "none",
+                    padding: "clamp(1.5rem, 3.5vw, 2rem)",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    minHeight: "220px",
+                    background: "radial-gradient(circle at 85% 18%, rgba(255, 205, 215, 0.45) 0%, transparent 55%), radial-gradient(circle at 15% 85%, rgba(225, 29, 72, 0.5) 0%, transparent 60%), linear-gradient(135deg, #FF6080 0%, #FF2E55 48%, #D4113E 100%)",
+                    boxShadow: "0 16px 36px -8px rgba(244, 43, 84, 0.38), 0 4px 14px rgba(0, 0, 0, 0.05)",
+                    border: "1px solid rgba(255, 255, 255, 0.38)",
+                    position: "relative",
                     overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    display: "-webkit-box",
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: "vertical",
-                  }}>
-                    {ws.description}
-                  </p>
-                )}
-                <p style={{
-                  fontSize: "0.78rem",
-                  color: "var(--text-tertiary)",
-                  fontFamily: "JetBrains Mono, monospace",
-                  marginBottom: "1rem",
-                }}>
-                  ID: {ws.id.slice(0, 8)}...
-                </p>
-              </div>
+                    color: "#FFFFFF",
+                    transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+                  }}
+                >
+                  {/* Glowing Concentric Radar / Sonar Rings (from reference image) */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: "-12px",
+                      top: "16px",
+                      width: "135px",
+                      height: "135px",
+                      pointerEvents: "none",
+                      opacity: 0.35,
+                    }}
+                  >
+                    <svg viewBox="0 0 100 100" width="100%" height="100%" fill="none">
+                      <circle cx="50" cy="50" r="46" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" />
+                      <circle cx="50" cy="50" r="33" stroke="rgba(255,255,255,0.6)" strokeWidth="2" />
+                      <circle cx="50" cy="50" r="18" fill="rgba(255, 255, 255, 0.25)" stroke="#FFFFFF" strokeWidth="2.5" />
+                      <circle cx="50" cy="50" r="6" fill="#FACC15" />
+                    </svg>
+                  </div>
 
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                paddingTop: "1rem",
-                borderTop: "1px solid rgba(40, 40, 40, 0.04)",
-              }}>
-                <div style={{ display: "flex", gap: "0.85rem", fontSize: "0.78rem", color: "var(--text-secondary)" }}>
-                  <span>{ws.files_count || 0} Files</span>
-                  <span>•</span>
-                  <span>{ws.credentials_count || 0} Links</span>
+                  <div>
+                    {/* Top Row: Icon & Status Badge */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem", position: "relative", zIndex: 2 }}>
+                      <div
+                        className="icon-circle-btn"
+                        style={{
+                          width: "42px",
+                          height: "42px",
+                          background: "rgba(255, 255, 255, 0.22)",
+                          border: "1px solid rgba(255, 255, 255, 0.35)",
+                          color: "#FFFFFF",
+                          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+                        }}
+                      >
+                        <StickyNote size={18} strokeWidth={1.75} />
+                      </div>
+                      <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                        <span
+                          className="badge-status"
+                          style={{
+                            background: "rgba(255, 255, 255, 0.24)",
+                            color: "#FFFFFF",
+                            border: "1px solid rgba(255, 255, 255, 0.3)",
+                            backdropFilter: "blur(8px)",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Notes Vault
+                        </span>
+                        <span
+                          className="badge-status"
+                          style={{
+                            background: "rgba(0, 0, 0, 0.18)",
+                            color: "#FFFFFF",
+                            backdropFilter: "blur(8px)",
+                          }}
+                        >
+                          {ws.role === "OWNER" ? "Owner" : "Member"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Text Hierarchy: Preserving exact font, sizes, and layout */}
+                    <div style={{ position: "relative", zIndex: 2 }}>
+                      <h3 style={{
+                        fontSize: "1.2rem",
+                        fontWeight: 400,
+                        color: "#FFFFFF",
+                        marginBottom: "0.25rem",
+                        letterSpacing: "-0.02em",
+                        textShadow: "0 1px 2px rgba(0, 0, 0, 0.12)",
+                      }}>
+                        {ws.name}
+                      </h3>
+                      {ws.description && (
+                        <p style={{
+                          fontSize: "0.84rem",
+                          color: "rgba(255, 255, 255, 0.92)",
+                          marginBottom: "0.6rem",
+                          lineHeight: 1.4,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                        }}>
+                          {ws.description}
+                        </p>
+                      )}
+                      <p style={{
+                        fontSize: "0.78rem",
+                        color: "rgba(255, 255, 255, 0.72)",
+                        fontFamily: "JetBrains Mono, monospace",
+                        marginBottom: "1rem",
+                      }}>
+                        ID: {ws.id.slice(0, 8)}...
+                      </p>
+                    </div>
+
+                    {/* Stacked Notes Floating Preview Capsule (matching the reference image style) */}
+                    <div style={{
+                      position: "relative",
+                      marginTop: "0.4rem",
+                      marginBottom: "0.85rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "0.65rem 0.95rem",
+                      background: "rgba(255, 255, 255, 0.18)",
+                      backdropFilter: "blur(12px)",
+                      WebkitBackdropFilter: "blur(12px)",
+                      borderRadius: "14px",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
+                      zIndex: 2,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                        {/* Layered Mini Notes Graphic */}
+                        <div style={{ position: "relative", width: "32px", height: "30px", flexShrink: 0 }}>
+                          {/* Back note sheet */}
+                          <div style={{
+                            position: "absolute",
+                            left: "0",
+                            top: "2px",
+                            width: "22px",
+                            height: "26px",
+                            background: "rgba(255, 255, 255, 0.85)",
+                            borderRadius: "4px",
+                            transform: "rotate(-10deg)",
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                          }} />
+                          {/* Front note sheet with content lines */}
+                          <div style={{
+                            position: "absolute",
+                            left: "7px",
+                            top: "0",
+                            width: "23px",
+                            height: "27px",
+                            background: "#FFFFFF",
+                            borderRadius: "4px",
+                            transform: "rotate(4deg)",
+                            boxShadow: "0 3px 8px rgba(0,0,0,0.2)",
+                            padding: "3px 4px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "2px",
+                          }}>
+                            <div style={{ width: "10px", height: "2px", background: "#E11D48", borderRadius: "1px" }} />
+                            <div style={{ width: "14px", height: "1.5px", background: "#CBD5E1", borderRadius: "1px" }} />
+                            <div style={{ width: "12px", height: "1.5px", background: "#CBD5E1", borderRadius: "1px" }} />
+                            <div style={{ width: "8px", height: "1.5px", background: "#CBD5E1", borderRadius: "1px" }} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: "0.82rem", fontWeight: 550, color: "#FFFFFF", lineHeight: 1.2 }}>
+                            Scratchpad & Notes
+                          </div>
+                          <div style={{ fontSize: "0.72rem", color: "rgba(255, 255, 255, 0.82)", marginTop: "2px" }}>
+                            {ws.notes_count || 0} active note{ws.notes_count === 1 ? "" : "s"} • AI Connected
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Waveform / Capsule accent */}
+                      <div style={{
+                        fontSize: "0.75rem",
+                        letterSpacing: "1px",
+                        color: "rgba(255, 255, 255, 0.75)",
+                        fontFamily: "monospace",
+                        fontWeight: 700,
+                      }}>
+                        ((((O))))
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer Row */}
+                  <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    paddingTop: "0.85rem",
+                    borderTop: "1px solid rgba(255, 255, 255, 0.22)",
+                    position: "relative",
+                    zIndex: 2,
+                  }}>
+                    <div style={{ display: "flex", gap: "0.85rem", fontSize: "0.78rem", color: "rgba(255, 255, 255, 0.88)" }}>
+                      <span>{ws.notes_count || 0} Notes</span>
+                      <span>•</span>
+                      <span>{ws.credentials_count || 0} Links</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", color: "#FFFFFF", fontSize: "0.82rem", fontWeight: 550 }}>
+                      <span>Open</span>
+                      <ArrowRight size={13} strokeWidth={2} />
+                    </div>
+                  </div>
+                </Link>
+              );
+            }
+
+            return (
+              <Link
+                key={ws.id}
+                href={`/workspaces/${ws.id}`}
+                className="frosted-panel"
+                style={{
+                  textDecoration: "none",
+                  padding: "clamp(1.5rem, 3.5vw, 2rem)",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  minHeight: "210px",
+                }}
+              >
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                    <div className="icon-circle-btn" style={{ width: "42px", height: "42px" }}>
+                      <FolderGit2 size={18} strokeWidth={1.5} />
+                    </div>
+                    <span className="badge-status" style={{ background: ws.role === "OWNER" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.04)" }}>
+                      {ws.role === "OWNER" ? "Owner" : "Member"}
+                    </span>
+                  </div>
+
+                  <h3 style={{
+                    fontSize: "1.2rem",
+                    fontWeight: 400,
+                    color: "var(--text-primary)",
+                    marginBottom: "0.25rem",
+                    letterSpacing: "-0.02em",
+                  }}>
+                    {ws.name}
+                  </h3>
+                  {ws.description && (
+                    <p style={{
+                      fontSize: "0.84rem",
+                      color: "var(--text-secondary)",
+                      marginBottom: "0.6rem",
+                      lineHeight: 1.4,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                    }}>
+                      {ws.description}
+                    </p>
+                  )}
+                  <p style={{
+                    fontSize: "0.78rem",
+                    color: "var(--text-tertiary)",
+                    fontFamily: "JetBrains Mono, monospace",
+                    marginBottom: "1rem",
+                  }}>
+                    ID: {ws.id.slice(0, 8)}...
+                  </p>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", color: "var(--text-primary)", fontSize: "0.82rem", fontWeight: 450 }}>
-                  <span>Open</span>
-                  <ArrowRight size={13} strokeWidth={1.5} />
+
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingTop: "1rem",
+                  borderTop: "1px solid rgba(40, 40, 40, 0.04)",
+                }}>
+                  <div style={{ display: "flex", gap: "0.85rem", fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                    <span>{ws.files_count || 0} Files</span>
+                    <span>•</span>
+                    <span>{ws.credentials_count || 0} Links</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", color: "var(--text-primary)", fontSize: "0.82rem", fontWeight: 450 }}>
+                    <span>Open</span>
+                    <ArrowRight size={13} strokeWidth={1.5} />
+                  </div>
                 </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       )}
 

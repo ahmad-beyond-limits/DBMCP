@@ -29,11 +29,13 @@ from app.database.models import (
 )
 from app.mcp.auth import AuthenticatedMCPContext
 from app.mcp.skills import ABOX_AI_SKILLS_GUIDE
+from app.notes.service import NoteService
 from app.policies.engine import PolicyEngine
 from app.resources.service import ResourceService
 from app.search.service import SearchService
 from app.storage.supabase_storage import get_storage_backend
 from app.structured.query_engine import StructuredQueryEngine
+from app.workspaces.service import WorkspaceService
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +223,118 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
             "required": ["workspace_id", "credential_id"],
         },
     },
+    {
+        "name": "create_note",
+        "description": "Creates and saves a structured note or knowledge scratchpad entry in a workspace (defaults to your dedicated 'Notes' workspace). Can reference workspace documents.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_id": {"type": "string", "description": "Optional workspace UUID or name (defaults to 'Notes' workspace)"},
+                "title": {"type": "string", "description": "Title or headline of the note"},
+                "content": {"type": "string", "description": "Markdown or plain text content of the note. You can mention workspace documents using @filename or @[filename]."},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional list of tags"},
+                "referenced_file_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional list of workspace document UUIDs referenced by this note"},
+            },
+            "required": ["title", "content"],
+        },
+    },
+    {
+        "name": "take_note",
+        "description": "Alias for create_note. Takes a note and saves it in the user's default 'Notes' workspace.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_id": {"type": "string", "description": "Optional workspace UUID or name (defaults to 'Notes' workspace)"},
+                "title": {"type": "string", "description": "Title or headline of the note"},
+                "content": {"type": "string", "description": "Markdown or plain text content of the note. You can mention workspace documents using @filename or @[filename]."},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional list of tags"},
+                "referenced_file_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional list of workspace document UUIDs referenced by this note"},
+            },
+            "required": ["title", "content"],
+        },
+    },
+    {
+        "name": "list_notes",
+        "description": "Lists and searches notes in a workspace (defaults to 'Notes' workspace) by keyword or tag.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_id": {"type": "string", "description": "Optional workspace UUID or name (defaults to 'Notes' workspace)"},
+                "search": {"type": "string", "description": "Optional search query to filter notes"},
+                "tag": {"type": "string", "description": "Optional tag filter"},
+            },
+        },
+    },
+    {
+        "name": "get_note",
+        "description": "Retrieves the full content, title, tags, referenced workspace files, and timestamps of a specific note.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_id": {"type": "string", "description": "Optional workspace UUID or name (defaults to 'Notes' workspace)"},
+                "note_id": {"type": "string", "description": "UUID or title of the note to retrieve"},
+            },
+            "required": ["note_id"],
+        },
+    },
+    {
+        "name": "read_note",
+        "description": "Alias for get_note. Retrieves the full content of a specific note.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_id": {"type": "string", "description": "Optional workspace UUID or name (defaults to 'Notes' workspace)"},
+                "note_id": {"type": "string", "description": "UUID or title of the note to read"},
+            },
+            "required": ["note_id"],
+        },
+    },
+    {
+        "name": "update_note",
+        "description": "Updates, replaces, or appends content to an existing note in a workspace.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_id": {"type": "string", "description": "Optional workspace UUID or name (defaults to 'Notes' workspace)"},
+                "note_id": {"type": "string", "description": "UUID or title of the note to update"},
+                "title": {"type": "string", "description": "Optional replacement title"},
+                "content": {"type": "string", "description": "Optional replacement content"},
+                "append_content": {"type": "string", "description": "Optional text to append to the end of existing note"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional updated tags"},
+                "referenced_file_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional updated list of workspace document UUIDs referenced by this note"},
+            },
+            "required": ["note_id"],
+        },
+    },
+    {
+        "name": "modify_note",
+        "description": "Alias for update_note. Modifies or appends to an existing note.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_id": {"type": "string", "description": "Optional workspace UUID or name (defaults to 'Notes' workspace)"},
+                "note_id": {"type": "string", "description": "UUID or title of the note to modify"},
+                "title": {"type": "string", "description": "Optional replacement title"},
+                "content": {"type": "string", "description": "Optional replacement content"},
+                "append_content": {"type": "string", "description": "Optional text to append to the end of existing note"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional updated tags"},
+                "referenced_file_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional updated list of workspace document UUIDs referenced by this note"},
+            },
+            "required": ["note_id"],
+        },
+    },
+    {
+        "name": "delete_note",
+        "description": "Permanently deletes a note from a workspace.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_id": {"type": "string", "description": "Optional workspace UUID or name (defaults to 'Notes' workspace)"},
+                "note_id": {"type": "string", "description": "UUID or title of the note to delete"},
+            },
+            "required": ["note_id"],
+        },
+    },
 ]
 
 # Standard Workspace-Scoped MCP Tool Definitions
@@ -339,6 +453,110 @@ MCP_TOOLS_DEFINITIONS = [
             "required": ["resource_id", "action"],
         },
     },
+    {
+        "name": "create_note",
+        "description": "Creates and saves a structured note or knowledge scratchpad entry in this workspace. Can reference workspace documents.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Title or headline of the note"},
+                "content": {"type": "string", "description": "Markdown or plain text content of the note. You can mention workspace documents using @filename or @[filename]."},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional list of tags"},
+                "referenced_file_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional list of workspace document UUIDs referenced by this note"},
+            },
+            "required": ["title", "content"],
+        },
+    },
+    {
+        "name": "take_note",
+        "description": "Alias for create_note. Takes and saves a note in this workspace.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Title or headline of the note"},
+                "content": {"type": "string", "description": "Markdown or plain text content of the note. You can mention workspace documents using @filename or @[filename]."},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional list of tags"},
+                "referenced_file_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional list of workspace document UUIDs referenced by this note"},
+            },
+            "required": ["title", "content"],
+        },
+    },
+    {
+        "name": "list_notes",
+        "description": "Lists and searches notes in this workspace by keyword or tag.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "search": {"type": "string", "description": "Optional search query to filter notes"},
+                "tag": {"type": "string", "description": "Optional tag filter"},
+            },
+        },
+    },
+    {
+        "name": "get_note",
+        "description": "Retrieves the full content, title, tags, referenced workspace files, and timestamps of a specific note.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "note_id": {"type": "string", "description": "UUID or title of the note to retrieve"},
+            },
+            "required": ["note_id"],
+        },
+    },
+    {
+        "name": "read_note",
+        "description": "Alias for get_note. Retrieves the full content of a specific note.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "note_id": {"type": "string", "description": "UUID or title of the note to read"},
+            },
+            "required": ["note_id"],
+        },
+    },
+    {
+        "name": "update_note",
+        "description": "Updates, replaces, or appends content to an existing note in this workspace.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "note_id": {"type": "string", "description": "UUID or title of the note to update"},
+                "title": {"type": "string", "description": "Optional replacement title"},
+                "content": {"type": "string", "description": "Optional replacement content"},
+                "append_content": {"type": "string", "description": "Optional text to append to the end of existing note"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional updated tags"},
+                "referenced_file_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional updated list of workspace document UUIDs referenced by this note"},
+            },
+            "required": ["note_id"],
+        },
+    },
+    {
+        "name": "modify_note",
+        "description": "Alias for update_note. Modifies or appends to an existing note.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "note_id": {"type": "string", "description": "UUID or title of the note to modify"},
+                "title": {"type": "string", "description": "Optional replacement title"},
+                "content": {"type": "string", "description": "Optional replacement content"},
+                "append_content": {"type": "string", "description": "Optional text to append to the end of existing note"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional updated tags"},
+                "referenced_file_ids": {"type": "array", "items": {"type": "string"}, "description": "Optional updated list of workspace document UUIDs referenced by this note"},
+            },
+            "required": ["note_id"],
+        },
+    },
+    {
+        "name": "delete_note",
+        "description": "Permanently deletes a note from this workspace.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "note_id": {"type": "string", "description": "UUID or title of the note to delete"},
+            },
+            "required": ["note_id"],
+        },
+    },
 ]
 
 
@@ -398,6 +616,37 @@ class MCPServer:
                 "content": [{"type": "text", "text": f"Policy Error: {op_decision.reason}"}],
             }
 
+        # 1b. Check Credential Granular Permissions (if defined)
+        perms = context.permissions or {}
+        if perms:
+            perm_tool_map = {
+                "read_resource": ["read_resource", "get_resource_metadata"],
+                "search": ["search"],
+                "query_dataset": ["query_dataset", "get_dataset_schema"],
+                "edit_dataset": ["edit_dataset"],
+                "read_notes": ["list_notes", "get_note", "read_note"],
+                "create_note": ["create_note", "take_note"],
+                "update_note": ["update_note", "modify_note"],
+                "delete_note": ["delete_note"],
+            }
+            for perm_key, tools in perm_tool_map.items():
+                if tool_name in tools and perm_key in perms and perms[perm_key] is False:
+                    reason = f"Permission Denied: This MCP Key does not have '{perm_key}' enabled for workspace {ws_id}."
+                    await AuditService.log_event(
+                        db=db,
+                        workspace_id=ws_id,
+                        operation=f"MCP_{tool_name.upper()}_DENIED",
+                        actor_type="MCP_CLIENT",
+                        credential_id=context.credential_id,
+                        decision="DENY",
+                        reason=reason,
+                        request_metadata={"tool": tool_name, "permission_key": perm_key},
+                    )
+                    return {
+                        "isError": True,
+                        "content": [{"type": "text", "text": reason}],
+                    }
+
         # 2. Dispatch Tool
         try:
             if tool_name == "workspace_info":
@@ -431,6 +680,45 @@ class MCPServer:
                     filters=args.get("filters"),
                     updates=args.get("updates"),
                     new_row=args.get("new_row"),
+                )
+            elif tool_name in ["create_note", "take_note"]:
+                return await cls._create_note(
+                    db=db,
+                    context=context,
+                    title=args.get("title"),
+                    content=args.get("content"),
+                    tags=args.get("tags"),
+                    referenced_file_ids=args.get("referenced_file_ids"),
+                )
+            elif tool_name == "list_notes":
+                return await cls._list_notes(
+                    db=db,
+                    context=context,
+                    search=args.get("search"),
+                    tag=args.get("tag"),
+                )
+            elif tool_name in ["get_note", "read_note"]:
+                return await cls._get_note(
+                    db=db,
+                    context=context,
+                    note_id=args.get("note_id"),
+                )
+            elif tool_name in ["update_note", "modify_note"]:
+                return await cls._update_note(
+                    db=db,
+                    context=context,
+                    note_id=args.get("note_id"),
+                    title=args.get("title"),
+                    content=args.get("content"),
+                    append_content=args.get("append_content"),
+                    tags=args.get("tags"),
+                    referenced_file_ids=args.get("referenced_file_ids"),
+                )
+            elif tool_name == "delete_note":
+                return await cls._delete_note(
+                    db=db,
+                    context=context,
+                    note_id=args.get("note_id"),
                 )
             else:
                 return {
@@ -1242,6 +1530,77 @@ class MCPServer:
                 require_perm("manage_mcp_keys", "Manage MCP keys and credentials")
                 return await cls._account_revoke_mcp_link(db, context, args.get("workspace_id"), args.get("credential_id"))
 
+            elif tool_name in ["create_note", "take_note"]:
+                if "create_note" in perms:
+                    require_perm("create_note", "Create and save notes")
+                else:
+                    require_perm("upload_files", "Create notes and upload content")
+                return await cls._account_create_note(
+                    db=db,
+                    context=context,
+                    workspace_id=args.get("workspace_id"),
+                    title=args.get("title"),
+                    content=args.get("content"),
+                    tags=args.get("tags"),
+                    referenced_file_ids=args.get("referenced_file_ids"),
+                )
+
+            elif tool_name == "list_notes":
+                if "read_notes" in perms:
+                    require_perm("read_notes", "Search and list notes")
+                else:
+                    require_perm("read_data", "View workspaces and notes")
+                return await cls._account_list_notes(
+                    db=db,
+                    context=context,
+                    workspace_id=args.get("workspace_id"),
+                    search=args.get("search"),
+                    tag=args.get("tag"),
+                )
+
+            elif tool_name in ["get_note", "read_note"]:
+                if "read_notes" in perms:
+                    require_perm("read_notes", "Read note contents")
+                else:
+                    require_perm("read_data", "Read note contents")
+                return await cls._account_get_note(
+                    db=db,
+                    context=context,
+                    workspace_id=args.get("workspace_id"),
+                    note_id=args.get("note_id"),
+                )
+
+            elif tool_name in ["update_note", "modify_note"]:
+                if "update_note" in perms:
+                    require_perm("update_note", "Update and append notes")
+                elif "edit_dataset" in perms:
+                    require_perm("edit_dataset", "Modify notes and datasets")
+                else:
+                    require_perm("read_data", "Access and edit notes")
+                return await cls._account_update_note(
+                    db=db,
+                    context=context,
+                    workspace_id=args.get("workspace_id"),
+                    note_id=args.get("note_id"),
+                    title=args.get("title"),
+                    content=args.get("content"),
+                    append_content=args.get("append_content"),
+                    tags=args.get("tags"),
+                    referenced_file_ids=args.get("referenced_file_ids"),
+                )
+
+            elif tool_name == "delete_note":
+                if "delete_note" in perms:
+                    require_perm("delete_note", "Delete notes from workspaces")
+                else:
+                    require_perm("delete_files", "Delete notes and resources")
+                return await cls._account_delete_note(
+                    db=db,
+                    context=context,
+                    workspace_id=args.get("workspace_id"),
+                    note_id=args.get("note_id"),
+                )
+
             else:
                 return {
                     "isError": True,
@@ -1266,9 +1625,9 @@ class MCPServer:
             return {"isError": True, "content": [{"type": "text", "text": f"Tool Execution Error: {str(e)}"}]}
 
     @classmethod
-    async def _resolve_account_workspace(cls, db: AsyncSession, user_id: str, ws_identifier: str) -> Workspace:
+    async def _resolve_account_workspace(cls, db: AsyncSession, user_id: str, ws_identifier: Optional[str] = None) -> Workspace:
         if not ws_identifier or not str(ws_identifier).strip():
-            raise ValueError("workspace_id parameter is required.")
+            return await WorkspaceService.ensure_user_default_workspace(db, user_id)
         target = str(ws_identifier).strip()
 
         stmt = select(Workspace).where(
@@ -1865,4 +2224,561 @@ class MCPServer:
         )
 
         return {"content": [{"type": "text", "text": json.dumps({"success": True, "message": f"Credential '{cred.name}' ({cred.credential_prefix}) revoked."}, indent=2)}]}
+
+    # ==============================================================================
+    # Note Management Tool Handlers (Workspace & Account)
+    # ==============================================================================
+
+    @classmethod
+    async def _create_note(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        title: Optional[str],
+        content: Optional[str],
+        tags: Optional[List[str]] = None,
+        referenced_file_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        if not title or not str(title).strip():
+            return {"isError": True, "content": [{"type": "text", "text": "Title is required for a note."}]}
+        
+        note = await NoteService.create_note(
+            db=db,
+            workspace_id=context.workspace_id,
+            title=str(title).strip(),
+            content=content or "",
+            tags=tags or [],
+            referenced_file_ids=referenced_file_ids,
+            user_id=context.user_id,
+        )
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=context.workspace_id,
+            user_id=context.user_id,
+            operation="MCP_CREATE_NOTE",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            resource_type="note",
+            resource_id=note.id,
+            decision="ALLOW",
+            reason=f"Created note '{note.title}'",
+        )
+
+        ref_files_list = [
+            {"id": f.id, "filename": f.original_filename, "type": f.file_type, "size_bytes": f.file_size}
+            for f in (getattr(note, "referenced_files", []) or [])
+        ]
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "success": True,
+                        "note_id": note.id,
+                        "workspace_id": note.workspace_id,
+                        "title": note.title,
+                        "content": note.content,
+                        "tags": note.tags,
+                        "referenced_file_ids": note.referenced_file_ids or [],
+                        "referenced_files": ref_files_list,
+                        "created_at": note.created_at.isoformat(),
+                        "message": f"Successfully created note '{note.title}'.",
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _list_notes(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        search: Optional[str] = None,
+        tag: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        notes, total = await NoteService.list_notes(
+            db=db,
+            workspace_id=context.workspace_id,
+            search=search,
+            tag=tag,
+        )
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=context.workspace_id,
+            user_id=context.user_id,
+            operation="MCP_LIST_NOTES",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            decision="ALLOW",
+            reason=f"Listed {len(notes)} note(s)",
+        )
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "notes": [
+                            {
+                                "id": n.id,
+                                "title": n.title,
+                                "preview": n.content[:200] + ("..." if len(n.content) > 200 else ""),
+                                "tags": n.tags,
+                                "referenced_file_ids": n.referenced_file_ids or [],
+                                "referenced_files": [
+                                    {"id": f.id, "filename": f.original_filename, "type": f.file_type}
+                                    for f in (getattr(n, "referenced_files", []) or [])
+                                ],
+                                "created_at": n.created_at.isoformat(),
+                                "updated_at": n.updated_at.isoformat(),
+                            }
+                            for n in notes
+                        ],
+                        "count": len(notes),
+                        "total": total,
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _get_note(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        note_id: Optional[str],
+    ) -> Dict[str, Any]:
+        if not note_id or not str(note_id).strip():
+            return {"isError": True, "content": [{"type": "text", "text": "note_id is required."}]}
+        
+        note = await NoteService.get_note(db, context.workspace_id, str(note_id).strip())
+        if not note:
+            return {"isError": True, "content": [{"type": "text", "text": f"Note '{note_id}' not found in workspace."}]}
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=context.workspace_id,
+            user_id=context.user_id,
+            operation="MCP_GET_NOTE",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            resource_type="note",
+            resource_id=note.id,
+            decision="ALLOW",
+            reason=f"Retrieved note '{note.title}'",
+        )
+
+        ref_files_list = [
+            {"id": f.id, "filename": f.original_filename, "type": f.file_type, "size_bytes": f.file_size}
+            for f in (getattr(note, "referenced_files", []) or [])
+        ]
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "id": note.id,
+                        "workspace_id": note.workspace_id,
+                        "title": note.title,
+                        "content": note.content,
+                        "tags": note.tags,
+                        "referenced_file_ids": note.referenced_file_ids or [],
+                        "referenced_files": ref_files_list,
+                        "created_at": note.created_at.isoformat(),
+                        "updated_at": note.updated_at.isoformat(),
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _update_note(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        note_id: Optional[str],
+        title: Optional[str] = None,
+        content: Optional[str] = None,
+        append_content: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        referenced_file_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        if not note_id or not str(note_id).strip():
+            return {"isError": True, "content": [{"type": "text", "text": "note_id is required."}]}
+        
+        note = await NoteService.update_note(
+            db=db,
+            workspace_id=context.workspace_id,
+            note_id=str(note_id).strip(),
+            title=title,
+            content=content,
+            append_content=append_content,
+            tags=tags,
+            referenced_file_ids=referenced_file_ids,
+        )
+        if not note:
+            return {"isError": True, "content": [{"type": "text", "text": f"Note '{note_id}' not found in workspace."}]}
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=context.workspace_id,
+            user_id=context.user_id,
+            operation="MCP_UPDATE_NOTE",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            resource_type="note",
+            resource_id=note.id,
+            decision="ALLOW",
+            reason=f"Updated note '{note.title}'",
+        )
+
+        ref_files_list = [
+            {"id": f.id, "filename": f.original_filename, "type": f.file_type, "size_bytes": f.file_size}
+            for f in (getattr(note, "referenced_files", []) or [])
+        ]
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "success": True,
+                        "id": note.id,
+                        "title": note.title,
+                        "content": note.content,
+                        "tags": note.tags,
+                        "referenced_file_ids": note.referenced_file_ids or [],
+                        "referenced_files": ref_files_list,
+                        "updated_at": note.updated_at.isoformat(),
+                        "message": f"Successfully updated note '{note.title}'.",
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _delete_note(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        note_id: Optional[str],
+    ) -> Dict[str, Any]:
+        if not note_id or not str(note_id).strip():
+            return {"isError": True, "content": [{"type": "text", "text": "note_id is required."}]}
+        
+        deleted = await NoteService.delete_note(db, context.workspace_id, str(note_id).strip())
+        if not deleted:
+            return {"isError": True, "content": [{"type": "text", "text": f"Note '{note_id}' not found in workspace."}]}
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=context.workspace_id,
+            user_id=context.user_id,
+            operation="MCP_DELETE_NOTE",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            decision="ALLOW",
+            reason=f"Deleted note '{note_id}'",
+        )
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "success": True,
+                        "deleted_note_id": str(note_id).strip(),
+                        "message": f"Successfully deleted note '{note_id}'.",
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _account_create_note(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        workspace_id: Optional[str],
+        title: str,
+        content: str,
+        tags: Optional[List[str]] = None,
+        referenced_file_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
+        if not title or not str(title).strip():
+            raise ValueError("title is required.")
+        
+        note = await NoteService.create_note(
+            db=db,
+            workspace_id=ws.id,
+            title=str(title).strip(),
+            content=content or "",
+            tags=tags or [],
+            referenced_file_ids=referenced_file_ids,
+            user_id=context.user_id,
+        )
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=ws.id,
+            user_id=context.user_id,
+            operation="MCP_ACCOUNT_CREATE_NOTE",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            resource_type="note",
+            resource_id=note.id,
+            decision="ALLOW",
+            reason=f"Account MCP key created note '{note.title}' in workspace '{ws.name}'",
+        )
+
+        ref_files_list = [
+            {"id": f.id, "filename": f.original_filename, "type": f.file_type, "size_bytes": f.file_size}
+            for f in (getattr(note, "referenced_files", []) or [])
+        ]
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "success": True,
+                        "note_id": note.id,
+                        "workspace_id": ws.id,
+                        "workspace_name": ws.name,
+                        "title": note.title,
+                        "content": note.content,
+                        "tags": note.tags,
+                        "referenced_file_ids": note.referenced_file_ids or [],
+                        "referenced_files": ref_files_list,
+                        "created_at": note.created_at.isoformat(),
+                        "message": f"Successfully saved note '{note.title}' in workspace '{ws.name}'.",
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _account_list_notes(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        workspace_id: Optional[str],
+        search: Optional[str] = None,
+        tag: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
+        notes, total = await NoteService.list_notes(
+            db=db,
+            workspace_id=ws.id,
+            search=search,
+            tag=tag,
+        )
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=ws.id,
+            user_id=context.user_id,
+            operation="MCP_ACCOUNT_LIST_NOTES",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            decision="ALLOW",
+            reason=f"Account MCP key listed notes in workspace '{ws.name}'",
+        )
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "workspace_id": ws.id,
+                        "workspace_name": ws.name,
+                        "notes": [
+                            {
+                                "id": n.id,
+                                "title": n.title,
+                                "preview": n.content[:200] + ("..." if len(n.content) > 200 else ""),
+                                "tags": n.tags,
+                                "referenced_file_ids": n.referenced_file_ids or [],
+                                "referenced_files": [
+                                    {"id": f.id, "filename": f.original_filename, "type": f.file_type}
+                                    for f in (getattr(n, "referenced_files", []) or [])
+                                ],
+                                "created_at": n.created_at.isoformat(),
+                                "updated_at": n.updated_at.isoformat(),
+                            }
+                            for n in notes
+                        ],
+                        "count": len(notes),
+                        "total": total,
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _account_get_note(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        workspace_id: Optional[str],
+        note_id: str,
+    ) -> Dict[str, Any]:
+        if not note_id:
+            raise ValueError("note_id is required.")
+        ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
+        note = await NoteService.get_note(db, ws.id, str(note_id).strip())
+        if not note:
+            raise ValueError(f"Note '{note_id}' not found in workspace '{ws.name}'.")
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=ws.id,
+            user_id=context.user_id,
+            operation="MCP_ACCOUNT_GET_NOTE",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            resource_type="note",
+            resource_id=note.id,
+            decision="ALLOW",
+            reason=f"Account MCP key read note '{note.title}' in workspace '{ws.name}'",
+        )
+
+        ref_files_list = [
+            {"id": f.id, "filename": f.original_filename, "type": f.file_type, "size_bytes": f.file_size}
+            for f in (getattr(note, "referenced_files", []) or [])
+        ]
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "id": note.id,
+                        "workspace_id": ws.id,
+                        "workspace_name": ws.name,
+                        "title": note.title,
+                        "content": note.content,
+                        "tags": note.tags,
+                        "referenced_file_ids": note.referenced_file_ids or [],
+                        "referenced_files": ref_files_list,
+                        "created_at": note.created_at.isoformat(),
+                        "updated_at": note.updated_at.isoformat(),
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _account_update_note(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        workspace_id: Optional[str],
+        note_id: str,
+        title: Optional[str] = None,
+        content: Optional[str] = None,
+        append_content: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        referenced_file_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        if not note_id:
+            raise ValueError("note_id is required.")
+        ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
+        note = await NoteService.update_note(
+            db=db,
+            workspace_id=ws.id,
+            note_id=str(note_id).strip(),
+            title=title,
+            content=content,
+            append_content=append_content,
+            tags=tags,
+            referenced_file_ids=referenced_file_ids,
+        )
+        if not note:
+            raise ValueError(f"Note '{note_id}' not found in workspace '{ws.name}'.")
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=ws.id,
+            user_id=context.user_id,
+            operation="MCP_ACCOUNT_UPDATE_NOTE",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            resource_type="note",
+            resource_id=note.id,
+            decision="ALLOW",
+            reason=f"Account MCP key updated note '{note.title}' in workspace '{ws.name}'",
+        )
+
+        ref_files_list = [
+            {"id": f.id, "filename": f.original_filename, "type": f.file_type, "size_bytes": f.file_size}
+            for f in (getattr(note, "referenced_files", []) or [])
+        ]
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "success": True,
+                        "id": note.id,
+                        "workspace_id": ws.id,
+                        "workspace_name": ws.name,
+                        "title": note.title,
+                        "content": note.content,
+                        "tags": note.tags,
+                        "referenced_file_ids": note.referenced_file_ids or [],
+                        "referenced_files": ref_files_list,
+                        "updated_at": note.updated_at.isoformat(),
+                        "message": f"Successfully updated note '{note.title}' in workspace '{ws.name}'.",
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _account_delete_note(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        workspace_id: Optional[str],
+        note_id: str,
+    ) -> Dict[str, Any]:
+        if not note_id:
+            raise ValueError("note_id is required.")
+        ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
+        deleted = await NoteService.delete_note(db, ws.id, str(note_id).strip())
+        if not deleted:
+            raise ValueError(f"Note '{note_id}' not found in workspace '{ws.name}'.")
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=ws.id,
+            user_id=context.user_id,
+            operation="MCP_ACCOUNT_DELETE_NOTE",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            decision="ALLOW",
+            reason=f"Account MCP key deleted note '{note_id}' in workspace '{ws.name}'",
+        )
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "success": True,
+                        "deleted_note_id": str(note_id).strip(),
+                        "workspace_id": ws.id,
+                        "workspace_name": ws.name,
+                        "message": f"Successfully deleted note '{note_id}' from workspace '{ws.name}'.",
+                    }, indent=2),
+                }
+            ]
+        }
 

@@ -72,6 +72,7 @@ class Workspace(Base):
     operation_policies = relationship("OperationPolicy", back_populates="workspace", cascade="all, delete-orphan")
     anonymisation_rules = relationship("AnonymisationRule", back_populates="workspace", cascade="all, delete-orphan")
     mcp_credentials = relationship("MCPCredential", back_populates="workspace", cascade="all, delete-orphan")
+    notes = relationship("Note", back_populates="workspace", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="workspace", cascade="all, delete-orphan")
 
 
@@ -104,10 +105,12 @@ class FileRecord(Base):
     file_type: Mapped[str] = mapped_column(String(32), nullable=False)  # PDF, DOCX, TXT, CSV, JSON
     status: Mapped[str] = mapped_column(String(32), default="UPLOADING", index=True)  # UPLOADING, PROCESSING, READY, FAILED, DELETED
     uploaded_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    note_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("notes.id", ondelete="CASCADE"), index=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     workspace = relationship("Workspace", back_populates="files")
+    note = relationship("Note", back_populates="files")
     extracted_content = relationship("ExtractedContent", back_populates="file", uselist=False, cascade="all, delete-orphan")
 
 
@@ -206,3 +209,22 @@ class AuditLog(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
     workspace = relationship("Workspace", back_populates="audit_logs")
+
+
+class Note(Base):
+    __tablename__ = "notes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    workspace_id: Mapped[str] = mapped_column(String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), index=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    tags: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, default=list)
+    referenced_file_ids: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, default=list)
+    created_by: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    # Relationships
+    workspace = relationship("Workspace", back_populates="notes")
+    files = relationship("FileRecord", back_populates="note", cascade="all, delete-orphan", lazy="selectin")
+

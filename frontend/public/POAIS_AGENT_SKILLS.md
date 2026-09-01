@@ -6,13 +6,28 @@ Use these instructions to interact accurately, securely, and effectively with wo
 
 ---
 
+## 🔒 Token Scope & Workspace Isolation Guarantees
+
+1. **Workspace-Scoped MCP Tokens (`mcp_live_ws_...`)**:
+   - Strictly isolated to the active workspace.
+   - All document operations (`read_resource`, `search`, `query_dataset`, `edit_dataset`) and note operations (`create_note`, `list_notes`, `get_note`, `update_note`, `delete_note`) are locked to this workspace.
+   - AI agents cannot access, view, or modify data from any other workspace.
+
+2. **Account Master MCP Tokens (`mcp_live_acc_...`)**:
+   - Account-level operator scope across all user workspaces.
+   - Supports creating workspaces, ingesting cloud links (Google Drive / Dropbox), cross-workspace queries, and managing workspace MCP delegation keys.
+   - Defaults to the user's dedicated "Notes" workspace when no `workspace_id` is supplied for note operations.
+
+---
+
 ## 🛠️ Complete MCP Tool Suite & Capabilities
 
+### 📂 Workspace Resources & Tabular Datasets
 1. `workspace_info()`
    - Inspect workspace name, active policies, security boundary status, and available tools.
 
 2. `list_resources()`
-   - Discover all accessible files (CSV, Excel .xlsx, PDF, Word .docx, JSON) permitted for your session.
+   - Discover all accessible files (CSV, Excel `.xlsx`, PDF, Word `.docx`, JSON, TXT, Images) permitted for your session.
 
 3. `get_resource_metadata(resource_id)`
    - Check file size, detected MIME type, formatting, and processing status.
@@ -21,7 +36,7 @@ Use these instructions to interact accurately, securely, and effectively with wo
    - Retrieve table column names, detected data types, and total row count for structured datasets.
 
 5. `query_dataset(resource_id, columns, filters, limit, aggregation)`
-   - Execute exact-match filtering and aggregations over CSV, Excel (.xlsx), or JSON data files.
+   - Execute exact-match filtering and aggregations over CSV, Excel (`.xlsx`), or JSON data files.
    - Supports comparison operators: `{"column": {"$gt": 50}}`, `{"status": {"$ne": "archived"}}`, `{"tag": {"$in": ["A", "B"]}}`.
 
 6. `edit_dataset(resource_id, action, filters, updates, new_row)`
@@ -35,6 +50,59 @@ Use these instructions to interact accurately, securely, and effectively with wo
 
 8. `read_resource(resource_id)`
    - Read extracted document text with automatic real-time PII anonymisation and policy redaction applied.
+
+---
+
+### 📝 Structured Note Studio & Knowledge Scratchpads
+9. `create_note(title, content, tags, referenced_file_ids)` / `take_note(...)`
+   - Capture structured notes, meeting minutes, executive summaries, research findings, and action items.
+   - Accepts rich Markdown formatting, tags array, and document UUID references (`referenced_file_ids`).
+
+10. `list_notes(search, tag)`
+    - Search and discover existing notes in the workspace by query string or tag.
+
+11. `get_note(note_id)` / `read_note(...)`
+    - Retrieve full content, title, tags, timestamps, and referenced document metadata for a note.
+
+12. `update_note(note_id, title, content, append_content, tags, referenced_file_ids)` / `modify_note(...)`
+    - Update an existing note. Use `append_content` to seamlessly append new findings, follow-up items, or discussion points to the end of a note without overwriting prior content.
+
+13. `delete_note(note_id)`
+    - Safely delete a note from the workspace (requires `delete_note` permission).
+
+---
+
+## ✍️ Best Practices for AI Note-Taking & Document References
+
+### 1. Structure Notes Professionally with Markdown
+When taking or updating notes, always format content cleanly:
+```markdown
+# Executive Summary: [Topic]
+
+## 🎯 Key Takeaways & Objectives
+- Objective 1
+- Objective 2
+
+## 📊 Document References & Data Insights
+- Based on analysis of @[Customer Churn Q3.xlsx], churn rate increased by 4.2%.
+- Requirements defined in @architecture_spec.pdf have been validated.
+
+## 📋 Action Items & Next Steps
+- [ ] Task 1: Follow up with engineering team
+- [ ] Task 2: Re-run monthly aggregation query
+```
+
+### 2. Document `@` Mentions & Linking
+- When citing or referencing workspace files in note text, mention them explicitly using:
+  - `@filename.ext` for filenames without spaces (e.g. `@sales_data.csv`)
+  - `@[filename with spaces.ext]` for filenames with spaces (e.g. `@[Q3 Financial Report.pdf]`)
+- Include the matching file IDs in the `referenced_file_ids` array parameter when calling `create_note` or `update_note`. This allows the POAIS workspace UI to highlight and link the referenced files interactively.
+
+### 3. Progressive Note Building with `append_content`
+- When the user asks to "add to the note", "log an update", or "append today's conclusions":
+  1. Call `list_notes(search=...)` or `get_note(note_id=...)` to identify the note.
+  2. Call `update_note(note_id=..., append_content="\n\n### Update [Timestamp]\n- ...")`.
+  3. Confirm to the user that the note was updated.
 
 ---
 
