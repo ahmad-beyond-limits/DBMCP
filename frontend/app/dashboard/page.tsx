@@ -438,7 +438,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Text Hierarchy: Preserving exact font, sizes, and layout */}
-                    <div style={{ position: "relative", zIndex: 2 }}>
+                    <div style={{ position: "relative", zIndex: 2, maxWidth: "66%" }}>
                       <h3 style={{
                         fontSize: "1.2rem",
                         fontWeight: 400,
@@ -474,80 +474,61 @@ export default function DashboardPage() {
                       </p>
                     </div>
 
-                    {/* Stacked Notes Floating Preview Capsule (matching the reference image style) */}
-                    <div style={{
-                      position: "relative",
-                      marginTop: "0.4rem",
-                      marginBottom: "0.85rem",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "0.65rem 0.95rem",
-                      background: "rgba(255, 255, 255, 0.18)",
-                      backdropFilter: "blur(12px)",
-                      WebkitBackdropFilter: "blur(12px)",
-                      borderRadius: "14px",
-                      border: "1px solid rgba(255, 255, 255, 0.3)",
-                      boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
-                      zIndex: 2,
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                        {/* Layered Mini Notes Graphic */}
-                        <div style={{ position: "relative", width: "32px", height: "30px", flexShrink: 0 }}>
-                          {/* Back note sheet */}
-                          <div style={{
-                            position: "absolute",
-                            left: "0",
-                            top: "2px",
-                            width: "22px",
-                            height: "26px",
-                            background: "rgba(255, 255, 255, 0.85)",
-                            borderRadius: "4px",
-                            transform: "rotate(-10deg)",
-                            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-                          }} />
-                          {/* Front note sheet with content lines */}
-                          <div style={{
-                            position: "absolute",
-                            left: "7px",
-                            top: "0",
-                            width: "23px",
-                            height: "27px",
-                            background: "#FFFFFF",
-                            borderRadius: "4px",
-                            transform: "rotate(4deg)",
-                            boxShadow: "0 3px 8px rgba(0,0,0,0.2)",
-                            padding: "3px 4px",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "2px",
-                          }}>
-                            <div style={{ width: "10px", height: "2px", background: "#E11D48", borderRadius: "1px" }} />
-                            <div style={{ width: "14px", height: "1.5px", background: "#CBD5E1", borderRadius: "1px" }} />
-                            <div style={{ width: "12px", height: "1.5px", background: "#CBD5E1", borderRadius: "1px" }} />
-                            <div style={{ width: "8px", height: "1.5px", background: "#CBD5E1", borderRadius: "1px" }} />
-                          </div>
-                        </div>
-
-                        <div>
-                          <div style={{ fontSize: "0.82rem", fontWeight: 550, color: "#FFFFFF", lineHeight: 1.2 }}>
-                            Scratchpad & Notes
-                          </div>
-                          <div style={{ fontSize: "0.72rem", color: "rgba(255, 255, 255, 0.82)", marginTop: "2px" }}>
-                            {ws.notes_count || 0} active note{ws.notes_count === 1 ? "" : "s"} • AI Connected
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Waveform / Capsule accent */}
-                      <div style={{
-                        fontSize: "0.75rem",
-                        letterSpacing: "1px",
-                        color: "rgba(255, 255, 255, 0.75)",
-                        fontFamily: "monospace",
-                        fontWeight: 700,
-                      }}>
-                        ((((O))))
+                    {/* Prominent Layered Notes Illustration (Positioned on the right, below the circle radar lines) */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        right: "1.65rem",
+                        bottom: "3.4rem",
+                        width: "68px",
+                        height: "76px",
+                        pointerEvents: "none",
+                        zIndex: 2,
+                        filter: "drop-shadow(0 10px 22px rgba(0, 0, 0, 0.22))",
+                      }}
+                    >
+                      {/* Back note sheet */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "0px",
+                          top: "6px",
+                          width: "48px",
+                          height: "60px",
+                          background: "rgba(255, 255, 255, 0.78)",
+                          backdropFilter: "blur(6px)",
+                          borderRadius: "7px",
+                          transform: "rotate(-12deg)",
+                          border: "1px solid rgba(255, 255, 255, 0.6)",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+                        }}
+                      />
+                      {/* Front note sheet with content lines */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "14px",
+                          top: "0px",
+                          width: "52px",
+                          height: "64px",
+                          background: "#FFFFFF",
+                          borderRadius: "8px",
+                          transform: "rotate(6deg)",
+                          border: "1px solid rgba(255, 255, 255, 0.95)",
+                          boxShadow: "0 8px 20px rgba(0,0,0,0.18)",
+                          padding: "7px 6px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "4px",
+                        }}
+                      >
+                        {/* Red header accent bar */}
+                        <div style={{ width: "22px", height: "4px", background: "#E11D48", borderRadius: "2px", marginBottom: "2px" }} />
+                        {/* Ruled lines */}
+                        <div style={{ width: "36px", height: "3px", background: "#CBD5E1", borderRadius: "1.5px" }} />
+                        <div style={{ width: "28px", height: "3px", background: "#CBD5E1", borderRadius: "1.5px" }} />
+                        <div style={{ width: "34px", height: "3px", background: "#CBD5E1", borderRadius: "1.5px" }} />
+                        <div style={{ width: "20px", height: "3px", background: "#E2E8F0", borderRadius: "1.5px" }} />
                       </div>
                     </div>
                   </div>

@@ -121,13 +121,7 @@ export function GatewayProvider({ children }: { children: React.ReactNode }) {
 
   // Action called when user clicks Login, Register, or navigation
   const checkAndNavigate = (targetUrl: string) => {
-    if (isReady) {
-      router.push(targetUrl);
-    } else {
-      setPendingRoute(targetUrl);
-      setProgress(15);
-      setIsWaking(true);
-    }
+    router.push(targetUrl);
   };
 
   return (

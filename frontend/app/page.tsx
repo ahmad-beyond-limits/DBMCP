@@ -73,22 +73,22 @@ export default function LandingPage() {
             </p>
 
             <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-              <button
-                onClick={() => checkAndNavigate("/register")}
+              <Link
+                href="/register"
                 className="pill-btn pill-btn-solid"
-                style={{ padding: "0.85rem 1.75rem", fontSize: "0.92rem" }}
+                style={{ padding: "0.85rem 1.75rem", fontSize: "0.92rem", textDecoration: "none" }}
               >
                 <span>Get Started</span>
                 <ArrowUpRight size={15} strokeWidth={1.5} />
-              </button>
+              </Link>
 
-              <button
-                onClick={() => checkAndNavigate("/dashboard")}
+              <Link
+                href="/dashboard"
                 className="pill-btn pill-btn-glass"
-                style={{ padding: "0.85rem 1.5rem", fontSize: "0.92rem" }}
+                style={{ padding: "0.85rem 1.5rem", fontSize: "0.92rem", textDecoration: "none" }}
               >
                 <span>Open Workspaces</span>
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -278,8 +278,8 @@ export default function LandingPage() {
         </div>
 
         <div>
-          <button
-            onClick={() => checkAndNavigate("/register")}
+          <Link
+            href="/register"
             className="pill-btn"
             style={{
               background: "#FFFFFF",
@@ -287,11 +287,12 @@ export default function LandingPage() {
               fontWeight: 450,
               padding: "0.85rem 1.75rem",
               fontSize: "0.92rem",
+              textDecoration: "none",
             }}
           >
             <span>Create Workspace</span>
             <ArrowRight size={15} strokeWidth={1.5} />
-          </button>
+          </Link>
         </div>
       </section>
     </div>

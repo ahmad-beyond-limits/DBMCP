@@ -6,8 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class UserRegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=64, description="Unique username")
     password: str = Field(..., min_length=6, max_length=128, description="User password")
-    first_name: str = Field(..., min_length=1, max_length=64, description="User first name")
-    last_name: str = Field(..., min_length=1, max_length=64, description="User last name")
+    first_name: Optional[str] = Field(None, max_length=64, description="User first name")
+    last_name: Optional[str] = Field(None, max_length=64, description="User last name")
 
 
 class UserUpdateRequest(BaseModel):

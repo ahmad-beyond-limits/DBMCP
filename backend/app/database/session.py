@@ -20,12 +20,20 @@ if settings.DATABASE_URL.startswith("sqlite"):
 elif "postgresql" in settings.DATABASE_URL:
     connect_args = {"statement_cache_size": 0}
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.LOG_LEVEL.upper() == "DEBUG",
-    future=True,
-    connect_args=connect_args,
-)
+engine_kwargs = {
+    "echo": settings.LOG_LEVEL.upper() == "DEBUG",
+    "future": True,
+    "connect_args": connect_args,
+    "pool_pre_ping": True,
+}
+if "postgresql" in settings.DATABASE_URL:
+    engine_kwargs.update({
+        "pool_recycle": 300,
+        "pool_size": 10,
+        "max_overflow": 20,
+    })
+
+engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

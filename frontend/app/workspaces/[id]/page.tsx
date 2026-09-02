@@ -48,6 +48,7 @@ import {
   Loader2,
   Edit3,
   BookOpen,
+  Paperclip,
   Download,
   FileCode,
   Layers,
@@ -67,6 +68,8 @@ import {
   Code,
   Quote,
   Heading2,
+  PenTool,
+  Type,
 } from "lucide-react";
 
 const POAIS_AI_SKILLS_MARKDOWN = `# POAIS: Policy-Oriented AI Space
@@ -175,6 +178,9 @@ Use these instructions to interact accurately, securely, and effectively with wo
 - Explain the policy constraint clearly to the user instead of attempting to bypass it.
 `;
 
+
+
+
 export default function WorkspaceDetailPage() {
   const params = useParams();
   const workspaceId = params.id as string;
@@ -206,6 +212,18 @@ export default function WorkspaceDetailPage() {
   const [mentionHighlightedIndex, setMentionHighlightedIndex] = useState(0);
   const [savingNote, setSavingNote] = useState(false);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [selectedNotePaperColor, setSelectedNotePaperColor] = useState<string>("paper-cream");
+  const [noteFontMode, setNoteFontMode] = useState<"handwriting" | "editorial">("handwriting");
+  const [showMobileNoteReaderModal, setShowMobileNoteReaderModal] = useState(false);
+
+  const paperColors = [
+    { id: "paper-cream", name: "Warm Cream", bg: "#FEF08A", border: "#FDE047" },
+    { id: "paper-rose", name: "Blush Rose", bg: "#FECDD3", border: "#FDA4AF" },
+    { id: "paper-sage", name: "Sage Mint", bg: "#BBF7D0", border: "#86EFAC" },
+    { id: "paper-sky", name: "Sky Blue", bg: "#BAE6FD", border: "#7DD3FC" },
+    { id: "paper-lavender", name: "Lavender", bg: "#DDD6FE", border: "#C4B5FD" },
+    { id: "paper-white", name: "Clean White", bg: "#FFFFFF", border: "#CBD5E1" },
+  ];
   const [policies, setPolicies] = useState<{
     resource_policies: any[];
     operation_policies: any[];
@@ -301,12 +319,65 @@ export default function WorkspaceDetailPage() {
     }
   }, [workspaceId]);
 
+  const getNoteColorClass = (note: any, fallbackIdx: number = 0) => {
+    if (note?.tags && Array.isArray(note.tags)) {
+      const colorTag = note.tags.find((t: string) => typeof t === "string" && t.startsWith("color:"));
+      if (colorTag) {
+        const colorName = colorTag.replace("color:", "").toLowerCase();
+        if (["cream", "rose", "sage", "sky", "lavender", "white"].includes(colorName)) {
+          return `paper-${colorName}`;
+        }
+      }
+    }
+    const fallbacks = ["paper-cream", "paper-sky", "paper-rose", "paper-sage", "paper-lavender"];
+    return fallbacks[fallbackIdx % fallbacks.length];
+  };
+
+  useEffect(() => {
+    if (selectedNote) {
+      setSelectedNotePaperColor(getNoteColorClass(selectedNote, 0));
+    } else {
+      setSelectedNotePaperColor("paper-cream");
+    }
+  }, [selectedNote?.id, selectedNote?.tags]);
+
+  const handleSelectPaperColor = async (colorId: string) => {
+    setSelectedNotePaperColor(colorId);
+    if (selectedNote) {
+      const colorName = colorId.replace("paper-", "");
+      const cleanTags = (selectedNote.tags || []).filter((t) => !t.startsWith("color:"));
+      cleanTags.push(`color:${colorName}`);
+      try {
+        const updated = await api.updateNote(workspaceId, selectedNote.id, {
+          title: selectedNote.title,
+          content: selectedNote.content,
+          tags: cleanTags,
+          referenced_file_ids: selectedNote.referenced_file_ids || [],
+        });
+        setSelectedNote(updated);
+        setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+      } catch (err) {
+        console.error("Failed to update note color", err);
+      }
+    }
+  };
+
   // Load real dynamic data columns whenever activeTransformFileId changes
   useEffect(() => {
     if (activeTransformFileId && workspaceId && shareWizardOpen) {
       loadDynamicFileSchema(activeTransformFileId);
     }
   }, [activeTransformFileId, shareWizardOpen]);
+
+  // Debounced search for notes
+  useEffect(() => {
+    if (workspaceId) {
+      const timer = setTimeout(() => {
+        loadNotes();
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [noteSearch]);
 
   const loadWorkspaceData = async () => {
     try {
@@ -378,8 +449,13 @@ export default function WorkspaceDetailPage() {
     try {
       const tagsArray = noteFormTags
         .split(",")
-        .map((t) => t.trim())
-        .filter((t) => t.length > 0);
+        .map((t) => t.trim().replace(/^#/, ""))
+        .filter((t) => t.length > 0 && !t.startsWith("color:"));
+
+      const activeColorName = selectedNotePaperColor.replace("paper-", "");
+      if (activeColorName) {
+        tagsArray.push(`color:${activeColorName}`);
+      }
 
       if (editingNote) {
         const updated = await api.updateNote(workspaceId, editingNote.id, {
@@ -522,26 +598,14 @@ export default function WorkspaceDetailPage() {
                 handleViewContent(matchedFile);
               }
             }}
+            className={matchedFile ? "rdl-mention-pill" : "rdl-mention-pill-unmatched"}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.25rem",
-              padding: "0.1rem 0.45rem",
-              margin: "0 0.15rem",
-              borderRadius: "4px",
-              background: matchedFile ? "rgba(37, 99, 235, 0.12)" : "rgba(46, 48, 50, 0.08)",
-              color: matchedFile ? "#2563EB" : "var(--text-secondary)",
-              fontWeight: 550,
-              cursor: matchedFile ? "pointer" : "default",
-              fontSize: "0.86rem",
-              border: matchedFile ? "1px solid rgba(37, 99, 235, 0.25)" : "none",
-              verticalAlign: "baseline",
-              transition: "all 0.15s ease",
+              fontWeight: 650,
             }}
             title={matchedFile ? `Click to view ${matchedFile.original_filename}` : undefined}
           >
-            {matchedFile ? <Link2 size={11} strokeWidth={2} /> : null}
-            {rawMatch}
+            {matchedFile ? <Link2 size={12} strokeWidth={2.4} style={{ marginRight: "0.2rem", flexShrink: 0 }} /> : null}
+            <strong style={{ fontWeight: 650 }}>{rawMatch}</strong>
           </span>
         );
         lastIndex = mentionRegex.lastIndex;
@@ -619,14 +683,15 @@ export default function WorkspaceDetailPage() {
             <pre
               key={`code-${i}`}
               style={{
-                padding: "0.85rem 1.1rem",
-                background: "#2E3032",
-                color: "#ECECED",
-                borderRadius: "var(--radius-md)",
+                padding: "0.5rem 0.85rem",
+                background: "#0F172A",
+                color: "#F1F5F9",
+                borderRadius: "10px",
                 fontFamily: "JetBrains Mono, monospace",
-                fontSize: "0.84rem",
+                fontSize: "0.82rem",
                 overflowX: "auto",
-                margin: "0.6rem 0",
+                margin: "0.25rem 0",
+                lineHeight: "1.45",
               }}
             >
               <code>{codeBlockContent.join("\n")}</code>
@@ -647,19 +712,19 @@ export default function WorkspaceDetailPage() {
 
       if (line.startsWith("# ")) {
         elements.push(
-          <h1 key={`h1-${i}`} style={{ fontSize: "1.35rem", fontWeight: 650, margin: "0.75rem 0 0.35rem 0", color: "var(--text-primary)" }}>
+          <h1 key={`h1-${i}`} style={{ fontSize: "1.3rem", fontWeight: 650, margin: 0, padding: 0, lineHeight: "32px", color: "inherit" }}>
             {renderInline(line.slice(2), `h1-${i}`)}
           </h1>
         );
       } else if (line.startsWith("## ")) {
         elements.push(
-          <h2 key={`h2-${i}`} style={{ fontSize: "1.18rem", fontWeight: 600, margin: "0.65rem 0 0.3rem 0", color: "var(--text-primary)" }}>
+          <h2 key={`h2-${i}`} style={{ fontSize: "1.15rem", fontWeight: 600, margin: 0, padding: 0, lineHeight: "32px", color: "inherit" }}>
             {renderInline(line.slice(3), `h2-${i}`)}
           </h2>
         );
       } else if (line.startsWith("### ")) {
         elements.push(
-          <h3 key={`h3-${i}`} style={{ fontSize: "1.05rem", fontWeight: 600, margin: "0.55rem 0 0.25rem 0", color: "var(--text-primary)" }}>
+          <h3 key={`h3-${i}`} style={{ fontSize: "1.02rem", fontWeight: 600, margin: 0, padding: 0, lineHeight: "32px", color: "inherit" }}>
             {renderInline(line.slice(4), `h3-${i}`)}
           </h3>
         );
@@ -668,13 +733,12 @@ export default function WorkspaceDetailPage() {
           <blockquote
             key={`quote-${i}`}
             style={{
-              borderLeft: "3px solid #E11D48",
-              margin: "0.5rem 0",
-              padding: "0.35rem 0.85rem",
-              background: "rgba(225, 29, 72, 0.04)",
-              color: "var(--text-secondary)",
+              borderLeft: "2.5px solid #6366F1",
+              margin: 0,
+              padding: "0 0 0 0.85rem",
+              color: "#64748B",
               fontStyle: "italic",
-              borderRadius: "0 6px 6px 0",
+              lineHeight: "32px",
             }}
           >
             {renderInline(line.slice(2), `quote-${i}`)}
@@ -684,26 +748,26 @@ export default function WorkspaceDetailPage() {
         const isChecked = line.trim().startsWith("- [x] ") || line.trim().startsWith("- [X] ");
         const taskText = line.trim().slice(6);
         elements.push(
-          <div key={`task-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.45rem", margin: "0.25rem 0" }}>
-            <input type="checkbox" checked={isChecked} readOnly style={{ accentColor: "#E11D48" }} />
-            <span style={{ textDecoration: isChecked ? "line-through" : "none", color: isChecked ? "var(--text-tertiary)" : "var(--text-primary)" }}>
+          <div key={`task-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.45rem", margin: 0, padding: 0, lineHeight: "32px", height: "32px" }}>
+            <input type="checkbox" checked={isChecked} readOnly style={{ accentColor: "#4F46E5" }} />
+            <span style={{ textDecoration: isChecked ? "line-through" : "none", color: isChecked ? "#94A3B8" : "inherit" }}>
               {renderInline(taskText, `task-t-${i}`)}
             </span>
           </div>
         );
       } else if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
         elements.push(
-          <div key={`bullet-${i}`} style={{ display: "flex", alignItems: "flex-start", gap: "0.45rem", margin: "0.2rem 0", paddingLeft: "0.5rem" }}>
-            <span style={{ color: "#E11D48", fontWeight: 700 }}>•</span>
-            <span>{renderInline(line.trim().slice(2), `b-${i}`)}</span>
+          <div key={`bullet-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.45rem", margin: 0, padding: 0, lineHeight: "32px", height: "32px" }}>
+            <span style={{ color: "#6366F1", fontWeight: 700, lineHeight: "32px" }}>•</span>
+            <span style={{ lineHeight: "32px" }}>{renderInline(line.trim().slice(2), `b-${i}`)}</span>
           </div>
         );
       } else if (/^\d+\.\s/.test(line.trim())) {
         const numMatch = line.trim().match(/^(\d+)\.\s(.*)$/);
         elements.push(
-          <div key={`num-${i}`} style={{ display: "flex", alignItems: "flex-start", gap: "0.45rem", margin: "0.2rem 0", paddingLeft: "0.5rem" }}>
-            <span style={{ color: "var(--text-secondary)", fontWeight: 550, minWidth: "18px" }}>{numMatch ? numMatch[1] + "." : "1."}</span>
-            <span>{renderInline(numMatch ? numMatch[2] : line, `n-${i}`)}</span>
+          <div key={`num-${i}`} style={{ display: "flex", alignItems: "center", gap: "0.45rem", margin: 0, padding: 0, lineHeight: "32px", height: "32px" }}>
+            <span style={{ color: "#64748B", fontWeight: 550, minWidth: "16px", lineHeight: "32px" }}>{numMatch ? numMatch[1] + "." : "1."}</span>
+            <span style={{ lineHeight: "32px" }}>{renderInline(numMatch ? numMatch[2] : line, `n-${i}`)}</span>
           </div>
         );
       } else if (line.trim().startsWith("|") && line.trim().endsWith("|")) {
@@ -711,9 +775,9 @@ export default function WorkspaceDetailPage() {
         const isDivider = cells.every((c) => /^:?-+:?$/.test(c));
         if (!isDivider) {
           elements.push(
-            <div key={`table-row-${i}`} style={{ display: "flex", gap: "0.5rem", borderBottom: "1px solid rgba(40,40,40,0.06)", padding: "0.3rem 0" }}>
+            <div key={`table-row-${i}`} style={{ display: "flex", gap: "0.5rem", borderBottom: "1px solid rgba(15, 23, 42, 0.06)", padding: 0, lineHeight: "32px", height: "32px" }}>
               {cells.map((cell, ci) => (
-                <div key={`cell-${i}-${ci}`} style={{ flex: 1, fontSize: "0.85rem", fontWeight: i === 0 ? 600 : 400 }}>
+                <div key={`cell-${i}-${ci}`} style={{ flex: 1, fontSize: "0.85rem", fontWeight: i === 0 ? 600 : 400, lineHeight: "32px" }}>
                   {renderInline(cell, `cell-t-${i}-${ci}`)}
                 </div>
               ))}
@@ -721,17 +785,17 @@ export default function WorkspaceDetailPage() {
           );
         }
       } else if (line.trim() === "") {
-        elements.push(<div key={`empty-${i}`} style={{ height: "0.4rem" }} />);
+        elements.push(<div key={`empty-${i}`} style={{ height: "32px", minHeight: "32px", lineHeight: "32px" }}>&nbsp;</div>);
       } else {
         elements.push(
-          <p key={`p-${i}`} style={{ margin: "0.25rem 0", lineHeight: 1.65 }}>
+          <p key={`p-${i}`} style={{ margin: 0, padding: 0, lineHeight: "32px", fontSize: "inherit", color: "inherit", fontWeight: "inherit" }}>
             {renderInline(line, `p-${i}`)}
           </p>
         );
       }
     }
 
-    return elements;
+    return <div className="rdl-markdown-body" style={{ color: "inherit" }}>{elements}</div>;
   };
 
   const handleUpdateWorkspaceDetails = async (e: React.FormEvent) => {
@@ -1473,20 +1537,32 @@ export default function WorkspaceDetailPage() {
         {/* Action Buttons */}
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
           {workspace.name.toLowerCase() === "notes" ? (
-            <button
-              onClick={() => {
-                setEditingNote(null);
-                setNoteFormTitle("");
-                setNoteFormContent("");
-                setNoteFormTags("");
-                setNoteFormReferencedFiles([]);
-                setShowCreateNoteModal(true);
-              }}
-              className="pill-btn pill-btn-solid pill-btn-lg"
-            >
-              <Plus size={16} strokeWidth={1.5} />
-              <span>New Note</span>
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <button
+                onClick={() => {
+                  setEditingNote(null);
+                  setNoteFormTitle("");
+                  setNoteFormContent("");
+                  setNoteFormTags("");
+                  setNoteFormReferencedFiles([]);
+                  setShowCreateNoteModal(true);
+                }}
+                className="pill-btn pill-btn-solid pill-btn-lg"
+              >
+                <Plus size={16} strokeWidth={1.5} />
+                <span>New Note</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={loadNotes}
+                className="rdl-circle-btn"
+                style={{ width: "38px", height: "38px", flexShrink: 0 }}
+                title="Refresh notes"
+              >
+                <RefreshCw size={14} strokeWidth={2} className={notesLoading ? "animate-spin" : ""} />
+              </button>
+            </div>
           ) : (
             <>
               <button
@@ -1642,22 +1718,44 @@ export default function WorkspaceDetailPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB: NOTES & SCRATCHPADS                                                  */}
+      {/* TAB: NOTES & SCRATCHPADS (AUTHENTIC NOTEBOOK CANVAS)                       */}
       {/* ========================================================================= */}
-      {activeTab === "notes" && (
-        <div>
-          <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2rem)", marginBottom: "1.75rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
-              <div>
-                <div className="slash-tag">WORKSPACE KNOWLEDGE & SCRATCHPAD</div>
-                <h3 style={{ fontSize: "1.3rem", fontWeight: 400, marginBottom: "0.3rem", color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-                  Notes & AI Agent Scratchpads
-                </h3>
-                <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", maxWidth: "600px", lineHeight: 1.5, fontWeight: 400 }}>
-                  Take structured notes, research summaries, and meeting takeaways. Connected AI agents can also autonomously create, search, append to, and manage notes in this workspace over MCP.
+      {activeTab === "notes" && (() => {
+        return (
+          <div className="rdl-notes-wrapper" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {/* Main Studio Canvas: 2-Column Note Gallery & Reading Canvas */}
+            {notes.length === 0 ? (
+              <div
+                className="rdl-glass-panel"
+                style={{
+                  textAlign: "center",
+                  padding: "3.5rem 2rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <div style={{
+                  width: "52px",
+                  height: "52px",
+                  borderRadius: "16px",
+                  background: "rgba(250, 204, 21, 0.15)",
+                  border: "1px solid rgba(250, 204, 21, 0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: "0.85rem",
+                  color: "#0F172A",
+                }}>
+                  <StickyNote size={22} strokeWidth={2} />
+                </div>
+                <h4 style={{ fontSize: "1.1rem", fontWeight: 600, color: "#1E293B", marginBottom: "0.35rem" }}>
+                  No notes in this workspace yet
+                </h4>
+                <p style={{ fontSize: "0.84rem", color: "#64748B", maxWidth: "420px", margin: "0 0 1.25rem 0", lineHeight: 1.5 }}>
+                  Create meeting takeaways, research summaries, and structured memos. Connected AI agents can also autonomously write and manage notes over MCP.
                 </p>
-              </div>
-              <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
                 <button
                   onClick={() => {
                     setEditingNote(null);
@@ -1667,564 +1765,851 @@ export default function WorkspaceDetailPage() {
                     setNoteFormReferencedFiles([]);
                     setShowCreateNoteModal(true);
                   }}
-                  className="pill-btn pill-btn-solid pill-btn-lg"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.55rem 1.3rem",
+                    borderRadius: "9999px",
+                    background: "linear-gradient(135deg, #FDE047 0%, #FACC15 100%)",
+                    color: "#0F172A",
+                    border: "1px solid rgba(250, 204, 21, 0.5)",
+                    fontWeight: 600,
+                    fontSize: "0.82rem",
+                    cursor: "pointer",
+                    boxShadow: "0 6px 20px -4px rgba(250, 204, 21, 0.4)",
+                  }}
                 >
-                  <Plus size={16} strokeWidth={1.5} />
-                  <span>New Note</span>
+                  <Plus size={15} strokeWidth={2.4} />
+                  <span>Create First Note</span>
                 </button>
               </div>
-            </div>
-
-            {/* Search & Tag Filter Bar */}
-            <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem", flexWrap: "wrap", alignItems: "center" }}>
-              <div style={{
-                position: "relative",
-                flex: "1 1 300px",
-                maxWidth: "480px",
-              }}>
-                <Search
-                  size={15}
-                  strokeWidth={1.75}
-                  style={{
-                    position: "absolute",
-                    left: "1rem",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "var(--text-tertiary)",
-                    pointerEvents: "none",
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="Search notes by title or content..."
-                  value={noteSearch}
-                  onChange={(e) => setNoteSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") loadNotes();
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem 2.4rem 0.6rem 2.6rem",
-                    fontSize: "0.86rem",
-                    background: "rgba(255, 255, 255, 0.95)",
-                    border: "1px solid rgba(40, 40, 40, 0.12)",
-                    borderRadius: "9999px",
-                    outline: "none",
-                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.03)",
-                    color: "var(--text-primary)",
-                    transition: "all 0.15s ease",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "var(--text-primary)";
-                    e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0, 0, 0, 0.05)";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "rgba(40, 40, 40, 0.12)";
-                    e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.03)";
-                  }}
-                />
-                {noteSearch && (
-                  <button
-                    onClick={() => {
-                      setNoteSearch("");
-                      setTimeout(() => loadNotes(), 50);
-                    }}
-                    style={{
-                      position: "absolute",
-                      right: "0.85rem",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      color: "var(--text-tertiary)",
-                      padding: 0,
-                    }}
-                    title="Clear search"
-                  >
-                    <X size={14} strokeWidth={1.5} />
-                  </button>
-                )}
-              </div>
-
-              {noteTagFilter && (
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.35rem",
-                  padding: "0.4rem 0.85rem",
-                  background: "rgba(46, 48, 50, 0.08)",
-                  borderRadius: "9999px",
-                  fontSize: "0.8rem",
-                  color: "var(--text-primary)",
-                }}>
-                  <Tag size={12} strokeWidth={1.5} />
-                  <span>Tag: <strong>{noteTagFilter}</strong></span>
-                  <button
-                    onClick={() => {
-                      setNoteTagFilter("");
-                      setTimeout(() => loadNotes(), 50);
-                    }}
-                    style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", padding: 0, marginLeft: "0.2rem" }}
-                  >
-                    <X size={12} strokeWidth={1.5} />
-                  </button>
-                </div>
-              )}
-
-              <button
-                onClick={loadNotes}
-                className="pill-btn pill-btn-solid"
-                style={{ padding: "0.55rem 1.15rem", fontSize: "0.84rem" }}
-              >
-                <RefreshCw size={13} strokeWidth={1.5} className={notesLoading ? "animate-spin" : ""} />
-                <span>Search</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Notes Layout */}
-          {notes.length === 0 ? (
-            <div className="frosted-panel" style={{ textAlign: "center", padding: "4.5rem 2rem", borderRadius: "var(--radius-xl)" }}>
-              <div style={{
-                width: "56px",
-                height: "56px",
-                borderRadius: "50%",
-                background: "rgba(46, 48, 50, 0.04)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 1.25rem auto",
-                color: "var(--text-secondary)",
-              }}>
-                <StickyNote size={26} strokeWidth={1.5} />
-              </div>
-              <h4 style={{ fontSize: "1.1rem", fontWeight: 450, color: "var(--text-primary)", marginBottom: "0.4rem" }}>
-                No notes found
-              </h4>
-              <p style={{ fontSize: "0.88rem", color: "var(--text-tertiary)", maxWidth: "440px", margin: "0 auto 1.5rem auto", lineHeight: 1.5 }}>
-                {noteSearch || noteTagFilter
-                  ? "No notes matched your search criteria. Try clearing your search query."
-                  : "You haven't added any notes to this workspace yet. Create your first note or ask your AI agent to store notes over MCP."}
-              </p>
-              <button
-                onClick={() => {
-                  setEditingNote(null);
-                  setNoteFormTitle("");
-                  setNoteFormContent("");
-                  setNoteFormTags("");
-                  setNoteFormReferencedFiles([]);
-                  setShowCreateNoteModal(true);
-                }}
-                className="pill-btn pill-btn-solid"
-              >
-                <Plus size={15} strokeWidth={1.5} />
-                <span>Take a Note</span>
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "clamp(260px, 32%, 360px) 1fr", gap: "1.25rem", alignItems: "start" }}>
-              {/* Note List Sidebar */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-                {notes.map((n) => {
-                  const isSelected = selectedNote?.id === n.id;
-                  return (
-                    <div
-                      key={n.id}
-                      onClick={() => setSelectedNote(n)}
-                      className="frosted-panel"
+            ) : (
+              <div className="rdl-notes-layout-grid">
+                {/* Note Sheets List (Left Column) */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+                  {/* Search Bar Only */}
+                  <div style={{ position: "relative", width: "100%", marginBottom: "0.25rem" }}>
+                    <Search
+                      size={13}
+                      strokeWidth={2}
                       style={{
-                        padding: "1rem 1.15rem",
-                        cursor: "pointer",
-                        borderRadius: "var(--radius-lg)",
-                        border: isSelected ? "1.5px solid var(--text-primary)" : "1px solid rgba(40, 40, 40, 0.06)",
-                        background: isSelected ? "rgba(255, 255, 255, 0.95)" : "rgba(255, 255, 255, 0.65)",
-                        boxShadow: isSelected ? "var(--shadow-md)" : "none",
+                        position: "absolute",
+                        left: "0.85rem",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "#94A3B8",
+                        pointerEvents: "none",
+                      }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Search notes, tags, or content..."
+                      value={noteSearch}
+                      onChange={(e) => setNoteSearch(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.45rem 2rem 0.45rem 2.2rem",
+                        fontSize: "0.78rem",
+                        background: "rgba(255, 255, 255, 0.85)",
+                        backdropFilter: "blur(16px)",
+                        border: "1px solid rgba(15, 23, 42, 0.08)",
+                        borderRadius: "9999px",
+                        outline: "none",
+                        color: "#0F172A",
+                        boxShadow: "0 1px 4px rgba(15, 23, 42, 0.03)",
                         transition: "all 0.15s ease",
                       }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
-                        <h4 style={{ fontSize: "0.94rem", fontWeight: isSelected ? 550 : 450, color: "var(--text-primary)", margin: 0, lineHeight: 1.3 }}>
-                          {n.title}
-                        </h4>
-                      </div>
+                    />
+                    {noteSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setNoteSearch("")}
+                        style={{
+                          position: "absolute",
+                          right: "0.65rem",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          color: "#94A3B8",
+                          padding: 0,
+                        }}
+                        title="Clear search"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                  {notes
+                    .filter((n) => {
+                      if (!noteSearch.trim()) return true;
+                      const q = noteSearch.toLowerCase();
+                      return (
+                        n.title?.toLowerCase().includes(q) ||
+                        n.content?.toLowerCase().includes(q) ||
+                        n.tags?.some((t) => t.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((n, idx) => {
+                    const isSelected = selectedNote?.id === n.id;
+                    const citedDocCount = n.referenced_file_ids?.length || n.referenced_files?.length || 0;
+                    const notePaperTheme = getNoteColorClass(n, idx);
 
-                      <p style={{
-                        fontSize: "0.8rem",
-                        color: "var(--text-secondary)",
-                        marginTop: "0.4rem",
-                        marginBottom: "0.6rem",
-                        lineHeight: 1.4,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                      }}>
-                        {n.content || "(Empty note)"}
-                      </p>
+                    return (
+                      <div
+                        key={n.id}
+                        onClick={() => {
+                          setSelectedNote(n);
+                          setShowMobileNoteReaderModal(true);
+                        }}
+                        className={`rdl-note-sheet ${notePaperTheme} ${isSelected ? "active-note" : ""}`}
+                        style={{
+                          padding: "1rem 1.15rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {/* Title, Note Indicator & Date */}
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.3rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", minWidth: 0 }}>
+                            <StickyNote size={12} strokeWidth={2} style={{ color: isSelected ? "#0F172A" : "#64748B", flexShrink: 0 }} />
+                            <h4 style={{
+                              fontSize: "0.9rem",
+                              fontWeight: 550,
+                              color: "#1E293B",
+                              margin: 0,
+                              lineHeight: 1.35,
+                              letterSpacing: "-0.01em",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}>
+                              {n.title}
+                            </h4>
+                          </div>
+                          <span style={{ fontSize: "0.68rem", color: "#94A3B8", whiteSpace: "nowrap", flexShrink: 0, fontWeight: 450 }}>
+                            {new Date(n.updated_at || n.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          </span>
+                        </div>
 
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.35rem" }}>
-                        <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
-                          {n.tags && n.tags.slice(0, 3).map((tag) => (
+                        {/* Content Snippet */}
+                        <p style={{
+                          fontSize: "0.8rem",
+                          color: "#64748B",
+                          lineHeight: 1.5,
+                          margin: "0 0 0.55rem 0",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          fontWeight: 400,
+                        }}>
+                          {n.content ? n.content.replace(/[#*`_>\[\]]/g, "").trim() : "(Empty note)"}
+                        </p>
+
+                        {/* Bottom Meta Badges */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.35rem" }}>
+                          <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", alignItems: "center" }}>
+                            {n.tags && n.tags.slice(0, 2).map((tag) => (
+                              <span
+                                key={tag}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setNoteTagFilter(tag);
+                                  setTimeout(() => loadNotes(), 50);
+                                }}
+                                className="rdl-tag-chip"
+                                style={{ cursor: "pointer", fontSize: "0.7rem", padding: "0.12rem 0.5rem" }}
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                            {n.tags && n.tags.length > 2 && (
+                              <span style={{ fontSize: "0.66rem", color: "#94A3B8", fontWeight: 500 }}>
+                                +{n.tags.length - 2}
+                              </span>
+                            )}
+                          </div>
+
+                          {citedDocCount > 0 && (
                             <span
-                              key={tag}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setNoteTagFilter(tag);
-                                setTimeout(() => loadNotes(), 50);
-                              }}
                               style={{
-                                fontSize: "0.68rem",
+                                fontSize: "0.66rem",
+                                fontWeight: 550,
                                 padding: "0.1rem 0.45rem",
                                 borderRadius: "9999px",
-                                background: "rgba(46, 48, 50, 0.06)",
-                                color: "var(--text-secondary)",
-                                cursor: "pointer",
+                                background: "rgba(79, 70, 229, 0.07)",
+                                color: "#4338CA",
+                                border: "1px solid rgba(79, 70, 229, 0.16)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.2rem",
                               }}
                             >
-                              #{tag}
-                            </span>
-                          ))}
-                          {n.tags && n.tags.length > 3 && (
-                            <span style={{ fontSize: "0.68rem", color: "var(--text-tertiary)" }}>
-                              +{n.tags.length - 3}
+                              <Link2 size={9} strokeWidth={2.2} />
+                              <span>{citedDocCount} {citedDocCount === 1 ? "doc" : "docs"}</span>
                             </span>
                           )}
                         </div>
-
-                        <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>
-                          {new Date(n.updated_at || n.created_at).toLocaleDateString()}
-                        </span>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
 
-              {/* Selected Note Preview & Editor Pane */}
-              {selectedNote ? (
-                <div className="frosted-panel" style={{ padding: "clamp(1.5rem, 3vw, 2.25rem)", borderRadius: "var(--radius-xl)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", paddingBottom: "1.25rem", borderBottom: "1px solid rgba(40, 40, 40, 0.06)" }}>
-                    <div style={{ flex: 1, minWidth: "220px" }}>
-                      <div className="slash-tag" style={{ margin: 0, marginBottom: "0.25rem" }}>
-                        NOTE #{selectedNote.id.substring(0, 8)}
-                      </div>
-                      <h2 style={{ fontSize: "1.45rem", fontWeight: 500, color: "var(--text-primary)", letterSpacing: "-0.02em", margin: 0 }}>
-                        {selectedNote.title}
-                      </h2>
-                      <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                        <span style={{ fontSize: "0.76rem", color: "var(--text-tertiary)" }}>
-                          Created: {new Date(selectedNote.created_at).toLocaleString()}
-                        </span>
-                        {selectedNote.updated_at && selectedNote.updated_at !== selectedNote.created_at && (
-                          <span style={{ fontSize: "0.76rem", color: "var(--text-tertiary)" }}>
-                            • Updated: {new Date(selectedNote.updated_at).toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(selectedNote.content);
-                          notify("success", "Note content copied to clipboard!");
-                        }}
-                        className="pill-btn pill-btn-glass"
-                        style={{ padding: "0.35rem 0.85rem", fontSize: "0.8rem" }}
-                        title="Copy markdown text"
-                      >
-                        <Copy size={13} strokeWidth={1.5} />
-                        <span>Copy</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setEditingNote(selectedNote);
-                          setNoteFormTitle(selectedNote.title);
-                          setNoteFormContent(selectedNote.content);
-                          setNoteFormTags(selectedNote.tags ? selectedNote.tags.join(", ") : "");
-                          setNoteFormReferencedFiles(selectedNote.referenced_file_ids || []);
-                          setShowCreateNoteModal(true);
-                        }}
-                        className="pill-btn pill-btn-glass"
-                        style={{ padding: "0.35rem 0.85rem", fontSize: "0.8rem" }}
-                      >
-                        <Edit3 size={13} strokeWidth={1.5} />
-                        <span>Edit</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleDeleteNote(selectedNote.id)}
-                        className="pill-btn pill-btn-glass"
-                        style={{ padding: "0.35rem 0.85rem", fontSize: "0.8rem", color: "var(--status-deny)" }}
-                        title="Delete note"
-                      >
-                        <Trash2 size={13} strokeWidth={1.5} />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Tags */}
-                  {selectedNote.tags && selectedNote.tags.length > 0 && (
-                    <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "1rem", marginBottom: "1rem" }}>
-                      {selectedNote.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          style={{
-                            fontSize: "0.74rem",
-                            padding: "0.2rem 0.65rem",
-                            borderRadius: "9999px",
-                            background: "rgba(46, 48, 50, 0.06)",
-                            color: "var(--text-secondary)",
-                            fontWeight: 450,
-                          }}
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Note Body */}
-                  <div style={{
-                    marginTop: "1.25rem",
-                    padding: "1.25rem",
-                    background: "#FAFAFA",
-                    borderRadius: "var(--radius-lg)",
-                    border: "1px solid rgba(40, 40, 40, 0.04)",
-                    fontFamily: "Inter, sans-serif",
-                    fontSize: "0.92rem",
-                    lineHeight: 1.7,
-                    color: "var(--text-primary)",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    minHeight: "220px",
-                  }}>
-                    {renderNoteContentWithMentions(selectedNote.content, selectedNote)}
-                  </div>
-
-                  {/* Referenced Workspace Documents Section */}
-                  {((selectedNote.referenced_files && selectedNote.referenced_files.length > 0) || (selectedNote.referenced_file_ids && selectedNote.referenced_file_ids.length > 0)) && (
-                    <div style={{ marginTop: "1.5rem", paddingTop: "1.25rem", borderTop: "1px solid rgba(40, 40, 40, 0.06)" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}>
-                        <div style={{
-                          width: "24px",
-                          height: "24px",
-                          borderRadius: "6px",
-                          background: "rgba(37, 99, 235, 0.1)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
+                {/* Selected Note Reading Canvas (Right Column: Desktop Inline Canvas) */}
+                <div className="rdl-desktop-reading-canvas" style={{ minWidth: 0, width: "100%" }}>
+                  {selectedNote ? (
+                    <div
+                      className={`rdl-notebook-page-full ${selectedNotePaperColor}`}
+                      style={{
+                        minHeight: "480px",
+                      }}
+                    >
+                      {/* Top Note Action & Header Area */}
+                      <div style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.6rem",
+                        padding: "clamp(0.75rem, 2vw, 1.15rem) clamp(0.85rem, 2.5vw, 1.75rem)",
+                        borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
+                      }}>
+                        {/* Row 1: Note Title (Lightweight & Spacious) */}
+                        <h2 style={{
+                          fontSize: "clamp(1.2rem, 2.2vw, 1.65rem)",
+                          fontWeight: 450,
+                          color: "#0F172A",
+                          letterSpacing: "-0.025em",
+                          margin: 0,
+                          lineHeight: 1.3,
                         }}>
-                          <Link2 size={13} strokeWidth={1.5} color="#2563EB" />
-                        </div>
-                        <span style={{ fontSize: "0.86rem", fontWeight: 550, color: "var(--text-primary)" }}>
-                          Referenced Workspace Documents ({selectedNote.referenced_files?.length || selectedNote.referenced_file_ids?.length || 0})
-                        </span>
-                        <span style={{ fontSize: "0.74rem", color: "var(--text-tertiary)" }}>
-                          • Mentioned in note
-                        </span>
-                      </div>
+                          {selectedNote.title}
+                        </h2>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "0.6rem" }}>
-                        {(selectedNote.referenced_files && selectedNote.referenced_files.length > 0
-                          ? selectedNote.referenced_files
-                          : files.filter((f) => (selectedNote.referenced_file_ids || []).includes(f.id))
-                        ).map((refFile) => (
-                          <div
-                            key={refFile.id}
-                            style={{
+                        {/* Row 2: Tags & Date on Left <----> Actions Toolbar on Opposite Right */}
+                        <div style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: "0.75rem",
+                        }}>
+                          {/* Left Side: Date, Tags & Attached Files */}
+                          <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.45rem",
+                            flexWrap: "wrap",
+                          }}>
+                            <span style={{ fontSize: "0.72rem", color: "#94A3B8", fontWeight: 450 }}>
+                              {new Date(selectedNote.updated_at || selectedNote.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                            </span>
+                            {selectedNote.tags && selectedNote.tags.filter((t) => !t.startsWith("color:")).map((tag) => (
+                              <span
+                                key={tag}
+                                className="rdl-tag-chip"
+                                style={{ padding: "0.1rem 0.48rem", fontSize: "0.68rem" }}
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                            {(selectedNote.referenced_file_ids?.length || 0) > 0 && (
+                              <span
+                                className="rdl-tag-chip"
+                                style={{
+                                  padding: "0.1rem 0.48rem",
+                                  fontSize: "0.68rem",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  color: "#6366F1",
+                                  borderColor: "rgba(99, 102, 241, 0.18)",
+                                }}
+                              >
+                                <Paperclip size={10} strokeWidth={2} />
+                                <span>{selectedNote.referenced_file_ids?.length} files</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Opposite Right Side: Controls Toolbar */}
+                          <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.45rem",
+                            flexWrap: "wrap",
+                          }}>
+                            {/* Note Paper Color Swatches */}
+                            <div style={{
                               display: "flex",
-                              justifyContent: "space-between",
                               alignItems: "center",
-                              padding: "0.65rem 0.95rem",
-                              background: "rgba(37, 99, 235, 0.03)",
-                              border: "1px solid rgba(37, 99, 235, 0.16)",
-                              borderRadius: "var(--radius-md)",
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", overflow: "hidden" }}>
-                              <div style={{
-                                width: "30px",
-                                height: "30px",
-                                borderRadius: "6px",
-                                background: "rgba(37, 99, 235, 0.08)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                              }}>
-                                {isImageFile(refFile) ? (
-                                  <ImageIcon size={14} strokeWidth={1.5} color="#E11D48" />
-                                ) : isDataFile(refFile) ? (
-                                  <Table size={14} strokeWidth={1.5} color="#2563EB" />
-                                ) : (
-                                  <FileText size={14} strokeWidth={1.5} color="#2563EB" />
-                                )}
-                              </div>
-                              <div style={{ overflow: "hidden" }}>
-                                <div style={{ fontSize: "0.84rem", fontWeight: 500, color: "var(--text-primary)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
-                                  {refFile.original_filename}
-                                </div>
-                                <div style={{ fontSize: "0.7rem", color: "var(--text-tertiary)" }}>
-                                  {(refFile.file_size / 1024).toFixed(1)} KB • {refFile.file_type}
-                                </div>
-                              </div>
+                              gap: "0.3rem",
+                              background: "rgba(255, 255, 255, 0.75)",
+                              backdropFilter: "blur(12px)",
+                              padding: "0.2rem 0.38rem",
+                              borderRadius: "9999px",
+                              border: "1px solid rgba(15, 23, 42, 0.08)",
+                              boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                            }}>
+                              {paperColors.map((c) => {
+                                const isSelected = selectedNotePaperColor === c.id;
+                                return (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => handleSelectPaperColor(c.id)}
+                                    title={`Paper Color: ${c.name}`}
+                                    style={{
+                                      width: "14px",
+                                      height: "14px",
+                                      borderRadius: "50%",
+                                      background: c.bg,
+                                      border: isSelected ? "2px solid #0F172A" : `1px solid ${c.border}`,
+                                      cursor: "pointer",
+                                      padding: 0,
+                                      transform: isSelected ? "scale(1.18)" : "scale(1)",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                  />
+                                );
+                              })}
                             </div>
 
+                            {/* Font Mode Toggle with Minimalist Lucide Icon */}
                             <button
-                              onClick={() => handleViewContent(refFile)}
-                              className="pill-btn pill-btn-glass pill-btn-sm"
-                              style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem", flexShrink: 0 }}
-                            >
-                              View Content
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Attached Files & Documents Section (ONLY for dedicated Notes workspace) */}
-                  {isNotesWorkspace && (
-                    <div style={{ marginTop: "1.75rem", paddingTop: "1.25rem", borderTop: "1px solid rgba(40, 40, 40, 0.06)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <span style={{ fontSize: "0.86rem", fontWeight: 550, color: "var(--text-primary)" }}>
-                            Attached Files ({selectedNote.files?.length || 0})
-                          </span>
-                          <span style={{ fontSize: "0.74rem", color: "var(--text-tertiary)" }}>
-                            • Isolated Storage Vault
-                          </span>
-                        </div>
-
-                        <div>
-                          <input
-                            type="file"
-                            id={`note-attach-${selectedNote.id}`}
-                            style={{ display: "none" }}
-                            onChange={handleUploadNoteFile}
-                            disabled={uploadingNoteFile}
-                          />
-                          <label
-                            htmlFor={`note-attach-${selectedNote.id}`}
-                            className="pill-btn pill-btn-glass"
-                            style={{
-                              padding: "0.35rem 0.85rem",
-                              fontSize: "0.8rem",
-                              cursor: uploadingNoteFile ? "wait" : "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.35rem",
-                            }}
-                          >
-                            {uploadingNoteFile ? (
-                              <Loader2 size={13} strokeWidth={1.5} className="animate-spin" />
-                            ) : (
-                              <Upload size={13} strokeWidth={1.5} />
-                            )}
-                            <span>{uploadingNoteFile ? "Uploading..." : "Attach File"}</span>
-                          </label>
-                        </div>
-                      </div>
-
-                      {/* File List */}
-                      {(!selectedNote.files || selectedNote.files.length === 0) ? (
-                        <div style={{
-                          padding: "1.25rem",
-                          textAlign: "center",
-                          background: "rgba(46, 48, 50, 0.02)",
-                          border: "1px dashed rgba(40, 40, 40, 0.12)",
-                          borderRadius: "var(--radius-md)",
-                          color: "var(--text-tertiary)",
-                          fontSize: "0.82rem",
-                        }}>
-                          No files attached to this note yet. Attach images, spreadsheets, CSVs, or PDFs to keep them safely organized with this note.
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                          {selectedNote.files.map((file) => (
-                            <div
-                              key={file.id}
+                              type="button"
+                              onClick={() => setNoteFontMode((prev) => (prev === "handwriting" ? "editorial" : "handwriting"))}
+                              className="pill-btn pill-btn-glass"
                               style={{
-                                display: "flex",
-                                justifyContent: "space-between",
+                                padding: "0.22rem 0.6rem",
+                                fontSize: "0.72rem",
+                                display: "inline-flex",
                                 alignItems: "center",
-                                padding: "0.65rem 0.95rem",
-                                background: "#FFFFFF",
-                                border: "1px solid rgba(40, 40, 40, 0.06)",
-                                borderRadius: "var(--radius-md)",
+                                gap: "0.32rem",
+                                fontWeight: 500,
+                                borderRadius: "9999px",
+                                border: "1px solid rgba(15, 23, 42, 0.08)",
+                                background: "rgba(255, 255, 255, 0.75)",
+                                color: "#1E293B",
+                                cursor: "pointer",
                                 boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
                               }}
+                              title="Toggle between Natural Handwriting and Clean Editorial font"
                             >
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", overflow: "hidden" }}>
-                                <div style={{
-                                  width: "32px",
-                                  height: "32px",
-                                  borderRadius: "8px",
-                                  background: "rgba(46, 48, 50, 0.04)",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  flexShrink: 0,
-                                }}>
-                                  {isImageFile(file) ? (
-                                    <ImageIcon size={15} strokeWidth={1.5} color="#E11D48" />
-                                  ) : isDataFile(file) ? (
-                                    <Table size={15} strokeWidth={1.5} color="#2563EB" />
-                                  ) : (
-                                    <FileText size={15} strokeWidth={1.5} color="#64748B" />
-                                  )}
-                                </div>
-                                <div style={{ overflow: "hidden" }}>
-                                  <div style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-primary)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
-                                    {file.original_filename}
-                                  </div>
-                                  <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>
-                                    {(file.file_size / 1024).toFixed(1)} KB • {file.file_type} • {new Date(file.created_at).toLocaleDateString()}
-                                  </div>
-                                </div>
-                              </div>
+                              {noteFontMode === "handwriting" ? (
+                                <>
+                                  <PenTool size={11} strokeWidth={2} style={{ color: "#6366F1" }} />
+                                  <span>Natural</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Type size={11} strokeWidth={2} style={{ color: "#0EA5E9" }} />
+                                  <span>Editorial</span>
+                                </>
+                              )}
+                            </button>
 
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
-                                <button
-                                  onClick={() => handleViewContent(file)}
-                                  className="pill-btn pill-btn-glass pill-btn-sm"
-                                  style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
-                                >
-                                  View Content
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteNoteFile(file.id)}
-                                  className="pill-btn pill-btn-glass pill-btn-sm"
-                                  style={{ padding: "0.25rem 0.5rem", color: "var(--status-deny)" }}
-                                  title="Delete attached file"
-                                >
-                                  <Trash2 size={12} strokeWidth={1.5} />
-                                </button>
-                              </div>
+                            {/* Circular Action Glass Buttons */}
+                            <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(selectedNote.content);
+                                  notify("success", "Note content copied to clipboard!");
+                                }}
+                                className="rdl-circle-btn"
+                                title="Copy markdown text"
+                              >
+                                <Copy size={13} strokeWidth={2} />
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setEditingNote(selectedNote);
+                                  setNoteFormTitle(selectedNote.title);
+                                  setNoteFormContent(selectedNote.content);
+                                  setNoteFormTags(selectedNote.tags ? selectedNote.tags.filter((t) => !t.startsWith("color:")).join(", ") : "");
+                                  setNoteFormReferencedFiles(selectedNote.referenced_file_ids || []);
+                                  setSelectedNotePaperColor(getNoteColorClass(selectedNote, 0));
+                                  setShowCreateNoteModal(true);
+                                }}
+                                className="rdl-circle-btn"
+                                title="Edit note"
+                              >
+                                <Edit3 size={13} strokeWidth={2} />
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteNote(selectedNote.id)}
+                                className="rdl-circle-btn"
+                                style={{ color: "var(--status-deny)" }}
+                                title="Delete note"
+                              >
+                                <Trash2 size={13} strokeWidth={2} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Continuous Ruled Notebook Paper Canvas */}
+                      <div className="rdl-notebook-ruled-body">
+                        <div className={`rdl-markdown-body ${noteFontMode === "handwriting" ? "font-handwriting" : "font-editorial"}`}>
+                          {renderNoteContentWithMentions(selectedNote.content, selectedNote)}
+                        </div>
+                      </div>
+
+                      {/* Referenced Workspace Documents Shelf (Minimal) */}
+                      {((selectedNote.referenced_files && selectedNote.referenced_files.length > 0) || (selectedNote.referenced_file_ids && selectedNote.referenced_file_ids.length > 0)) && (
+                        <div style={{
+                          padding: "0.6rem 1.6rem 0.6rem 3.6rem",
+                          borderTop: "1px solid rgba(15, 23, 42, 0.05)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          flexWrap: "wrap",
+                        }}>
+                          <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                            <Link2 size={11} strokeWidth={2.2} color="#4F46E5" />
+                            <span>References:</span>
+                          </span>
+                          {(selectedNote.referenced_files && selectedNote.referenced_files.length > 0
+                            ? selectedNote.referenced_files
+                            : files.filter((f) => (selectedNote.referenced_file_ids || []).includes(f.id))
+                          ).map((refFile) => (
+                            <div
+                              key={refFile.id}
+                              onClick={() => handleViewContent(refFile)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
+                                padding: "0.15rem 0.5rem",
+                                background: "rgba(255, 255, 255, 0.8)",
+                                border: "1px solid rgba(15, 23, 42, 0.08)",
+                                borderRadius: "9999px",
+                                fontSize: "0.7rem",
+                                color: "#334155",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <FileText size={10} color="#4F46E5" />
+                              <span style={{ maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {refFile.original_filename}
+                              </span>
                             </div>
                           ))}
                         </div>
                       )}
+
+                      {/* Attached Files Minimal Area (ONLY for dedicated Notes workspace) */}
+                      {isNotesWorkspace && (
+                        <div style={{
+                          padding: "0.6rem 1.6rem 0.85rem 3.6rem",
+                          borderTop: "1px solid rgba(15, 23, 42, 0.05)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          flexWrap: "wrap",
+                          gap: "0.4rem",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                              <Paperclip size={11} strokeWidth={2} />
+                              <span>Files ({selectedNote.files?.length || 0}):</span>
+                            </span>
+
+                            {selectedNote.files && selectedNote.files.length > 0 ? (
+                              selectedNote.files.map((file) => (
+                                <div
+                                  key={file.id}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem",
+                                    padding: "0.12rem 0.45rem",
+                                    background: "rgba(255, 255, 255, 0.85)",
+                                    border: "1px solid rgba(15, 23, 42, 0.08)",
+                                    borderRadius: "9999px",
+                                    fontSize: "0.7rem",
+                                    color: "#334155",
+                                  }}
+                                >
+                                  <span
+                                    onClick={() => handleViewContent(file)}
+                                    style={{ cursor: "pointer", maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                                  >
+                                    {file.original_filename}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteNoteFile(file.id)}
+                                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#94A3B8", display: "flex", alignItems: "center" }}
+                                    title="Delete attachment"
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                </div>
+                              ))
+                            ) : (
+                              <span style={{ fontSize: "0.7rem", color: "#94A3B8", fontStyle: "italic" }}>
+                                No files attached
+                              </span>
+                            )}
+                          </div>
+
+                          <div>
+                            <input
+                              type="file"
+                              id={`note-attach-${selectedNote.id}`}
+                              style={{ display: "none" }}
+                              onChange={handleUploadNoteFile}
+                              disabled={uploadingNoteFile}
+                            />
+                            <label
+                              htmlFor={`note-attach-${selectedNote.id}`}
+                              style={{
+                                cursor: uploadingNoteFile ? "wait" : "pointer",
+                                fontSize: "0.72rem",
+                                color: "#4F46E5",
+                                fontWeight: 550,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.2rem",
+                                padding: "0.18rem 0.5rem",
+                                borderRadius: "9999px",
+                                background: "rgba(79, 70, 229, 0.06)",
+                                border: "1px solid rgba(79, 70, 229, 0.15)",
+                              }}
+                            >
+                              {uploadingNoteFile ? (
+                                <Loader2 size={10} strokeWidth={2} className="animate-spin" />
+                              ) : (
+                                <Plus size={10} strokeWidth={2.4} />
+                              )}
+                              <span>{uploadingNoteFile ? "Uploading..." : "Attach"}</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      className="rdl-glass-panel"
+                      style={{
+                        padding: "3.5rem 2rem",
+                        borderRadius: "24px",
+                        textAlign: "center",
+                        color: "#64748B",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <div style={{
+                        width: "48px",
+                        height: "48px",
+                        borderRadius: "16px",
+                        background: "rgba(15, 23, 42, 0.04)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginBottom: "0.75rem",
+                        color: "#94A3B8",
+                      }}>
+                        <StickyNote size={22} strokeWidth={1.5} />
+                      </div>
+                      <h4 style={{ fontSize: "1rem", fontWeight: 650, color: "#0F172A", margin: 0, marginBottom: "0.25rem" }}>
+                        Select a note to read
+                      </h4>
+                      <p style={{ fontSize: "0.82rem", color: "#94A3B8", margin: 0 }}>
+                        Choose a note from the left to read its contents or click &ldquo;Take a Note&rdquo;.
+                      </p>
                     </div>
                   )}
                 </div>
-              ) : (
-                <div className="frosted-panel" style={{ padding: "3rem 2rem", textAlign: "center", color: "var(--text-tertiary)" }}>
-                  Select a note from the left to view its contents.
+              </div>
+            )}
+
+            {/* Mobile / Tablet Full Note Reader Modal Popup */}
+            {showMobileNoteReaderModal && selectedNote && (
+              <div
+                className="rdl-mobile-reader-overlay"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setShowMobileNoteReaderModal(false);
+                }}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(15, 23, 42, 0.45)",
+                  backdropFilter: "blur(20px)",
+                  WebkitBackdropFilter: "blur(20px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 99999,
+                  padding: "clamp(0.25rem, 2vw, 1rem)",
+                }}
+              >
+                <div style={{
+                  width: "min(96vw, 760px)",
+                  height: "min(92vh, 840px)",
+                  display: "flex",
+                  flexDirection: "column",
+                  background: "rgba(255, 255, 255, 0.98)",
+                  backdropFilter: "blur(32px)",
+                  WebkitBackdropFilter: "blur(32px)",
+                  boxShadow: "0 30px 80px -15px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.9)",
+                  borderRadius: "clamp(16px, 2.5vw, 24px)",
+                  overflow: "hidden",
+                  border: "1px solid rgba(255, 255, 255, 0.8)",
+                  position: "relative",
+                }}>
+                  {/* Top Gradient Accent Line */}
+                  <div style={{ height: "3px", background: "linear-gradient(90deg, #0F172A 0%, #475569 50%, #0F172A 100%)", width: "100%", flexShrink: 0 }} />
+
+                  {/* Mobile Reader Header */}
+                  <div style={{
+                    padding: "0.65rem clamp(0.75rem, 2.5vw, 1.25rem)",
+                    background: "linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 250, 252, 0.9) 100%)",
+                    borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                    flexShrink: 0,
+                  }}>
+                    {/* Row 1: Back/Close & Note Title */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowMobileNoteReaderModal(false)}
+                          className="rdl-circle-btn"
+                          style={{ width: "28px", height: "28px", flexShrink: 0 }}
+                          title="Back to notes list"
+                        >
+                          <ArrowLeft size={14} strokeWidth={2.4} />
+                        </button>
+                        <h3 style={{
+                          fontSize: "clamp(1.05rem, 2vw, 1.35rem)",
+                          fontWeight: 600,
+                          color: "#0F172A",
+                          margin: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "-0.02em",
+                        }}>
+                          {selectedNote.title}
+                        </h3>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowMobileNoteReaderModal(false)}
+                        className="icon-circle-btn"
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          background: "rgba(15, 23, 42, 0.04)",
+                          border: "1px solid rgba(15, 23, 42, 0.08)",
+                          borderRadius: "50%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <X size={13} strokeWidth={2} />
+                      </button>
+                    </div>
+
+                    {/* Row 2: Date, Tags & Controls */}
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: "0.5rem",
+                    }}>
+                      {/* Tags & Date */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: "0.7rem", color: "#94A3B8" }}>
+                          {new Date(selectedNote.updated_at || selectedNote.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        </span>
+                        {selectedNote.tags && selectedNote.tags.filter((t) => !t.startsWith("color:")).map((tag) => (
+                          <span key={tag} className="rdl-tag-chip" style={{ padding: "0.08rem 0.45rem", fontSize: "0.66rem" }}>
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Actions */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+                        {/* Color Swatches */}
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.25rem",
+                          background: "rgba(255, 255, 255, 0.8)",
+                          padding: "0.15rem 0.35rem",
+                          borderRadius: "9999px",
+                          border: "1px solid rgba(15, 23, 42, 0.08)",
+                        }}>
+                          {paperColors.map((c) => {
+                            const isSelected = selectedNotePaperColor === c.id;
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => handleSelectPaperColor(c.id)}
+                                title={`Paper Color: ${c.name}`}
+                                style={{
+                                  width: "13px",
+                                  height: "13px",
+                                  borderRadius: "50%",
+                                  background: c.bg,
+                                  border: isSelected ? "2px solid #0F172A" : `1px solid ${c.border}`,
+                                  cursor: "pointer",
+                                  padding: 0,
+                                  transform: isSelected ? "scale(1.15)" : "scale(1)",
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+
+                        {/* Font Mode Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => setNoteFontMode((prev) => (prev === "handwriting" ? "editorial" : "handwriting"))}
+                          className="pill-btn pill-btn-glass"
+                          style={{ padding: "0.18rem 0.5rem", fontSize: "0.68rem", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}
+                        >
+                          {noteFontMode === "handwriting" ? (
+                            <>
+                              <PenTool size={10} strokeWidth={2} style={{ color: "#6366F1" }} />
+                              <span>Natural</span>
+                            </>
+                          ) : (
+                            <>
+                              <Type size={10} strokeWidth={2} style={{ color: "#0EA5E9" }} />
+                              <span>Editorial</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Action Buttons */}
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedNote.content);
+                            notify("success", "Note content copied!");
+                          }}
+                          className="rdl-circle-btn"
+                          style={{ width: "26px", height: "26px" }}
+                          title="Copy markdown text"
+                        >
+                          <Copy size={12} strokeWidth={2} />
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowMobileNoteReaderModal(false);
+                            setEditingNote(selectedNote);
+                            setNoteFormTitle(selectedNote.title);
+                            setNoteFormContent(selectedNote.content);
+                            setNoteFormTags(selectedNote.tags ? selectedNote.tags.filter((t) => !t.startsWith("color:")).join(", ") : "");
+                            setNoteFormReferencedFiles(selectedNote.referenced_file_ids || []);
+                            setSelectedNotePaperColor(getNoteColorClass(selectedNote, 0));
+                            setShowCreateNoteModal(true);
+                          }}
+                          className="rdl-circle-btn"
+                          style={{ width: "26px", height: "26px" }}
+                          title="Edit note"
+                        >
+                          <Edit3 size={12} strokeWidth={2} />
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowMobileNoteReaderModal(false);
+                            handleDeleteNote(selectedNote.id);
+                          }}
+                          className="rdl-circle-btn"
+                          style={{ width: "26px", height: "26px", color: "var(--status-deny)" }}
+                          title="Delete note"
+                        >
+                          <Trash2 size={12} strokeWidth={2} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mobile Ruled Notebook Body */}
+                  <div className={`rdl-notebook-ruled-body ${selectedNotePaperColor}`} style={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: "auto",
+                    WebkitOverflowScrolling: "touch",
+                  }}>
+                    <div className={noteFontMode === "handwriting" ? "font-handwriting" : "font-editorial"}>
+                      {renderNoteContentWithMentions(selectedNote.content, selectedNote)}
+                    </div>
+                  </div>
+
+                  {/* Mobile Referenced Docs Shelf */}
+                  {((selectedNote.referenced_files && selectedNote.referenced_files.length > 0) || (selectedNote.referenced_file_ids && selectedNote.referenced_file_ids.length > 0)) && (
+                    <div style={{
+                      padding: "0.5rem 1rem",
+                      borderTop: "1px solid rgba(15, 23, 42, 0.05)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      flexWrap: "wrap",
+                      background: "rgba(15, 23, 42, 0.02)",
+                    }}>
+                      <span style={{ fontSize: "0.68rem", color: "#64748B", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+                        <Link2 size={10} strokeWidth={2.2} color="#4F46E5" />
+                        <span>References:</span>
+                      </span>
+                      {(selectedNote.referenced_files && selectedNote.referenced_files.length > 0
+                        ? selectedNote.referenced_files
+                        : files.filter((f) => (selectedNote.referenced_file_ids || []).includes(f.id))
+                      ).map((refFile) => (
+                        <div
+                          key={refFile.id}
+                          onClick={() => handleViewContent(refFile)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                            padding: "0.12rem 0.45rem",
+                            background: "rgba(255, 255, 255, 0.9)",
+                            border: "1px solid rgba(15, 23, 42, 0.08)",
+                            borderRadius: "9999px",
+                            fontSize: "0.66rem",
+                            color: "#334155",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <FileText size={9} color="#4F46E5" />
+                          <span style={{ maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {refFile.original_filename}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* TAB 2: AI LINKS                                                           */}
@@ -3099,7 +3484,7 @@ export default function WorkspaceDetailPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 9999,
+            zIndex: 99999,
             padding: "clamp(1rem, 2.5vw, 2rem)",
             overflowY: "auto",
           }}
@@ -3435,7 +3820,7 @@ export default function WorkspaceDetailPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 9999,
+            zIndex: 99999,
             padding: "clamp(0.5rem, 2vw, 1.5rem)",
             overflowY: "auto",
           }}
@@ -4488,7 +4873,7 @@ export default function WorkspaceDetailPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 9999,
+            zIndex: 99999,
             padding: "clamp(1rem, 2.5vw, 2rem)",
             overflowY: "auto",
           }}
@@ -4610,7 +4995,7 @@ export default function WorkspaceDetailPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 9999,
+            zIndex: 99999,
             padding: "clamp(1rem, 2.5vw, 2rem)",
             overflowY: "auto",
           }}
@@ -4832,7 +5217,7 @@ export default function WorkspaceDetailPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 9999,
+            zIndex: 99999,
             padding: "clamp(0.5rem, 2vw, 1.5rem)",
             overflowY: "auto",
           }}
@@ -5016,8 +5401,14 @@ export default function WorkspaceDetailPage() {
             const isValidTrigger = /\s/.test(charBeforeAt) || lastAtIndex === 0;
             const query = textBeforeCursor.substring(lastAtIndex + 1);
 
-            if (isValidTrigger && !query.includes("\n") && !query.includes("]")) {
-              setMentionSearch(query);
+            const isBracketed = query.startsWith("[");
+            const hasSpace = !isBracketed && query.includes(" ");
+            const hasNewline = query.includes("\n");
+            const hasClosingBracket = isBracketed && query.includes("]");
+
+            if (isValidTrigger && !hasSpace && !hasNewline && !hasClosingBracket) {
+              const cleanQuery = isBracketed ? query.substring(1) : query;
+              setMentionSearch(cleanQuery);
               setMentionIndex(lastAtIndex);
               setShowMentionMenu(true);
               setMentionHighlightedIndex(0);
@@ -5092,98 +5483,108 @@ export default function WorkspaceDetailPage() {
             style={{
               position: "fixed",
               inset: 0,
-              background: "rgba(10, 10, 10, 0.55)",
-              backdropFilter: "blur(16px)",
-              WebkitBackdropFilter: "blur(16px)",
+              background: "rgba(15, 23, 42, 0.45)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              zIndex: 9999,
-              padding: "clamp(0.5rem, 1.5vw, 1.5rem)",
+              zIndex: 99999,
+              padding: "clamp(0.25rem, 1.5vw, 1.5rem)",
             }}
           >
             <div style={{
-              width: "min(96vw, 1150px)",
-              height: "min(90vh, 880px)",
+              width: "min(98vw, 1200px)",
+              height: "min(96vh, 920px)",
               display: "flex",
               flexDirection: "column",
-              background: "#FFFFFF",
-              boxShadow: "0 25px 60px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08)",
-              borderRadius: "20px",
+              background: "rgba(255, 255, 255, 0.96)",
+              backdropFilter: "blur(32px)",
+              WebkitBackdropFilter: "blur(32px)",
+              boxShadow: "0 30px 80px -15px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.9)",
+              borderRadius: "clamp(14px, 2vw, 24px)",
               overflow: "hidden",
-              border: "1px solid rgba(225, 29, 72, 0.15)",
+              border: "1px solid rgba(255, 255, 255, 0.8)",
               position: "relative",
             }}>
-              {/* Modal Top Gradient Accent Line */}
-              <div style={{ height: "4px", background: "linear-gradient(90deg, #E11D48 0%, #FB7185 50%, #E11D48 100%)", width: "100%", flexShrink: 0 }} />
+              {/* Top Gradient Accent Line */}
+              <div style={{ height: "3px", background: "linear-gradient(90deg, #0F172A 0%, #475569 50%, #0F172A 100%)", width: "100%", flexShrink: 0 }} />
 
-              {/* Modal Header */}
+              {/* Minimal Modal Header (Compact & Responsive) */}
               <div style={{
-                padding: "0.9rem 1.75rem 0.8rem 1.75rem",
-                background: "linear-gradient(180deg, rgba(244, 63, 94, 0.04) 0%, rgba(255, 255, 255, 1) 100%)",
-                borderBottom: "1px solid rgba(40, 40, 40, 0.07)",
+                padding: "0.5rem clamp(0.75rem, 2vw, 1.5rem)",
+                background: "linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 250, 252, 0.85) 100%)",
+                borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 flexShrink: 0,
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                   <div style={{
-                    width: "38px",
-                    height: "38px",
-                    borderRadius: "10px",
-                    background: "linear-gradient(135deg, #E11D48 0%, #BE123C 100%)",
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "8px",
+                    background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    boxShadow: "0 4px 12px rgba(225, 29, 72, 0.3)",
+                    boxShadow: "0 3px 8px rgba(15, 23, 42, 0.2)",
                     flexShrink: 0,
                   }}>
-                    <StickyNote size={19} color="#FFFFFF" strokeWidth={2} />
+                    <StickyNote size={14} color="#FFFFFF" strokeWidth={2} />
                   </div>
                   <div>
-                    <div style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.3rem",
-                      padding: "0.1rem 0.5rem",
-                      borderRadius: "9999px",
-                      background: "rgba(225, 29, 72, 0.1)",
-                      color: "#BE123C",
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      letterSpacing: "0.04em",
-                      textTransform: "uppercase",
-                      marginBottom: "0.15rem",
-                    }}>
-                      <Sparkles size={10} strokeWidth={2.5} />
-                      {editingNote ? "Modify Workspace Note" : "Workspace Note & Scratchpad"}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <span style={{
+                        padding: "0.1rem 0.5rem",
+                        borderRadius: "9999px",
+                        background: "rgba(15, 23, 42, 0.05)",
+                        color: "#334155",
+                        fontSize: "0.68rem",
+                        fontWeight: 650,
+                        letterSpacing: "0.03em",
+                        textTransform: "uppercase",
+                      }}>
+                        {editingNote ? "Modify Note" : "Note Studio"}
+                      </span>
                     </div>
-                    <h2 style={{ fontSize: "1.2rem", fontWeight: 650, color: "var(--text-primary)", letterSpacing: "-0.02em", margin: 0, lineHeight: 1.2 }}>
-                      {editingNote ? "Edit Note" : "Create New Note"}
-                    </h2>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowCreateNoteModal(false)}
-                  className="icon-circle-btn"
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    background: "rgba(46, 48, 50, 0.05)",
-                    border: "1px solid rgba(40, 40, 40, 0.08)",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  <X size={15} strokeWidth={2} />
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                  {/* Word & Char Counter Pill */}
+                  <div style={{
+                    fontSize: "0.72rem",
+                    color: "#64748B",
+                    fontWeight: 500,
+                    padding: "0.15rem 0.55rem",
+                    borderRadius: "9999px",
+                    background: "rgba(15, 23, 42, 0.04)",
+                  }}>
+                    {noteWordCount} words • {noteCharCount} chars
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateNoteModal(false)}
+                    className="icon-circle-btn"
+                    style={{
+                      width: "28px",
+                      height: "28px",
+                      background: "rgba(15, 23, 42, 0.04)",
+                      border: "1px solid rgba(15, 23, 42, 0.08)",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <X size={13} strokeWidth={2} />
+                  </button>
+                </div>
               </div>
 
               {/* Modal Body / Form */}
@@ -5197,201 +5598,139 @@ export default function WorkspaceDetailPage() {
                 }}
                 style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
               >
-                {/* Top Meta Bar: 2 Columns for Title & Tags */}
+                {/* Header Area: Clean Title Input & Unified Tag Chips (Compact) */}
                 <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "1.3fr 1fr",
-                  gap: "1rem",
-                  padding: "0.85rem 1.75rem 0.6rem 1.75rem",
+                  padding: "0.55rem clamp(0.75rem, 2vw, 1.5rem) 0.35rem clamp(0.75rem, 2vw, 1.5rem)",
                   flexShrink: 0,
-                  alignItems: "start",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.35rem",
                 }}>
-                  {/* Note Title Field */}
-                  <div>
-                    <label style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.35rem",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "var(--text-primary)",
-                      marginBottom: "0.35rem",
-                    }}>
-                      <FileText size={13} color="#E11D48" strokeWidth={2} />
-                      <span>Note Title</span>
-                      <span style={{ color: "var(--status-deny)", fontWeight: 700 }}>*</span>
-                    </label>
-                    <div style={{
-                      display: "flex",
-                      alignItems: "center",
-                      background: "#FFFFFF",
-                      border: "1.5px solid rgba(40, 40, 40, 0.14)",
-                      borderRadius: "9px",
-                      padding: "0.15rem 0.75rem",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-                    }}>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Q3 Sales Strategy & Action Items"
-                        value={noteFormTitle}
-                        onChange={(e) => setNoteFormTitle(e.target.value)}
+                  {/* Seamless Note Title Input */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      placeholder="Note Title..."
+                      value={noteFormTitle}
+                      onChange={(e) => setNoteFormTitle(e.target.value)}
+                      style={{
+                        width: "100%",
+                        fontSize: "clamp(1.1rem, 2vw, 1.25rem)",
+                        fontWeight: 650,
+                        border: "none",
+                        outline: "none",
+                        padding: "0.1rem 0",
+                        color: "#0F172A",
+                        background: "transparent",
+                        fontFamily: "Inter, sans-serif",
+                        letterSpacing: "-0.02em",
+                      }}
+                    />
+                    {noteFormTitle && (
+                      <button
+                        type="button"
+                        onClick={() => setNoteFormTitle("")}
                         style={{
-                          width: "100%",
-                          fontSize: "0.92rem",
-                          fontWeight: 550,
-                          border: "none",
-                          outline: "none",
-                          padding: "0.4rem 0",
-                          color: "var(--text-primary)",
                           background: "transparent",
-                          fontFamily: "Inter, sans-serif",
+                          border: "none",
+                          color: "#94A3B8",
+                          cursor: "pointer",
+                          padding: "0.2rem",
                         }}
-                      />
-                      {noteFormTitle && (
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Unified Tags Strip */}
+                  <div style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: "0.3rem",
+                  }}>
+                    <Tag size={11} strokeWidth={2} color="#64748B" style={{ marginRight: "0.1rem" }} />
+
+                    {parsedTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rdl-tag-chip"
+                        style={{ padding: "0.1rem 0.48rem", fontSize: "0.68rem" }}
+                      >
+                        #{tag}
                         <button
                           type="button"
-                          onClick={() => setNoteFormTitle("")}
+                          onClick={() => removeTag(tag)}
                           style={{
                             background: "transparent",
                             border: "none",
-                            color: "var(--text-tertiary)",
+                            color: "#64748B",
                             cursor: "pointer",
-                            padding: "0.15rem",
-                          }}
-                        >
-                          <X size={12} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Tags Field */}
-                  <div>
-                    <div style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: "0.35rem",
-                    }}>
-                      <label style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.35rem",
-                        fontSize: "0.8rem",
-                        fontWeight: 600,
-                        color: "var(--text-primary)",
-                      }}>
-                        <Tag size={13} color="#E11D48" strokeWidth={2} />
-                        <span>Tags & Categories</span>
-                      </label>
-                      <span style={{ fontSize: "0.68rem", color: "var(--text-tertiary)" }}>
-                        Press <kbd style={{ padding: "0.05rem 0.25rem", background: "rgba(0,0,0,0.06)", borderRadius: "3px", fontSize: "0.65rem" }}>Enter</kbd> to add
-                      </span>
-                    </div>
-
-                    <div style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      gap: "0.35rem",
-                      padding: "0.3rem 0.65rem",
-                      background: "rgba(46, 48, 50, 0.02)",
-                      border: "1.5px solid rgba(40, 40, 40, 0.12)",
-                      borderRadius: "9px",
-                      minHeight: "38px",
-                      maxHeight: "72px",
-                      overflowY: "auto",
-                    }}>
-                      {parsedTags.map((tag) => (
-                        <span
-                          key={tag}
-                          style={{
-                            display: "inline-flex",
+                            padding: 0,
+                            display: "flex",
                             alignItems: "center",
-                            gap: "0.25rem",
-                            padding: "0.15rem 0.5rem",
-                            borderRadius: "9999px",
-                            background: "linear-gradient(135deg, rgba(225, 29, 72, 0.08) 0%, rgba(244, 63, 94, 0.14) 100%)",
-                            border: "1px solid rgba(225, 29, 72, 0.25)",
-                            color: "#BE123C",
-                            fontSize: "0.72rem",
-                            fontWeight: 600,
-                            userSelect: "none",
+                            opacity: 0.75,
                           }}
                         >
-                          #{tag}
-                          <button
-                            type="button"
-                            onClick={() => removeTag(tag)}
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              color: "#BE123C",
-                              cursor: "pointer",
-                              padding: 0,
-                              display: "flex",
-                              alignItems: "center",
-                            }}
-                          >
-                            <X size={10} strokeWidth={2.5} />
-                          </button>
-                        </span>
-                      ))}
+                          <X size={10} strokeWidth={2.5} />
+                        </button>
+                      </span>
+                    ))}
 
-                      <input
-                        type="text"
-                        placeholder={parsedTags.length === 0 ? "Type tags (research, q3)..." : "+ tag..."}
-                        value={noteCustomTagInput}
-                        onChange={(e) => setNoteCustomTagInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === ",") {
-                            e.preventDefault();
-                            addTag(noteCustomTagInput);
-                          } else if (e.key === "Backspace" && !noteCustomTagInput && parsedTags.length > 0) {
-                            removeTag(parsedTags[parsedTags.length - 1]);
-                          }
-                        }}
-                        onBlur={() => {
-                          if (noteCustomTagInput.trim()) {
-                            addTag(noteCustomTagInput);
-                          }
-                        }}
-                        style={{
-                          flex: 1,
-                          minWidth: "100px",
-                          border: "none",
-                          background: "transparent",
-                          outline: "none",
-                          fontSize: "0.8rem",
-                          color: "var(--text-primary)",
-                          padding: "0.15rem 0",
-                        }}
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      placeholder={parsedTags.length === 0 ? "Add tags (press Enter)..." : "+ tag..."}
+                      value={noteCustomTagInput}
+                      onChange={(e) => setNoteCustomTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === ",") {
+                          e.preventDefault();
+                          addTag(noteCustomTagInput);
+                        } else if (e.key === "Backspace" && !noteCustomTagInput && parsedTags.length > 0) {
+                          removeTag(parsedTags[parsedTags.length - 1]);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (noteCustomTagInput.trim()) {
+                          addTag(noteCustomTagInput);
+                        }
+                      }}
+                      style={{
+                        minWidth: "110px",
+                        border: "none",
+                        background: "transparent",
+                        outline: "none",
+                        fontSize: "0.76rem",
+                        color: "#64748B",
+                        padding: "0.1rem 0.3rem",
+                      }}
+                    />
                   </div>
                 </div>
 
-                {/* Workspace Documents Horizontal Ribbon */}
+                {/* Workspace Documents Ribbon (Compact) */}
                 {files.length > 0 && (
                   <div style={{
-                    padding: "0.45rem 1.75rem",
-                    background: "rgba(37, 99, 235, 0.03)",
-                    borderTop: "1px solid rgba(37, 99, 235, 0.1)",
-                    borderBottom: "1px solid rgba(37, 99, 235, 0.1)",
+                    padding: "0.25rem clamp(0.75rem, 2vw, 1.5rem)",
+                    background: "rgba(15, 23, 42, 0.02)",
+                    borderTop: "1px solid rgba(15, 23, 42, 0.06)",
+                    borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
                     display: "flex",
                     alignItems: "center",
-                    gap: "0.75rem",
+                    gap: "0.55rem",
                     flexShrink: 0,
                   }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexShrink: 0 }}>
-                      <Link2 size={13} strokeWidth={2} color="#2563EB" />
-                      <span style={{ fontSize: "0.76rem", fontWeight: 650, color: "var(--text-primary)" }}>
-                        Workspace Documents ({files.length}):
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", flexShrink: 0 }}>
+                      <Link2 size={11} strokeWidth={2.2} color="#4F46E5" />
+                      <span style={{ fontSize: "0.7rem", fontWeight: 650, color: "#0F172A" }}>
+                        Workspace Docs ({files.length}):
                       </span>
                     </div>
 
-                    <div style={{ display: "flex", gap: "0.4rem", overflowX: "auto", flex: 1, paddingBottom: "2px", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: "0.3rem", overflowX: "auto", flex: 1, paddingBottom: "2px", alignItems: "center", WebkitOverflowScrolling: "touch" }}>
                       {files.map((file) => {
                         const isLinked = noteFormReferencedFiles.includes(file.id);
                         return (
@@ -5400,18 +5739,18 @@ export default function WorkspaceDetailPage() {
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
-                              gap: "0.3rem",
-                              padding: "0.2rem 0.55rem",
+                              gap: "0.25rem",
+                              padding: "0.14rem 0.45rem",
                               borderRadius: "9999px",
-                              fontSize: "0.74rem",
-                              border: isLinked ? "1px solid #2563EB" : "1px solid rgba(40, 40, 40, 0.12)",
-                              background: isLinked ? "rgba(37, 99, 235, 0.1)" : "#FFFFFF",
-                              color: isLinked ? "#1D4ED8" : "var(--text-secondary)",
+                              fontSize: "0.68rem",
+                              border: isLinked ? "1px solid #0F172A" : "1px solid rgba(15, 23, 42, 0.08)",
+                              background: isLinked ? "#0F172A" : "#FFFFFF",
+                              color: isLinked ? "#FFFFFF" : "#475569",
                               cursor: "pointer",
                               transition: "all 0.15s ease",
                               userSelect: "none",
                               flexShrink: 0,
-                              boxShadow: isLinked ? "0 1px 3px rgba(37,99,235,0.15)" : "none",
+                              boxShadow: isLinked ? "0 2px 6px rgba(15,23,42,0.15)" : "none",
                             }}
                             onClick={() => {
                               setNoteFormReferencedFiles((prev) =>
@@ -5419,8 +5758,8 @@ export default function WorkspaceDetailPage() {
                               );
                             }}
                           >
-                            <FileText size={11} strokeWidth={2} color={isLinked ? "#2563EB" : "inherit"} />
-                            <span style={{ fontWeight: isLinked ? 600 : 400, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <FileText size={9} strokeWidth={2} color={isLinked ? "#FFFFFF" : "inherit"} />
+                            <span style={{ fontWeight: isLinked ? 600 : 400, maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {file.original_filename}
                             </span>
                             <button
@@ -5429,7 +5768,7 @@ export default function WorkspaceDetailPage() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (!noteFormReferencedFiles.includes(file.id)) {
-                                  setNoteFormReferencedFiles((prev) => [...prev, file.id]);
+                                   setNoteFormReferencedFiles((prev) => [...prev, file.id]);
                                 }
                                 const mentionText = file.original_filename.includes(" ")
                                   ? ` @[${file.original_filename}] `
@@ -5437,14 +5776,14 @@ export default function WorkspaceDetailPage() {
                                 setNoteFormContent((prev) => prev ? prev + mentionText : mentionText.trimStart());
                               }}
                               style={{
-                                background: isLinked ? "rgba(37, 99, 235, 0.2)" : "rgba(46, 48, 50, 0.06)",
+                                background: isLinked ? "rgba(255, 255, 255, 0.2)" : "rgba(15, 23, 42, 0.06)",
                                 border: "none",
                                 borderRadius: "4px",
                                 cursor: "pointer",
-                                padding: "0.08rem 0.35rem",
-                                fontSize: "0.68rem",
+                                padding: "0.05rem 0.25rem",
+                                fontSize: "0.64rem",
                                 fontWeight: 700,
-                                color: isLinked ? "#1D4ED8" : "var(--text-secondary)",
+                                color: isLinked ? "#FFFFFF" : "#475569",
                               }}
                             >
                               +@
@@ -5456,24 +5795,24 @@ export default function WorkspaceDetailPage() {
                   </div>
                 )}
 
-                {/* Main Markdown Writing Canvas - Prominent & Full Height */}
+                {/* Main Lined Notebook Writing Canvas (Maximized Space) */}
                 <div style={{
                   display: "flex",
                   flexDirection: "column",
                   flex: 1,
                   minHeight: 0,
-                  margin: "0.75rem 1.75rem",
-                  border: "1.5px solid rgba(40, 40, 40, 0.14)",
-                  borderRadius: "12px",
+                  margin: "0.35rem clamp(0.5rem, 1.5vw, 1.5rem) 0.4rem clamp(0.5rem, 1.5vw, 1.5rem)",
+                  border: "1px solid rgba(15, 23, 42, 0.08)",
+                  borderRadius: "18px",
                   background: "#FFFFFF",
                   overflow: "hidden",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
                 }}>
-                  {/* Editor Top Toolbar */}
+                  {/* Floating Formatting Toolbar */}
                   <div style={{
-                    padding: "0.45rem 0.85rem",
-                    background: "linear-gradient(180deg, #FBFBFC 0%, #F5F5F7 100%)",
-                    borderBottom: "1px solid rgba(40, 40, 40, 0.08)",
+                    padding: "0.35rem clamp(0.5rem, 1.5vw, 0.85rem)",
+                    background: "linear-gradient(180deg, #FCFCFD 0%, #F6F6F8 100%)",
+                    borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
@@ -5481,80 +5820,144 @@ export default function WorkspaceDetailPage() {
                     gap: "0.4rem",
                     flexShrink: 0,
                   }}>
-                    {/* Tabs: Write vs Preview */}
-                    <div style={{
-                      display: "flex",
-                      background: "rgba(40, 40, 40, 0.06)",
-                      padding: "0.15rem",
-                      borderRadius: "8px",
-                      gap: "0.2rem",
-                    }}>
-                      <button
-                        type="button"
-                        onClick={() => setNoteEditorTab("write")}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.3rem",
-                          padding: "0.25rem 0.7rem",
-                          borderRadius: "6px",
-                          border: "none",
-                          background: noteEditorTab === "write" ? "#FFFFFF" : "transparent",
-                          boxShadow: noteEditorTab === "write" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                          color: noteEditorTab === "write" ? "#E11D48" : "var(--text-secondary)",
-                          fontWeight: noteEditorTab === "write" ? 650 : 500,
-                          fontSize: "0.78rem",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                      >
-                        <Edit3 size={12} strokeWidth={2} />
-                        <span>Write</span>
-                      </button>
+                    {/* Left: Tabs & Color Swatches & Font Toggle */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      {/* Tabs: Write vs Preview */}
+                      <div style={{
+                        display: "flex",
+                        background: "rgba(15, 23, 42, 0.05)",
+                        padding: "0.15rem",
+                        borderRadius: "8px",
+                        gap: "0.2rem",
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => setNoteEditorTab("write")}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            padding: "0.2rem 0.6rem",
+                            borderRadius: "6px",
+                            border: "none",
+                            background: noteEditorTab === "write" ? "#FFFFFF" : "transparent",
+                            boxShadow: noteEditorTab === "write" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                            color: noteEditorTab === "write" ? "#0F172A" : "#64748B",
+                            fontWeight: noteEditorTab === "write" ? 600 : 450,
+                            fontSize: "0.76rem",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <Edit3 size={11} strokeWidth={2} />
+                          <span>Write</span>
+                        </button>
 
+                        <button
+                          type="button"
+                          onClick={() => setNoteEditorTab("preview")}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            padding: "0.2rem 0.6rem",
+                            borderRadius: "6px",
+                            border: "none",
+                            background: noteEditorTab === "preview" ? "#FFFFFF" : "transparent",
+                            boxShadow: noteEditorTab === "preview" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                            color: noteEditorTab === "preview" ? "#0F172A" : "#64748B",
+                            fontWeight: noteEditorTab === "preview" ? 600 : 450,
+                            fontSize: "0.76rem",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <Eye size={11} strokeWidth={2} />
+                          <span>Preview</span>
+                        </button>
+                      </div>
+
+                      {/* Modal Paper Color Swatches */}
+                      <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                        background: "#FFFFFF",
+                        padding: "0.18rem 0.35rem",
+                        borderRadius: "9999px",
+                        border: "1px solid rgba(15, 23, 42, 0.08)",
+                      }}>
+                        {paperColors.map((c) => {
+                          const isSelected = selectedNotePaperColor === c.id;
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => setSelectedNotePaperColor(c.id)}
+                              title={`Paper: ${c.name}`}
+                              style={{
+                                width: "14px",
+                                height: "14px",
+                                borderRadius: "50%",
+                                background: c.bg,
+                                border: isSelected ? "2px solid #0F172A" : `1px solid ${c.border}`,
+                                cursor: "pointer",
+                                padding: 0,
+                                transform: isSelected ? "scale(1.15)" : "scale(1)",
+                                transition: "all 0.15s ease",
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+
+                      {/* Font Switcher */}
                       <button
                         type="button"
-                        onClick={() => setNoteEditorTab("preview")}
+                        onClick={() => setNoteFontMode((prev) => (prev === "handwriting" ? "editorial" : "handwriting"))}
+                        className="pill-btn pill-btn-glass"
                         style={{
-                          display: "flex",
+                          padding: "0.2rem 0.55rem",
+                          fontSize: "0.72rem",
+                          display: "inline-flex",
                           alignItems: "center",
                           gap: "0.3rem",
-                          padding: "0.25rem 0.7rem",
-                          borderRadius: "6px",
-                          border: "none",
-                          background: noteEditorTab === "preview" ? "#FFFFFF" : "transparent",
-                          boxShadow: noteEditorTab === "preview" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                          color: noteEditorTab === "preview" ? "#E11D48" : "var(--text-secondary)",
-                          fontWeight: noteEditorTab === "preview" ? 650 : 500,
-                          fontSize: "0.78rem",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
                         }}
+                        title="Toggle font style"
                       >
-                        <Eye size={12} strokeWidth={2} />
-                        <span>Preview</span>
+                        {noteFontMode === "handwriting" ? (
+                          <>
+                            <PenTool size={11} strokeWidth={2} style={{ color: "#6366F1" }} />
+                            <span>Natural</span>
+                          </>
+                        ) : (
+                          <>
+                            <Type size={11} strokeWidth={2} style={{ color: "#0EA5E9" }} />
+                            <span>Editorial</span>
+                          </>
+                        )}
                       </button>
                     </div>
 
                     {/* Formatting Action Tools */}
                     {noteEditorTab === "write" && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.2rem", flexWrap: "wrap" }}>
                         <button
                           type="button"
                           title="Bold (**text**)"
                           onClick={() => insertMarkdown("**", "**", "bold text")}
                           style={{
-                            padding: "0.25rem 0.45rem",
+                            padding: "0.2rem 0.4rem",
                             borderRadius: "5px",
-                            border: "1px solid rgba(40,40,40,0.08)",
+                            border: "1px solid rgba(15,23,42,0.06)",
                             background: "#FFFFFF",
-                            color: "var(--text-primary)",
+                            color: "#475569",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
                           }}
                         >
-                          <Bold size={12} strokeWidth={2.5} />
+                          <Bold size={11} strokeWidth={2.4} />
                         </button>
 
                         <button
@@ -5562,53 +5965,53 @@ export default function WorkspaceDetailPage() {
                           title="Italic (*text*)"
                           onClick={() => insertMarkdown("*", "*", "italic text")}
                           style={{
-                            padding: "0.25rem 0.45rem",
+                            padding: "0.2rem 0.4rem",
                             borderRadius: "5px",
-                            border: "1px solid rgba(40,40,40,0.08)",
+                            border: "1px solid rgba(15,23,42,0.06)",
                             background: "#FFFFFF",
-                            color: "var(--text-primary)",
+                            color: "#475569",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
                           }}
                         >
-                          <Italic size={12} strokeWidth={2.5} />
+                          <Italic size={11} strokeWidth={2.4} />
                         </button>
 
                         <button
                           type="button"
-                          title="Heading (## text)"
+                          title="Heading (## Title)"
                           onClick={() => insertMarkdown("## ", "", "Heading")}
                           style={{
-                            padding: "0.25rem 0.45rem",
+                            padding: "0.2rem 0.4rem",
                             borderRadius: "5px",
-                            border: "1px solid rgba(40,40,40,0.08)",
+                            border: "1px solid rgba(15,23,42,0.06)",
                             background: "#FFFFFF",
-                            color: "var(--text-primary)",
+                            color: "#475569",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
                           }}
                         >
-                          <Heading2 size={12} strokeWidth={2.5} />
+                          <Heading2 size={11} strokeWidth={2.4} />
                         </button>
 
                         <button
                           type="button"
-                          title="Blockquote (> quote)"
-                          onClick={() => insertMarkdown("> ", "", "Quote text")}
+                          title="Quote (> quote)"
+                          onClick={() => insertMarkdown("> ", "", "quote")}
                           style={{
-                            padding: "0.25rem 0.45rem",
+                            padding: "0.2rem 0.4rem",
                             borderRadius: "5px",
-                            border: "1px solid rgba(40,40,40,0.08)",
+                            border: "1px solid rgba(15,23,42,0.06)",
                             background: "#FFFFFF",
-                            color: "var(--text-primary)",
+                            color: "#475569",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
                           }}
                         >
-                          <Quote size={12} strokeWidth={2.5} />
+                          <Quote size={11} strokeWidth={2.4} />
                         </button>
 
                         <button
@@ -5616,17 +6019,17 @@ export default function WorkspaceDetailPage() {
                           title="Code Block (```)"
                           onClick={() => insertMarkdown("```\n", "\n```", "code block")}
                           style={{
-                            padding: "0.25rem 0.45rem",
+                            padding: "0.2rem 0.4rem",
                             borderRadius: "5px",
-                            border: "1px solid rgba(40,40,40,0.08)",
+                            border: "1px solid rgba(15,23,42,0.06)",
                             background: "#FFFFFF",
-                            color: "var(--text-primary)",
+                            color: "#475569",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
                           }}
                         >
-                          <Code size={12} strokeWidth={2.5} />
+                          <Code size={11} strokeWidth={2.4} />
                         </button>
 
                         <button
@@ -5634,35 +6037,17 @@ export default function WorkspaceDetailPage() {
                           title="Bullet List (- item)"
                           onClick={() => insertMarkdown("- ", "", "list item")}
                           style={{
-                            padding: "0.25rem 0.45rem",
+                            padding: "0.2rem 0.4rem",
                             borderRadius: "5px",
-                            border: "1px solid rgba(40,40,40,0.08)",
+                            border: "1px solid rgba(15,23,42,0.06)",
                             background: "#FFFFFF",
-                            color: "var(--text-primary)",
+                            color: "#475569",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
                           }}
                         >
-                          <List size={12} strokeWidth={2.5} />
-                        </button>
-
-                        <button
-                          type="button"
-                          title="Numbered List (1. item)"
-                          onClick={() => insertMarkdown("1. ", "", "list item")}
-                          style={{
-                            padding: "0.25rem 0.45rem",
-                            borderRadius: "5px",
-                            border: "1px solid rgba(40,40,40,0.08)",
-                            background: "#FFFFFF",
-                            color: "var(--text-primary)",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                        >
-                          <ListOrdered size={12} strokeWidth={2.5} />
+                          <List size={11} strokeWidth={2.4} />
                         </button>
 
                         <button
@@ -5670,65 +6055,42 @@ export default function WorkspaceDetailPage() {
                           title="Task Checkbox (- [ ] task)"
                           onClick={() => insertMarkdown("- [ ] ", "", "task item")}
                           style={{
-                            padding: "0.25rem 0.45rem",
+                            padding: "0.2rem 0.4rem",
                             borderRadius: "5px",
-                            border: "1px solid rgba(40,40,40,0.08)",
+                            border: "1px solid rgba(15,23,42,0.06)",
                             background: "#FFFFFF",
-                            color: "var(--text-primary)",
+                            color: "#475569",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
                           }}
                         >
-                          <CheckSquare size={12} strokeWidth={2.5} />
+                          <CheckSquare size={11} strokeWidth={2.4} />
                         </button>
 
                         <button
                           type="button"
-                          title="Markdown Table"
-                          onClick={() => insertMarkdown("| Column 1 | Column 2 |\n|---|---|\n| Item 1 | Item 2 |\n", "")}
-                          style={{
-                            padding: "0.25rem 0.45rem",
-                            borderRadius: "5px",
-                            border: "1px solid rgba(40,40,40,0.08)",
-                            background: "#FFFFFF",
-                            color: "var(--text-primary)",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                        >
-                          <Table size={12} strokeWidth={2.5} />
-                        </button>
-
-                        <button
-                          type="button"
-                          title="Mention Workspace Document (@filename)"
+                          title="Insert Document @Mention"
                           onClick={triggerMentionFromToolbar}
                           style={{
-                            padding: "0.2rem 0.55rem",
+                            padding: "0.2rem 0.5rem",
                             borderRadius: "5px",
-                            border: "1px solid rgba(37,99,235,0.25)",
-                            background: "rgba(37,99,235,0.08)",
-                            color: "#2563EB",
+                            border: "1px solid rgba(99, 102, 241, 0.2)",
+                            background: "rgba(99, 102, 241, 0.08)",
+                            color: "#4F46E5",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
                             gap: "0.25rem",
-                            fontSize: "0.74rem",
+                            fontSize: "0.72rem",
                             fontWeight: 650,
                           }}
                         >
-                          <Link2 size={11} strokeWidth={2.5} />
+                          <Link2 size={11} strokeWidth={2.4} />
                           <span>@ Mention</span>
                         </button>
                       </div>
                     )}
-
-                    {/* Word & Char Counter */}
-                    <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", fontWeight: 500 }}>
-                      {noteWordCount} words • {noteCharCount} chars
-                    </div>
                   </div>
 
                   {/* Interactive @ Mention Dropdown Autocomplete Popup */}
@@ -5737,9 +6099,9 @@ export default function WorkspaceDetailPage() {
                       style={{
                         margin: "0.4rem 0.75rem 0 0.75rem",
                         background: "#FFFFFF",
-                        borderRadius: "10px",
-                        boxShadow: "0 10px 25px -4px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(37, 99, 235, 0.3)",
-                        border: "1.5px solid #2563EB",
+                        borderRadius: "12px",
+                        boxShadow: "0 12px 30px -4px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(79, 70, 229, 0.3)",
+                        border: "1.5px solid #4F46E5",
                         overflow: "hidden",
                         maxHeight: "180px",
                         display: "flex",
@@ -5751,24 +6113,20 @@ export default function WorkspaceDetailPage() {
                       {/* Header */}
                       <div style={{
                         padding: "0.35rem 0.75rem",
-                        background: "linear-gradient(180deg, #F0F7FF 0%, #E0F2FE 100%)",
-                        borderBottom: "1px solid rgba(37, 99, 235, 0.15)",
+                        background: "linear-gradient(180deg, #EEF2FF 0%, #E0E7FF 100%)",
+                        borderBottom: "1px solid rgba(79, 70, 229, 0.15)",
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        fontSize: "0.72rem",
-                        color: "#1D4ED8",
-                        fontWeight: 650,
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                          <Link2 size={12} strokeWidth={2.5} />
-                          <span>Mention Workspace Document</span>
-                          {mentionSearch && (
-                            <span style={{ fontWeight: 400, opacity: 0.8 }}>(matching &ldquo;{mentionSearch}&rdquo;)</span>
-                          )}
+                          <Link2 size={12} color="#4F46E5" strokeWidth={2.5} />
+                          <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#3730A3" }}>
+                            Reference Workspace File
+                          </span>
                         </div>
-                        <span style={{ fontSize: "0.68rem", opacity: 0.75 }}>
-                          <kbd style={{ padding: "0.05rem 0.25rem", background: "#FFFFFF", borderRadius: "3px" }}>↑</kbd> <kbd style={{ padding: "0.05rem 0.25rem", background: "#FFFFFF", borderRadius: "3px" }}>↓</kbd> navigate • <kbd style={{ padding: "0.05rem 0.25rem", background: "#FFFFFF", borderRadius: "3px" }}>Enter</kbd> insert • <kbd style={{ padding: "0.05rem 0.25rem", background: "#FFFFFF", borderRadius: "3px" }}>Esc</kbd> cancel
+                        <span style={{ fontSize: "0.68rem", color: "#6366F1" }}>
+                          {filteredMentionFiles.length} available
                         </span>
                       </div>
 
@@ -5787,29 +6145,29 @@ export default function WorkspaceDetailPage() {
                                   alignItems: "center",
                                   justifyContent: "space-between",
                                   padding: "0.4rem 0.75rem",
-                                  background: isHighlighted ? "rgba(37, 99, 235, 0.1)" : "transparent",
-                                  borderLeft: isHighlighted ? "3px solid #2563EB" : "3px solid transparent",
+                                  background: isHighlighted ? "rgba(79, 70, 229, 0.08)" : "transparent",
+                                  borderLeft: isHighlighted ? "3px solid #4F46E5" : "3px solid transparent",
                                   cursor: "pointer",
                                   transition: "background 0.1s ease",
                                 }}
                               >
                                 <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", minWidth: 0 }}>
-                                  <FileText size={13} color={isHighlighted ? "#2563EB" : "var(--text-secondary)"} strokeWidth={2} />
-                                  <span style={{ fontSize: "0.82rem", fontWeight: isHighlighted ? 650 : 500, color: isHighlighted ? "#1D4ED8" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  <FileText size={13} color={isHighlighted ? "#4F46E5" : "#64748B"} strokeWidth={2} />
+                                  <span style={{ fontSize: "0.82rem", fontWeight: isHighlighted ? 650 : 500, color: isHighlighted ? "#4338CA" : "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                     {file.original_filename}
                                   </span>
-                                  <span style={{ fontSize: "0.68rem", color: "var(--text-tertiary)", padding: "0.1rem 0.35rem", background: "rgba(0,0,0,0.04)", borderRadius: "4px" }}>
+                                  <span style={{ fontSize: "0.68rem", color: "#94A3B8", padding: "0.1rem 0.35rem", background: "rgba(0,0,0,0.04)", borderRadius: "4px" }}>
                                     {file.file_type || "FILE"}
                                   </span>
                                 </div>
-                                <span style={{ fontSize: "0.7rem", color: isHighlighted ? "#2563EB" : "var(--text-tertiary)", fontWeight: 600 }}>
+                                <span style={{ fontSize: "0.7rem", color: isHighlighted ? "#4F46E5" : "#94A3B8", fontWeight: 600 }}>
                                   {isHighlighted ? "↵ Insert @mention" : file.file_size ? `${(file.file_size / 1024).toFixed(0)} KB` : ""}
                                 </span>
                               </div>
                             );
                           })
                         ) : (
-                          <div style={{ padding: "0.6rem 0.75rem", fontSize: "0.76rem", color: "var(--text-secondary)", fontStyle: "italic", textAlign: "center" }}>
+                          <div style={{ padding: "0.6rem 0.75rem", fontSize: "0.76rem", color: "#64748B", fontStyle: "italic", textAlign: "center" }}>
                             No workspace documents matching &ldquo;{mentionSearch}&rdquo;.
                           </div>
                         )}
@@ -5817,74 +6175,67 @@ export default function WorkspaceDetailPage() {
                     </div>
                   )}
 
-                  {/* Editor Main Writing Canvas (Full Flex Height) */}
+                  {/* Editor Main Writing Canvas (Ruled Notebook Paper Experience) */}
                   {noteEditorTab === "write" ? (
-                    <textarea
-                      id="note-content-textarea"
-                      placeholder="Write your note with rich Markdown (headings, lists, tasks, code, tables)... Type @ to mention workspace documents."
-                      value={noteFormContent}
-                      onChange={handleContentChange}
-                      onKeyDown={(e) => {
-                        if (showMentionMenu && filteredMentionFiles.length > 0) {
-                          if (e.key === "ArrowDown") {
-                            e.preventDefault();
-                            setMentionHighlightedIndex((prev) => (prev + 1) % filteredMentionFiles.length);
-                            return;
+                    <div className={`rdl-notebook-textarea-wrapper ${selectedNotePaperColor}`}>
+                      <textarea
+                        id="note-content-textarea"
+                        placeholder="Write your note in Markdown (headings, lists, tasks, code, tables)... Type @ to mention workspace documents."
+                        value={noteFormContent}
+                        onChange={handleContentChange}
+                        onKeyDown={(e) => {
+                          if (showMentionMenu && filteredMentionFiles.length > 0) {
+                            if (e.key === "ArrowDown") {
+                              e.preventDefault();
+                              setMentionHighlightedIndex((prev) => (prev + 1) % filteredMentionFiles.length);
+                              return;
+                            }
+                            if (e.key === "ArrowUp") {
+                              e.preventDefault();
+                              setMentionHighlightedIndex((prev) => (prev - 1 + filteredMentionFiles.length) % filteredMentionFiles.length);
+                              return;
+                            }
+                            if (e.key === "Enter" || e.key === "Tab") {
+                              e.preventDefault();
+                              handleSelectMentionFile(filteredMentionFiles[mentionHighlightedIndex]);
+                              return;
+                            }
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              setShowMentionMenu(false);
+                              return;
+                            }
                           }
-                          if (e.key === "ArrowUp") {
-                            e.preventDefault();
-                            setMentionHighlightedIndex((prev) => (prev - 1 + filteredMentionFiles.length) % filteredMentionFiles.length);
-                            return;
-                          }
-                          if (e.key === "Enter" || e.key === "Tab") {
-                            e.preventDefault();
-                            handleSelectMentionFile(filteredMentionFiles[mentionHighlightedIndex]);
-                            return;
-                          }
-                          if (e.key === "Escape") {
-                            e.preventDefault();
-                            setShowMentionMenu(false);
-                            return;
-                          }
-                        }
-                      }}
-                      style={{
-                        width: "100%",
-                        flex: 1,
-                        minHeight: "220px",
-                        padding: "1.1rem 1.25rem",
-                        fontSize: "0.92rem",
-                        lineHeight: 1.7,
-                        fontFamily: "Inter, sans-serif",
-                        border: "none",
-                        outline: "none",
-                        background: "#FFFFFF",
-                        color: "var(--text-primary)",
-                        resize: "none",
-                      }}
-                    />
+                        }}
+                        className={`rdl-notebook-textarea ${noteFontMode === "handwriting" ? "font-handwriting" : "font-editorial"}`}
+                        style={{
+                          width: "100%",
+                          minHeight: "320px",
+                        }}
+                      />
+                    </div>
                   ) : (
-                    <div style={{
+                    <div className={`rdl-notebook-ruled-body ${selectedNotePaperColor}`} style={{
                       flex: 1,
-                      padding: "1.1rem 1.25rem",
+                      minHeight: 0,
                       overflowY: "auto",
-                      background: "#FAFAFC",
-                      fontSize: "0.92rem",
-                      lineHeight: 1.7,
-                      color: "var(--text-primary)",
+                      borderRadius: 0,
                     }}>
-                      {renderNoteContentWithMentions(noteFormContent, {
-                        referenced_files: files.filter((f) => noteFormReferencedFiles.includes(f.id)),
-                      })}
+                      <div className={noteFontMode === "handwriting" ? "font-handwriting" : "font-editorial"}>
+                        {renderNoteContentWithMentions(noteFormContent, {
+                          id: editingNote?.id || "preview-id",
+                          files: files.filter((f) => noteFormReferencedFiles.includes(f.id)),
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Modal Footer */}
+                {/* Modal Footer (Compact) */}
                 <div style={{
-                  padding: "0.85rem 1.75rem",
+                  padding: "0.5rem clamp(0.75rem, 2vw, 1.5rem)",
                   background: "linear-gradient(180deg, #FAFAFC 0%, #F5F5F7 100%)",
-                  borderTop: "1px solid rgba(40, 40, 40, 0.08)",
+                  borderTop: "1px solid rgba(15, 23, 42, 0.08)",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
@@ -5892,19 +6243,19 @@ export default function WorkspaceDetailPage() {
                   gap: "0.75rem",
                   flexShrink: 0,
                 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.74rem", color: "var(--text-tertiary)" }}>
-                    <kbd style={{ padding: "0.15rem 0.4rem", background: "#FFFFFF", border: "1px solid rgba(40,40,40,0.12)", borderRadius: "4px", fontSize: "0.7rem", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>Ctrl</kbd>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.72rem", color: "#94A3B8" }}>
+                    <kbd style={{ padding: "0.12rem 0.35rem", background: "#FFFFFF", border: "1px solid rgba(15,23,42,0.12)", borderRadius: "4px", fontSize: "0.68rem", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>Ctrl</kbd>
                     <span>+</span>
-                    <kbd style={{ padding: "0.15rem 0.4rem", background: "#FFFFFF", border: "1px solid rgba(40,40,40,0.12)", borderRadius: "4px", fontSize: "0.7rem", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>Enter</kbd>
+                    <kbd style={{ padding: "0.12rem 0.35rem", background: "#FFFFFF", border: "1px solid rgba(15,23,42,0.12)", borderRadius: "4px", fontSize: "0.68rem", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>Enter</kbd>
                     <span>to quick-save note</span>
                   </div>
 
-                  <div style={{ display: "flex", gap: "0.75rem" }}>
+                  <div style={{ display: "flex", gap: "0.6rem" }}>
                     <button
                       type="button"
                       onClick={() => setShowCreateNoteModal(false)}
                       className="pill-btn pill-btn-glass"
-                      style={{ padding: "0.55rem 1.25rem", fontSize: "0.84rem" }}
+                      style={{ padding: "0.45rem 1.15rem", fontSize: "0.8rem" }}
                     >
                       Cancel
                     </button>
@@ -5912,22 +6263,22 @@ export default function WorkspaceDetailPage() {
                       type="submit"
                       disabled={savingNote}
                       style={{
-                        padding: "0.58rem 1.6rem",
+                        padding: "0.48rem 1.45rem",
                         borderRadius: "9999px",
-                        background: "linear-gradient(135deg, #E11D48 0%, #BE123C 100%)",
-                        color: "#FFFFFF",
-                        border: "none",
-                        fontWeight: 600,
-                        fontSize: "0.84rem",
+                        background: "linear-gradient(135deg, #FDE047 0%, #FACC15 100%)",
+                        color: "#0F172A",
+                        border: "1px solid rgba(250, 204, 21, 0.5)",
+                        fontWeight: 700,
+                        fontSize: "0.82rem",
                         display: "flex",
                         alignItems: "center",
                         gap: "0.45rem",
                         cursor: savingNote ? "not-allowed" : "pointer",
-                        boxShadow: "0 4px 14px rgba(225, 29, 72, 0.35)",
+                        boxShadow: "0 8px 24px -4px rgba(250, 204, 21, 0.45)",
                         transition: "all 0.15s ease",
                       }}
                     >
-                      {savingNote ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} strokeWidth={2} />}
+                      {savingNote ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} strokeWidth={2.4} />}
                       <span>{editingNote ? "Update Note" : "Save Note"}</span>
                     </button>
                   </div>

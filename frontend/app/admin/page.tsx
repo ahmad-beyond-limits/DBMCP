@@ -627,7 +627,7 @@ export default function AdminDashboardPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 9999,
+            zIndex: 99999,
             padding: "1rem",
             overflowY: "auto",
           }}
@@ -709,7 +709,7 @@ export default function AdminDashboardPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 9999,
+            zIndex: 99999,
             padding: "1rem",
             overflowY: "auto",
           }}
