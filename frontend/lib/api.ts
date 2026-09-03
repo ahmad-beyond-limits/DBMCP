@@ -218,6 +218,38 @@ class ApiClient {
     return this.request<ExtractedContent>(`/workspaces/${workspaceId}/files/${fileId}/content`);
   }
 
+  async downloadFile(workspaceId: string, fileId: string): Promise<Blob> {
+    const apiBase = getApiBase();
+    const token = typeof window !== "undefined" ? localStorage.getItem("dbmcp_access_token") : null;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch(`${apiBase}/workspaces/${workspaceId}/files/${fileId}/download`, {
+      headers,
+    });
+    if (!res.ok) {
+      throw new Error(`Download failed (${res.status})`);
+    }
+    return res.blob();
+  }
+
+  async getFileBlob(workspaceId: string, fileId: string): Promise<Blob> {
+    const apiBase = getApiBase();
+    const token = typeof window !== "undefined" ? localStorage.getItem("dbmcp_access_token") : null;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch(`${apiBase}/workspaces/${workspaceId}/files/${fileId}/raw`, {
+      headers,
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch file stream (${res.status})`);
+    }
+    return res.blob();
+  }
+
   async deleteFile(workspaceId: string, fileId: string): Promise<void> {
     return this.request<void>(`/workspaces/${workspaceId}/files/${fileId}`, {
       method: "DELETE",
@@ -511,3 +543,14 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+
+export function triggerBrowserDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}

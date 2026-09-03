@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, getApiBase } from "@/lib/api";
+import { api, getApiBase, triggerBrowserDownload } from "@/lib/api";
 import {
   AuditLog,
   ExtractedContent,
@@ -239,6 +239,18 @@ export default function WorkspaceDetailPage() {
   // Modals & Action States
   const [selectedFileContent, setSelectedFileContent] = useState<ExtractedContent | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>("");
+
+  // 🌟 Clean Data & Spreadsheet Viewer Studio States 🌟
+  const [dataViewerModalOpen, setDataViewerModalOpen] = useState(false);
+  const [activeViewerFile, setActiveViewerFile] = useState<FileRecord | null>(null);
+  const [activeViewerContent, setActiveViewerContent] = useState<ExtractedContent | null>(null);
+  const [activeViewerSheet, setActiveViewerSheet] = useState<string>("");
+  const [viewerSearchQuery, setViewerSearchQuery] = useState("");
+  const [viewerJsonMode, setViewerJsonMode] = useState<"sheet" | "json">("sheet");
+  const [viewerImageBlobUrl, setViewerImageBlobUrl] = useState<string | null>(null);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+  const [copiedViewerText, setCopiedViewerText] = useState(false);
   const [createdCredential, setCreatedCredential] = useState<MCPCredentialCreated | null>(null);
   const [newMemberUsername, setNewMemberUsername] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("MEMBER");
@@ -1095,12 +1107,79 @@ export default function WorkspaceDetailPage() {
   };
 
   const handleViewContent = async (file: FileRecord) => {
+    setActiveViewerFile(file);
+    setActiveViewerContent(null);
+    setViewerSearchQuery("");
+    setViewerImageBlobUrl(null);
+    setDataViewerModalOpen(true);
+    setViewerLoading(true);
+
     try {
-      setSelectedFileName(file.original_filename);
+      // 1. If image file, fetch raw blob for high-resolution visual rendering
+      if (isImageFile(file)) {
+        try {
+          const blob = await api.getFileBlob(workspaceId, file.id);
+          const objUrl = URL.createObjectURL(blob);
+          setViewerImageBlobUrl(objUrl);
+        } catch (imgErr) {
+          console.warn("Could not load direct image blob:", imgErr);
+        }
+      }
+
+      // 2. Fetch extracted content and structured metadata
       const content = await api.getFileContent(workspaceId, file.id);
-      setSelectedFileContent(content);
+      setActiveViewerContent(content);
+
+      // 3. Initialize active sheet if Excel workbook
+      const struct = content.structured_data;
+      if (struct && struct.sheets) {
+        const sheetKeys = Object.keys(struct.sheets);
+        if (sheetKeys.length > 0) {
+          setActiveViewerSheet(sheetKeys[0]);
+        }
+      } else if (struct && struct.sheet_names && struct.sheet_names.length > 0) {
+        setActiveViewerSheet(struct.sheet_names[0]);
+      } else {
+        setActiveViewerSheet("");
+      }
+
+      // 4. Default JSON view mode
+      const isJson = (file.file_type || "").toUpperCase() === "JSON" || (file.original_filename || "").toLowerCase().endsWith(".json");
+      if (isJson) {
+        if (struct && struct.table_detected && struct.columns && struct.columns.length > 0) {
+          setViewerJsonMode("sheet");
+        } else {
+          setViewerJsonMode("json");
+        }
+      }
     } catch (err: any) {
       notify("error", err.message || "Failed to read content");
+    } finally {
+      setViewerLoading(false);
+    }
+  };
+
+  const handleCloseDataViewer = () => {
+    setDataViewerModalOpen(false);
+    if (viewerImageBlobUrl) {
+      URL.revokeObjectURL(viewerImageBlobUrl);
+      setViewerImageBlobUrl(null);
+    }
+    setActiveViewerFile(null);
+    setActiveViewerContent(null);
+    setViewerSearchQuery("");
+  };
+
+  const handleDownloadFile = async (file: FileRecord) => {
+    setDownloadingFileId(file.id);
+    try {
+      const blob = await api.downloadFile(workspaceId, file.id);
+      triggerBrowserDownload(blob, file.original_filename);
+      notify("success", `Downloaded '${file.original_filename}' successfully.`);
+    } catch (err: any) {
+      notify("error", err.message || "Failed to download file");
+    } finally {
+      setDownloadingFileId(null);
     }
   };
 
@@ -1657,7 +1736,11 @@ export default function WorkspaceDetailPage() {
                 <tbody>
                   {files.map((file) => (
                     <tr key={file.id}>
-                      <td style={{ fontWeight: 450, color: "var(--text-primary)" }}>
+                      <td
+                        style={{ fontWeight: 450, color: "var(--text-primary)", cursor: "pointer" }}
+                        onClick={() => handleViewContent(file)}
+                        title="Click to view file contents"
+                      >
                         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                           {isImageFile(file) ? (
                             <ImageIcon size={16} strokeWidth={1.5} color="#4F46E5" />
@@ -1666,7 +1749,7 @@ export default function WorkspaceDetailPage() {
                           ) : (
                             <FileText size={16} strokeWidth={1.5} color="#989B9D" />
                           )}
-                          <span>{file.original_filename}</span>
+                          <span style={{ transition: "color 0.15s ease" }} className="hover-underline">{file.original_filename}</span>
                         </div>
                       </td>
                       <td>
@@ -1691,13 +1774,33 @@ export default function WorkspaceDetailPage() {
                       <td className="table-actions-cell">
                         <div className="table-actions-group">
                           <button
+                            type="button"
                             onClick={() => handleViewContent(file)}
                             className="pill-btn pill-btn-glass pill-btn-sm"
+                            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                            title="Inspect content in Clean Data Viewer Studio"
                           >
-                            View Content
+                            <Eye size={13} strokeWidth={1.5} />
+                            <span>View</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadFile(file)}
+                            disabled={downloadingFileId === file.id}
+                            className="pill-btn pill-btn-glass pill-btn-sm"
+                            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.28rem 0.65rem" }}
+                            title={`Download ${file.original_filename}`}
+                          >
+                            {downloadingFileId === file.id ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <Download size={13} strokeWidth={1.5} />
+                            )}
+                            <span>Download</span>
                           </button>
                           {workspace.role === "OWNER" && (
                             <button
+                              type="button"
                               onClick={() => handleDeleteFile(file.id)}
                               className="pill-btn pill-btn-glass pill-btn-sm"
                               style={{ color: "var(--status-deny)", padding: "0.3rem 0.6rem" }}
@@ -6284,6 +6387,705 @@ export default function WorkspaceDetailPage() {
                   </div>
                 </div>
               </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ========================================================================= */}
+      {/* 🌟 CLEAN DATA & SPREADSHEET VIEWER STUDIO MODAL                         */}
+      {/* ========================================================================= */}
+      {dataViewerModalOpen && activeViewerFile && (() => {
+        const file = activeViewerFile;
+        const struct = activeViewerContent?.structured_data;
+        const plainText = activeViewerContent?.plain_text || "";
+        const isImage = isImageFile(file);
+        const isJson = (file.file_type || "").toUpperCase() === "JSON" || (file.original_filename || "").toLowerCase().endsWith(".json");
+        const isExcel = (file.file_type || "").toUpperCase() === "XLSX" || (file.file_type || "").toUpperCase() === "XLS" || (file.original_filename || "").toLowerCase().endsWith(".xlsx") || (file.original_filename || "").toLowerCase().endsWith(".xls");
+        const isCsv = (file.file_type || "").toUpperCase() === "CSV" || (file.original_filename || "").toLowerCase().endsWith(".csv");
+
+        // Determine sheets for Excel
+        const sheetsMap = struct?.sheets || {};
+        const availableSheetNames: string[] = Object.keys(sheetsMap).length > 0 
+          ? Object.keys(sheetsMap) 
+          : (struct?.sheet_names || []);
+
+        // Active sheet dataset
+        const currentSheetData = (activeViewerSheet && sheetsMap[activeViewerSheet]) 
+          ? sheetsMap[activeViewerSheet] 
+          : struct;
+
+        const columns: string[] = currentSheetData?.columns || [];
+        const rawRows: any[] = currentSheetData?.rows || [];
+        const schema: Record<string, string> = currentSheetData?.schema || {};
+
+        // Live search filter across rows
+        const filteredRows = rawRows.filter((rowObj) => {
+          if (!viewerSearchQuery.trim()) return true;
+          const q = viewerSearchQuery.toLowerCase();
+          return Object.values(rowObj).some((val) =>
+            String(val !== undefined && val !== null ? val : "").toLowerCase().includes(q)
+          );
+        });
+
+        // Determine if we should show the spreadsheet view
+        const hasTabularData = columns.length > 0 && (rawRows.length > 0 || currentSheetData?.table_detected !== false);
+        const showSpreadsheet = (isExcel || isCsv || (isJson && viewerJsonMode === "sheet")) && hasTabularData;
+
+        return (
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) handleCloseDataViewer();
+            }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(10, 10, 10, 0.6)",
+              backdropFilter: "blur(18px)",
+              WebkitBackdropFilter: "blur(18px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 99999,
+              padding: "clamp(0.5rem, 2vw, 1.5rem)",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              className="frosted-panel"
+              style={{
+                width: "95vw",
+                maxWidth: "1420px",
+                height: "92vh",
+                maxHeight: "920px",
+                display: "flex",
+                flexDirection: "column",
+                background: "#FFFFFF",
+                boxShadow: "0 30px 90px -15px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08)",
+                borderRadius: "var(--radius-xl)",
+                overflow: "hidden",
+                position: "relative",
+              }}
+            >
+              {/* TOP HEADER BAR */}
+              <div
+                style={{
+                  padding: "0.85rem clamp(1rem, 2.5vw, 1.75rem)",
+                  background: "linear-gradient(180deg, #FFFFFF 0%, #FAFAFA 100%)",
+                  borderBottom: "1px solid rgba(40, 40, 40, 0.06)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "0.75rem",
+                  flexShrink: 0,
+                }}
+              >
+                {/* File Title & Identity Badges */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: "1 1 320px" }}>
+                  <div
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "10px",
+                      background: isImage ? "rgba(99, 102, 241, 0.1)" : isExcel || isCsv ? "rgba(46, 48, 50, 0.07)" : "rgba(15, 23, 42, 0.06)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isImage ? (
+                      <ImageIcon size={18} strokeWidth={1.75} color="#4F46E5" />
+                    ) : isExcel || isCsv ? (
+                      <Table size={18} strokeWidth={1.75} color="#2E3032" />
+                    ) : isJson ? (
+                      <FileCode size={18} strokeWidth={1.75} color="#0EA5E9" />
+                    ) : (
+                      <FileText size={18} strokeWidth={1.75} color="#475569" />
+                    )}
+                  </div>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <h2
+                        style={{
+                          fontSize: "clamp(1rem, 1.8vw, 1.25rem)",
+                          fontWeight: 500,
+                          color: "var(--text-primary)",
+                          letterSpacing: "-0.02em",
+                          margin: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: "400px",
+                        }}
+                        title={file.original_filename}
+                      >
+                        {file.original_filename}
+                      </h2>
+                      <span
+                        className="badge-status"
+                        style={{
+                          fontSize: "0.68rem",
+                          padding: "0.1rem 0.5rem",
+                          background: "rgba(46, 48, 50, 0.05)",
+                          color: "var(--text-primary)",
+                          fontFamily: "JetBrains Mono, monospace",
+                        }}
+                      >
+                        {file.file_type || "FILE"}
+                      </span>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", fontFamily: "JetBrains Mono, monospace" }}>
+                        {(file.file_size / 1024).toFixed(1)} KB
+                      </span>
+                    </div>
+
+                    {/* Subtitle / Record Stats */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.15rem", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                      {showSpreadsheet ? (
+                        <>
+                          <span>
+                            <strong>{rawRows.length}</strong> total rows
+                          </span>
+                          <span>•</span>
+                          <span>
+                            <strong>{columns.length}</strong> columns
+                          </span>
+                          {viewerSearchQuery.trim() && (
+                            <>
+                              <span>•</span>
+                              <span style={{ color: "#4F46E5", fontWeight: 500 }}>
+                                {filteredRows.length} matching search
+                              </span>
+                            </>
+                          )}
+                          {activeViewerSheet && (
+                            <>
+                              <span>•</span>
+                              <span>Sheet: <strong>{activeViewerSheet}</strong></span>
+                            </>
+                          )}
+                        </>
+                      ) : isImage ? (
+                        <span>
+                          {struct?.width && struct?.height ? `${struct.width} × ${struct.height} px • ` : ""}Visual Asset Preview
+                        </span>
+                      ) : isJson ? (
+                        <span>Structured JSON Data</span>
+                      ) : (
+                        <span>Extracted Document Text Content</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Center / Search bar (for tabular datasets) */}
+                {showSpreadsheet && (
+                  <div style={{ position: "relative", flex: "1 1 240px", maxWidth: "340px" }}>
+                    <Search
+                      size={14}
+                      style={{
+                        position: "absolute",
+                        left: "0.75rem",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "var(--text-tertiary)",
+                        pointerEvents: "none",
+                      }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Search rows in table..."
+                      value={viewerSearchQuery}
+                      onChange={(e) => setViewerSearchQuery(e.target.value)}
+                      className="modern-input"
+                      style={{
+                        paddingLeft: "2.15rem",
+                        fontSize: "0.78rem",
+                        height: "34px",
+                        background: "#FFFFFF",
+                        border: "1px solid rgba(40, 40, 40, 0.1)",
+                      }}
+                    />
+                    {viewerSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setViewerSearchQuery("")}
+                        style={{
+                          position: "absolute",
+                          right: "0.6rem",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "var(--text-tertiary)",
+                          padding: 0,
+                        }}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Right Action Controls */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  {/* JSON Mode Switcher (if file is JSON and tabular detected) */}
+                  {isJson && hasTabularData && (
+                    <div style={{ display: "flex", background: "rgba(46, 48, 50, 0.05)", padding: "0.15rem", borderRadius: "var(--radius-pill)" }}>
+                      <button
+                        type="button"
+                        onClick={() => setViewerJsonMode("sheet")}
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "0.22rem 0.65rem",
+                          borderRadius: "var(--radius-pill)",
+                          border: "none",
+                          background: viewerJsonMode === "sheet" ? "#FFFFFF" : "transparent",
+                          color: viewerJsonMode === "sheet" ? "var(--text-primary)" : "var(--text-secondary)",
+                          fontWeight: viewerJsonMode === "sheet" ? 500 : 400,
+                          cursor: "pointer",
+                          boxShadow: viewerJsonMode === "sheet" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                        }}
+                      >
+                        <Table size={12} strokeWidth={1.5} />
+                        <span>Sheet View</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewerJsonMode("json")}
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "0.22rem 0.65rem",
+                          borderRadius: "var(--radius-pill)",
+                          border: "none",
+                          background: viewerJsonMode === "json" ? "#FFFFFF" : "transparent",
+                          color: viewerJsonMode === "json" ? "var(--text-primary)" : "var(--text-secondary)",
+                          fontWeight: viewerJsonMode === "json" ? 500 : 400,
+                          cursor: "pointer",
+                          boxShadow: viewerJsonMode === "json" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                        }}
+                      >
+                        <FileCode size={12} strokeWidth={1.5} />
+                        <span>Formatted JSON</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Copy Button */}
+                  {(plainText || isJson) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const copyText = isJson && struct?.raw !== undefined ? JSON.stringify(struct.raw, null, 2) : (plainText || JSON.stringify(struct, null, 2));
+                        navigator.clipboard.writeText(copyText);
+                        setCopiedViewerText(true);
+                        notify("success", "Content copied to clipboard!");
+                        setTimeout(() => setCopiedViewerText(false), 2000);
+                      }}
+                      className="pill-btn pill-btn-glass"
+                      style={{ padding: "0.35rem 0.75rem", fontSize: "0.78rem", gap: "0.35rem" }}
+                      title="Copy content to clipboard"
+                    >
+                      {copiedViewerText ? <Check size={13} strokeWidth={2} /> : <Copy size={13} strokeWidth={1.5} />}
+                      <span>{copiedViewerText ? "Copied" : "Copy"}</span>
+                    </button>
+                  )}
+
+                  {/* Primary Download Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadFile(file)}
+                    disabled={downloadingFileId === file.id}
+                    className="pill-btn pill-btn-solid"
+                    style={{ padding: "0.35rem 0.95rem", fontSize: "0.78rem", gap: "0.4rem" }}
+                  >
+                    {downloadingFileId === file.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Download size={14} strokeWidth={1.75} />
+                    )}
+                    <span>Download File</span>
+                  </button>
+
+                  {/* Close Button */}
+                  <button
+                    type="button"
+                    onClick={handleCloseDataViewer}
+                    className="icon-circle-btn"
+                    style={{ width: "32px", height: "32px", flexShrink: 0 }}
+                    title="Close viewer"
+                  >
+                    <X size={15} strokeWidth={1.5} />
+                  </button>
+                </div>
+              </div>
+
+              {/* MULTI-WORKSHEET BAR (FOR EXCEL WORKBOOKS) */}
+              {isExcel && availableSheetNames.length > 1 && (
+                <div
+                  style={{
+                    padding: "0.45rem clamp(1rem, 2.5vw, 1.75rem)",
+                    background: "#F4F4F5",
+                    borderBottom: "1px solid rgba(40, 40, 40, 0.08)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    overflowX: "auto",
+                    flexShrink: 0,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.72rem", color: "var(--text-secondary)", fontWeight: 500, textTransform: "uppercase", marginRight: "0.4rem", flexShrink: 0 }}>
+                    <Layers size={13} strokeWidth={1.75} color="#2E3032" />
+                    <span>Sheets ({availableSheetNames.length}):</span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+                    {availableSheetNames.map((sName) => {
+                      const isCurActive = activeViewerSheet === sName;
+                      const sRowCount = sheetsMap[sName]?.row_count || sheetsMap[sName]?.rows?.length || 0;
+                      return (
+                        <button
+                          key={sName}
+                          type="button"
+                          onClick={() => {
+                            setActiveViewerSheet(sName);
+                            setViewerSearchQuery("");
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.4rem",
+                            padding: "0.3rem 0.75rem",
+                            borderRadius: "var(--radius-sm)",
+                            background: isCurActive ? "#2E3032" : "#FFFFFF",
+                            color: isCurActive ? "#FFFFFF" : "var(--text-primary)",
+                            border: isCurActive ? "1px solid #2E3032" : "1px solid rgba(40, 40, 40, 0.1)",
+                            fontSize: "0.78rem",
+                            fontWeight: isCurActive ? 550 : 400,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            boxShadow: isCurActive ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <Table size={12} strokeWidth={1.5} color={isCurActive ? "#FFFFFF" : "var(--text-secondary)"} />
+                          <span>{sName}</span>
+                          {sRowCount > 0 && (
+                            <span
+                              style={{
+                                fontSize: "0.65rem",
+                                padding: "0.05rem 0.35rem",
+                                borderRadius: "9999px",
+                                background: isCurActive ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.05)",
+                                color: isCurActive ? "#FFFFFF" : "var(--text-tertiary)",
+                              }}
+                            >
+                              {sRowCount}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* MAIN BODY CANVAS */}
+              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+                {viewerLoading ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, gap: "0.75rem", color: "var(--text-secondary)" }}>
+                    <Loader2 size={24} className="animate-spin" color="#2E3032" />
+                    <span style={{ fontSize: "0.85rem" }}>Loading file contents and preview...</span>
+                  </div>
+                ) : showSpreadsheet ? (
+                  /* ========================================================================= */
+                  /* A: CLEAN INTERACTIVE SPREADSHEET CANVAS                                   */
+                  /* ========================================================================= */
+                  <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+                    <div style={{ flex: 1, overflow: "auto", position: "relative" }}>
+                      <table className="spreadsheet-grid-table" style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+                        <thead>
+                          <tr>
+                            <th className="spreadsheet-row-index" style={{ position: "sticky", top: 0, left: 0, zIndex: 10, background: "#F1F1F2" }}>
+                              #
+                            </th>
+                            {columns.map((colName, colIdx) => {
+                              const letter = String.fromCharCode(65 + (colIdx % 26)) + (colIdx >= 26 ? Math.floor(colIdx / 26) : "");
+                              const colType = schema[colName] || "string";
+                              return (
+                                <th
+                                  key={colName}
+                                  style={{
+                                    position: "sticky",
+                                    top: 0,
+                                    zIndex: 5,
+                                    background: "#F7F7F8",
+                                    borderBottom: "1.5px solid rgba(40, 40, 40, 0.12)",
+                                    borderRight: "1px solid rgba(40, 40, 40, 0.06)",
+                                    padding: "0.6rem 0.85rem",
+                                    textAlign: "left",
+                                    userSelect: "none",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", minWidth: 0 }}>
+                                      <span
+                                        style={{
+                                          fontSize: "0.68rem",
+                                          color: "var(--text-tertiary)",
+                                          fontFamily: "JetBrains Mono, monospace",
+                                          fontWeight: 500,
+                                        }}
+                                      >
+                                        {letter}
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontWeight: 600,
+                                          fontSize: "0.82rem",
+                                          color: "var(--text-primary)",
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                        title={colName}
+                                      >
+                                        {colName}
+                                      </span>
+                                    </div>
+                                    <span
+                                      style={{
+                                        fontSize: "0.62rem",
+                                        fontWeight: 450,
+                                        padding: "0.05rem 0.35rem",
+                                        borderRadius: "3px",
+                                        background: "rgba(0, 0, 0, 0.04)",
+                                        color: "var(--text-tertiary)",
+                                        fontFamily: "JetBrains Mono, monospace",
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {colType}
+                                    </span>
+                                  </div>
+                                </th>
+                              );
+                            })}
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {filteredRows.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={columns.length + 1}
+                                style={{
+                                  textAlign: "center",
+                                  padding: "5rem 1rem",
+                                  color: "var(--text-tertiary)",
+                                  fontSize: "0.88rem",
+                                }}
+                              >
+                                {viewerSearchQuery ? `No rows matching "${viewerSearchQuery}".` : "No data rows available in this sheet."}
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredRows.map((rowObj, rIdx) => (
+                              <tr key={rIdx} style={{ transition: "background 0.1s ease" }}>
+                                <td
+                                  className="spreadsheet-row-index"
+                                  style={{
+                                    position: "sticky",
+                                    left: 0,
+                                    zIndex: 3,
+                                    background: "#F8F8F9",
+                                    borderRight: "1px solid rgba(40, 40, 40, 0.08)",
+                                    borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
+                                    textAlign: "center",
+                                    padding: "0.45rem 0.6rem",
+                                    fontSize: "0.72rem",
+                                    color: "var(--text-tertiary)",
+                                    fontFamily: "JetBrains Mono, monospace",
+                                    userSelect: "none",
+                                  }}
+                                >
+                                  {rIdx + 1}
+                                </td>
+
+                                {columns.map((colName) => {
+                                  const cellVal = rowObj && typeof rowObj === "object" && rowObj[colName] !== undefined && rowObj[colName] !== null
+                                    ? String(rowObj[colName])
+                                    : "";
+
+                                  return (
+                                    <td
+                                      key={colName}
+                                      style={{
+                                        padding: "0.48rem 0.85rem",
+                                        borderRight: "1px solid rgba(40, 40, 40, 0.04)",
+                                        borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
+                                        fontSize: "0.8rem",
+                                        color: cellVal ? "var(--text-primary)" : "var(--text-tertiary)",
+                                        fontFamily: "JetBrains Mono, monospace",
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        maxWidth: "320px",
+                                      }}
+                                      title={cellVal || "(null)"}
+                                    >
+                                      {cellVal !== "" ? cellVal : <span style={{ color: "var(--text-tertiary)", fontStyle: "italic" }}>null</span>}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Bottom Status Bar */}
+                    <div
+                      style={{
+                        padding: "0.5rem 1.25rem",
+                        background: "#F8F9FA",
+                        borderTop: "1px solid rgba(40, 40, 40, 0.06)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        fontSize: "0.74rem",
+                        color: "var(--text-secondary)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                        <span>
+                          Showing <strong>{filteredRows.length}</strong> of <strong>{rawRows.length}</strong> rows
+                        </span>
+                        <span>•</span>
+                        <span>
+                          <strong>{columns.length}</strong> columns detected
+                        </span>
+                      </div>
+                      <span style={{ color: "var(--text-tertiary)" }}>
+                        Clean Data Sheet View
+                      </span>
+                    </div>
+                  </div>
+                ) : isImage ? (
+                  /* ========================================================================= */
+                  /* B: HIGH-DEFINITION VISUAL IMAGE CANVAS                                    */
+                  /* ========================================================================= */
+                  <div
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "1.5rem",
+                      background: "repeating-conic-gradient(#F5F5F7 0% 25%, #FFFFFF 0% 50%) 50% / 20px 20px",
+                      overflow: "auto",
+                      position: "relative",
+                    }}
+                  >
+                    {viewerImageBlobUrl ? (
+                      <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+                        <img
+                          src={viewerImageBlobUrl}
+                          alt={file.original_filename}
+                          style={{
+                            maxWidth: "100%",
+                            maxHeight: "68vh",
+                            objectFit: "contain",
+                            borderRadius: "10px",
+                            boxShadow: "0 20px 50px -10px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.06)",
+                            background: "#FFFFFF",
+                          }}
+                        />
+                        <div
+                          style={{
+                            background: "rgba(255, 255, 255, 0.95)",
+                            backdropFilter: "blur(10px)",
+                            padding: "0.4rem 0.95rem",
+                            borderRadius: "var(--radius-pill)",
+                            border: "1px solid rgba(40, 40, 40, 0.08)",
+                            boxShadow: "var(--shadow-sm)",
+                            fontSize: "0.75rem",
+                            color: "var(--text-primary)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.6rem",
+                          }}
+                        >
+                          <span>Format: <strong>{struct?.format || file.file_type}</strong></span>
+                          <span>•</span>
+                          <span>Dimensions: <strong>{struct?.width && struct?.height ? `${struct.width} × ${struct.height}` : "Vector/Scalable"}</strong></span>
+                          <span>•</span>
+                          <span>Size: <strong>{(file.file_size / 1024).toFixed(1)} KB</strong></span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: "center", color: "var(--text-secondary)" }}>
+                        <ImageIcon size={48} strokeWidth={1} color="var(--text-tertiary)" style={{ margin: "0 auto 1rem auto" }} />
+                        <p style={{ fontSize: "0.9rem" }}>Preparing visual image preview...</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* ========================================================================= */
+                  /* C: PRETTIFIED JSON / DOCUMENT TEXT CANVAS                                 */
+                  /* ========================================================================= */
+                  <div style={{ flex: 1, overflow: "auto", padding: "1.25rem 1.75rem", background: isJson ? "#1E1E24" : "#FFFFFF" }}>
+                    {isJson ? (
+                      <pre
+                        style={{
+                          margin: 0,
+                          fontFamily: "JetBrains Mono, monospace",
+                          fontSize: "0.82rem",
+                          color: "#FACC15",
+                          lineHeight: 1.6,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {(() => {
+                          try {
+                            const obj = struct?.raw !== undefined ? struct.raw : JSON.parse(plainText);
+                            return JSON.stringify(obj, null, 2);
+                          } catch {
+                            return plainText || "{}";
+                          }
+                        })()}
+                      </pre>
+                    ) : (
+                      <div
+                        style={{
+                          maxWidth: "840px",
+                          margin: "0 auto",
+                          fontSize: "0.92rem",
+                          color: "#1E293B",
+                          lineHeight: 1.75,
+                          whiteSpace: "pre-wrap",
+                          fontFamily: "Inter, sans-serif",
+                        }}
+                      >
+                        {plainText || "(No readable text extracted for this document)"}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );

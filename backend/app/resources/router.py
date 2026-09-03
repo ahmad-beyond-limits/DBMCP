@@ -1,5 +1,7 @@
 from typing import List
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +11,7 @@ from app.database.models import ExtractedContent, FileRecord, User
 from app.database.session import get_db
 from app.resources.schemas import ExtractedContentResponse, FileRecordResponse, ImportLinkRequest
 from app.resources.service import ResourceService
+from app.storage.supabase_storage import get_storage_backend
 from app.workspaces.service import WorkspaceService
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/files", tags=["Files"])
@@ -110,6 +113,76 @@ async def get_file_content(
     if not content:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Extracted content not found")
     return content
+
+
+@router.get("/{file_id}/download")
+async def download_file(
+    workspace_id: str,
+    file_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download raw binary file from storage with attachment disposition."""
+    await WorkspaceService.verify_access(db, workspace_id, user.id)
+
+    stmt = select(FileRecord).where(
+        FileRecord.id == file_id,
+        FileRecord.workspace_id == workspace_id,
+    )
+    record = (await db.execute(stmt)).scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    storage = get_storage_backend()
+    try:
+        content = await storage.download(record.storage_path)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File content not found in storage")
+
+    filename = record.original_filename or "download"
+    encoded_filename = quote(filename)
+    return Response(
+        content=content,
+        media_type=record.content_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{encoded_filename}',
+        },
+    )
+
+
+@router.get("/{file_id}/raw")
+async def get_raw_file(
+    workspace_id: str,
+    file_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Stream raw file inline (for image viewing, vectors, or direct browser preview)."""
+    await WorkspaceService.verify_access(db, workspace_id, user.id)
+
+    stmt = select(FileRecord).where(
+        FileRecord.id == file_id,
+        FileRecord.workspace_id == workspace_id,
+    )
+    record = (await db.execute(stmt)).scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    storage = get_storage_backend()
+    try:
+        content = await storage.download(record.storage_path)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File content not found in storage")
+
+    filename = record.original_filename or "preview"
+    encoded_filename = quote(filename)
+    return Response(
+        content=content,
+        media_type=record.content_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"; filename*=UTF-8\'\'{encoded_filename}',
+        },
+    )
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
