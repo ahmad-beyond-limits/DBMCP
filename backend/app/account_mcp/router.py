@@ -115,6 +115,15 @@ async def create_account_credential(
     await db.commit()
     await db.refresh(cred)
 
+    cred_id = cred.id
+    cred_name = cred.name
+    cred_prefix = cred.credential_prefix
+    cred_perms = dict(cred.permissions) if cred.permissions else {}
+    cred_created_at = cred.created_at
+    cred_expires_at = cred.expires_at
+    cred_revoked_at = cred.revoked_at
+    cred_last_used_at = cred.last_used_at
+
     # Log audit event
     await AuditService.log_event(
         db=db,
@@ -122,22 +131,22 @@ async def create_account_credential(
         workspace_id=None,
         operation="CREATE_ACCOUNT_MCP_KEY",
         actor_type="USER",
-        credential_id=cred.id,
+        credential_id=cred_id,
         decision="ALLOW",
-        reason=f"User @{current_user.username} created Account Master MCP Key '{cred.name}'",
-        request_metadata={"name": cred.name, "permissions": perms_dict, "expires_at": str(expires_at)},
+        reason=f"User @{current_user.username} created Account Master MCP Key '{cred_name}'",
+        request_metadata={"name": cred_name, "permissions": perms_dict, "expires_at": str(expires_at)},
     )
 
     return CreatedAccountMCPResponse(
-        id=cred.id,
-        name=cred.name,
-        credential_prefix=cred.credential_prefix,
+        id=cred_id,
+        name=cred_name,
+        credential_prefix=cred_prefix,
         scope_type="ACCOUNT",
-        permissions=cred.permissions or {},
-        created_at=cred.created_at,
-        expires_at=cred.expires_at,
-        revoked_at=cred.revoked_at,
-        last_used_at=cred.last_used_at,
+        permissions=cred_perms,
+        created_at=cred_created_at,
+        expires_at=cred_expires_at,
+        revoked_at=cred_revoked_at,
+        last_used_at=cred_last_used_at,
         is_active=True,
         raw_token=raw_token,
     )
@@ -188,26 +197,33 @@ async def rotate_account_credential(
     await db.commit()
     await db.refresh(new_cred)
 
+    new_cred_id = new_cred.id
+    new_cred_name = new_cred.name
+    new_cred_prefix = new_cred.credential_prefix
+    new_cred_perms = dict(new_cred.permissions) if new_cred.permissions else {}
+    new_cred_created_at = new_cred.created_at
+    new_cred_expires_at = new_cred.expires_at
+
     await AuditService.log_event(
         db=db,
         user_id=current_user.id,
         workspace_id=None,
         operation="ROTATE_ACCOUNT_MCP_KEY",
         actor_type="USER",
-        credential_id=new_cred.id,
+        credential_id=new_cred_id,
         decision="ALLOW",
         reason=f"User rotated Account MCP key {cred.credential_prefix} -> {new_prefix}",
-        request_metadata={"old_credential_id": cred.id, "new_credential_id": new_cred.id},
+        request_metadata={"old_credential_id": cred.id, "new_credential_id": new_cred_id},
     )
 
     return CreatedAccountMCPResponse(
-        id=new_cred.id,
-        name=new_cred.name,
-        credential_prefix=new_cred.credential_prefix,
+        id=new_cred_id,
+        name=new_cred_name,
+        credential_prefix=new_cred_prefix,
         scope_type="ACCOUNT",
-        permissions=new_cred.permissions or {},
-        created_at=new_cred.created_at,
-        expires_at=new_cred.expires_at,
+        permissions=new_cred_perms,
+        created_at=new_cred_created_at,
+        expires_at=new_cred_expires_at,
         revoked_at=None,
         last_used_at=None,
         is_active=True,

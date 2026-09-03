@@ -199,11 +199,11 @@ class AuditLog(Base):
     user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
     actor_type: Mapped[str] = mapped_column(String(32), nullable=False)  # USER, MCP_CLIENT
     credential_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
-    operation: Mapped[str] = mapped_column(String(64), nullable=False)
+    operation: Mapped[str] = mapped_column(String(128), nullable=False)
     resource_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    resource_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    resource_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     decision: Mapped[str] = mapped_column(String(32), nullable=False)  # ALLOW, DENY, ALLOW_WITH_TRANSFORMATION
-    reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     policy_version: Mapped[int] = mapped_column(Integer, default=1)
     request_metadata: Mapped[Optional[Any]] = mapped_column(JSON, default=dict, nullable=True)  # sanitized parameters
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)

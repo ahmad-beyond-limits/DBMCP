@@ -122,27 +122,34 @@ async def create_mcp_credential(
     await db.commit()
     await db.refresh(cred)
 
+    # Capture attributes to avoid expired-attribute reload
+    cred_id = cred.id
+    cred_workspace_id = cred.workspace_id
+    cred_name = cred.name
+    cred_created_at = cred.created_at
+    cred_permissions = dict(cred.permissions) if cred.permissions else {}
+
     await AuditService.log_event(
         db=db,
         workspace_id=workspace_id,
         operation="MCP_TOKEN_CREATED",
         actor_type="USER",
         user_id=user.id,
-        credential_id=cred.id,
+        credential_id=cred_id,
         decision="ALLOW",
         reason=f"MCP credential created with permissions: {assigned_permissions}",
-        request_metadata={"credential_prefix": prefix, "name": cred.name, "permissions": assigned_permissions},
+        request_metadata={"credential_prefix": prefix, "name": cred_name, "permissions": assigned_permissions},
     )
 
     return MCPCredentialCreateResponse(
-        id=cred.id,
-        workspace_id=cred.workspace_id,
-        name=cred.name,
+        id=cred_id,
+        workspace_id=cred_workspace_id,
+        name=cred_name,
         credential_prefix=prefix,
         raw_token=raw_token,
         expires_at=expires_at,
-        created_at=cred.created_at,
-        permissions=cred.permissions,
+        created_at=cred_created_at,
+        permissions=cred_permissions,
     )
 
 
@@ -176,30 +183,40 @@ async def update_mcp_credential(
     await db.commit()
     await db.refresh(cred)
 
+    cred_id = cred.id
+    cred_workspace_id = cred.workspace_id
+    cred_name = cred.name
+    cred_prefix = cred.credential_prefix
+    cred_created_at = cred.created_at
+    cred_expires_at = cred.expires_at
+    cred_revoked_at = cred.revoked_at
+    cred_last_used_at = cred.last_used_at
+    cred_permissions = dict(cred.permissions) if cred.permissions else {}
+
     await AuditService.log_event(
         db=db,
         workspace_id=workspace_id,
         operation="MCP_PERMISSIONS_UPDATED",
         actor_type="USER",
         user_id=user.id,
-        credential_id=cred.id,
+        credential_id=cred_id,
         decision="ALLOW",
-        reason=f"Permissions updated for MCP credential {cred.credential_prefix}",
-        request_metadata={"permissions": cred.permissions, "name": cred.name},
+        reason=f"Permissions updated for MCP credential {cred_prefix}",
+        request_metadata={"permissions": cred_permissions, "name": cred_name},
     )
 
     now = utc_now()
     return MCPCredentialListItem(
-        id=cred.id,
-        workspace_id=cred.workspace_id,
-        name=cred.name,
-        credential_prefix=cred.credential_prefix,
-        created_at=cred.created_at,
-        expires_at=cred.expires_at,
-        revoked_at=cred.revoked_at,
-        last_used_at=cred.last_used_at,
-        is_active=(cred.revoked_at is None) and (cred.expires_at is None or ensure_utc(cred.expires_at) > now),
-        permissions=cred.permissions or {},
+        id=cred_id,
+        workspace_id=cred_workspace_id,
+        name=cred_name,
+        credential_prefix=cred_prefix,
+        created_at=cred_created_at,
+        expires_at=cred_expires_at,
+        revoked_at=cred_revoked_at,
+        last_used_at=cred_last_used_at,
+        is_active=(cred_revoked_at is None) and (cred_expires_at is None or ensure_utc(cred_expires_at) > now),
+        permissions=cred_permissions,
     )
 
 
@@ -247,27 +264,33 @@ async def rotate_mcp_credential(
     await db.commit()
     await db.refresh(new_cred)
 
+    new_cred_id = new_cred.id
+    new_cred_workspace_id = new_cred.workspace_id
+    new_cred_name = new_cred.name
+    new_cred_created_at = new_cred.created_at
+    new_cred_permissions = dict(new_cred.permissions) if new_cred.permissions else {}
+
     await AuditService.log_event(
         db=db,
         workspace_id=workspace_id,
         operation="MCP_TOKEN_ROTATED",
         actor_type="USER",
         user_id=user.id,
-        credential_id=new_cred.id,
+        credential_id=new_cred_id,
         decision="ALLOW",
         reason=f"Previous credential {old_cred.credential_prefix} invalidated and rotated",
         request_metadata={"old_prefix": old_cred.credential_prefix, "new_prefix": prefix},
     )
 
     return MCPCredentialCreateResponse(
-        id=new_cred.id,
-        workspace_id=new_cred.workspace_id,
-        name=new_cred.name,
+        id=new_cred_id,
+        workspace_id=new_cred_workspace_id,
+        name=new_cred_name,
         credential_prefix=prefix,
         raw_token=raw_token,
         expires_at=new_expires_at,
-        created_at=new_cred.created_at,
-        permissions=new_cred.permissions,
+        created_at=new_cred_created_at,
+        permissions=new_cred_permissions,
     )
 
 

@@ -31,7 +31,7 @@ class AuditService:
     async def log_event(
         cls,
         db: AsyncSession,
-        workspace_id: str,
+        workspace_id: Optional[str],
         operation: str,
         actor_type: str,  # USER, MCP_CLIENT, SYSTEM
         decision: str,    # ALLOW, DENY, ALLOW_WITH_TRANSFORMATION
@@ -42,28 +42,35 @@ class AuditService:
         reason: Optional[str] = None,
         policy_version: int = 1,
         request_metadata: Optional[Dict[str, Any]] = None,
-    ) -> AuditLog:
-        """Create and persist an audit event securely."""
+    ) -> Optional[AuditLog]:
+        """Create and persist an audit event securely without disrupting the outer transaction."""
         clean_metadata = cls._sanitize_metadata(request_metadata)
+        safe_reason = str(reason)[:4000] if reason is not None else None
+        safe_operation = str(operation)[:128]
+        safe_resource_type = str(resource_type)[:64] if resource_type else None
+        safe_resource_id = str(resource_id)[:255] if resource_id else None
 
         log_entry = AuditLog(
             workspace_id=workspace_id,
             actor_type=actor_type,
             credential_id=credential_id,
             user_id=user_id,
-            operation=operation,
-            resource_type=resource_type,
-            resource_id=resource_id,
+            operation=safe_operation,
+            resource_type=safe_resource_type,
+            resource_id=safe_resource_id,
             decision=decision,
-            reason=reason,
+            reason=safe_reason,
             policy_version=policy_version,
             request_metadata=clean_metadata,
         )
-        db.add(log_entry)
+
         try:
+            async with db.begin_nested():
+                db.add(log_entry)
+                await db.flush()
             await db.commit()
-            await db.refresh(log_entry)
+            return log_entry
         except Exception as e:
             logger.error(f"Failed to persist audit log: {e}")
-            await db.rollback()
-        return log_entry
+            return None
+

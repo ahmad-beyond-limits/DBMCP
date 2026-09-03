@@ -184,4 +184,21 @@ async def init_db() -> None:
         except Exception as e:
             logger.warning(f"Schema migration warning for notes.referenced_file_ids: {e}")
 
+        # Automatic schema migration: ensure `audit_logs` column types accommodate long reasons and paths
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(
+                    text("ALTER TABLE audit_logs ALTER COLUMN reason TYPE TEXT")
+                )
+                await conn.execute(
+                    text("ALTER TABLE audit_logs ALTER COLUMN resource_id TYPE VARCHAR(255)")
+                )
+                await conn.execute(
+                    text("ALTER TABLE audit_logs ALTER COLUMN operation TYPE VARCHAR(128)")
+                )
+                logger.info("Executed schema migration: ensure audit_logs columns allow expanded sizes.")
+        except Exception as e:
+            logger.warning(f"Schema migration warning for audit_logs column types: {e}")
+
+
 

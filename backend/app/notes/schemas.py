@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class NoteCreateRequest(BaseModel):
@@ -19,6 +19,8 @@ class NoteUpdateRequest(BaseModel):
 
 
 class NoteAttachedFileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     workspace_id: str
     note_id: Optional[str] = None
@@ -29,11 +31,10 @@ class NoteAttachedFileResponse(BaseModel):
     status: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class NoteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     workspace_id: str
     title: str
@@ -45,9 +46,6 @@ class NoteResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     files: Optional[List[NoteAttachedFileResponse]] = []
-
-    class Config:
-        from_attributes = True
 
 
 class NoteListResponse(BaseModel):

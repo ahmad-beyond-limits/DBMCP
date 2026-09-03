@@ -67,3 +67,40 @@ async def test_audit_logging_and_secret_redaction(client: AsyncClient, db_sessio
         assert raw_token.lower() not in meta_str
         assert "password123" not in meta_str
         assert "mcp_token_secret" not in meta_str
+
+
+@pytest.mark.asyncio
+async def test_audit_log_long_reason_and_permissions(client: AsyncClient, db_session: AsyncSession):
+    """
+    Verify that creating an MCP credential with extensive granular permissions
+    and long descriptions succeeds without character limit truncation or session crash.
+    """
+    reg = await client.post("/auth/register", json={"username": "long_audit_user", "password": "password123"})
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    ws_id = (await client.post("/workspaces", json={"name": "Long Audit WS"}, headers=headers)).json()["id"]
+
+    # Complex permissions payload with extensive field definitions (>300 chars)
+    complex_perms = {
+        "files": {"read": True, "write": False, "allowed_extensions": ["pdf", "docx", "xlsx", "txt", "md"]},
+        "notes": {"read": True, "create": True, "update": True, "delete": False, "allowed_tags": ["finance", "confidential", "q3_audit", "compliance_report"]},
+        "structured_data": {"read": True, "write": False, "allowed_tables": ["users", "transactions", "audit_trails", "system_parameters"]},
+    }
+
+    res = await client.post(
+        f"/workspaces/{ws_id}/mcp-credentials",
+        json={"name": "High Security Key", "permissions": complex_perms},
+        headers=headers,
+    )
+    assert res.status_code == 201, res.text
+    data = res.json()
+    assert "raw_token" in data
+    assert data["name"] == "High Security Key"
+
+    # Confirm audit log entry was safely persisted
+    logs_res = await client.get(f"/workspaces/{ws_id}/audit-logs", headers=headers)
+    assert logs_res.status_code == 200
+    logs = logs_res.json()
+    created_logs = [l for l in logs if l["operation"] == "MCP_TOKEN_CREATED"]
+    assert len(created_logs) >= 1
+    assert "High Security Key" in str(created_logs[0]["request_metadata"])
+
