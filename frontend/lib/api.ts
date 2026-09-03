@@ -6,6 +6,10 @@ import {
   AdminStats,
   AdminUser,
   AdminWorkspace,
+  AIGlobalRules,
+  AIGuidanceCreateRequest,
+  AIGuidancePlaybook,
+  AIGuidanceUpdateRequest,
   AuditLog,
   ExtractedContent,
   FileRecord,
@@ -538,6 +542,46 @@ class ApiClient {
   async deleteNoteFile(workspaceId: string, noteId: string, fileId: string): Promise<void> {
     await this.request<void>(`/workspaces/${workspaceId}/notes/${noteId}/files/${fileId}`, {
       method: "DELETE",
+    });
+  }
+
+  // ============================================================================
+  // AI Guidance & Playbook Layer (Admin-Only API)
+  // ============================================================================
+
+  async getAdminAIGuidance(category?: string): Promise<AIGuidancePlaybook[]> {
+    const query = category ? `?category=${encodeURIComponent(category)}` : "";
+    return this.request<AIGuidancePlaybook[]>(`/admin/ai-guidance${query}`);
+  }
+
+  async createAdminAIGuidance(data: AIGuidanceCreateRequest): Promise<AIGuidancePlaybook> {
+    return this.request<AIGuidancePlaybook>("/admin/ai-guidance", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAdminAIGuidance(id: string, data: AIGuidanceUpdateRequest): Promise<AIGuidancePlaybook> {
+    return this.request<AIGuidancePlaybook>(`/admin/ai-guidance/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAdminAIGuidance(id: string): Promise<void> {
+    await this.request<void>(`/admin/ai-guidance/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getAdminGlobalAIRules(): Promise<AIGlobalRules> {
+    return this.request<AIGlobalRules>("/admin/ai-global-rules");
+  }
+
+  async updateAdminGlobalAIRules(rules_text: string): Promise<AIGlobalRules> {
+    return this.request<AIGlobalRules>("/admin/ai-global-rules", {
+      method: "PUT",
+      body: JSON.stringify({ rules_text }),
     });
   }
 }

@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.router import get_current_admin_user
 from app.core.security import create_access_token, hash_password
 from app.database.models import (
+    AIGlobalRules,
+    AIGuidancePlaybook,
     AuditLog,
     FileRecord,
     MCPCredential,
@@ -298,3 +300,293 @@ async def list_all_admin_workspaces(
         )
 
     return ws_items
+
+
+# ==============================================================================
+# AI Guidance & Playbook Layer (Admin-Only Management)
+# ==============================================================================
+
+class AIGuidancePlaybookItem(BaseModel):
+    id: str
+    title: str
+    category: str
+    trigger_condition: str
+    summary: str
+    prompt_template: str
+    strict_rules: List[str] = Field(default_factory=list)
+    style_guide: Optional[str] = ""
+    is_active: bool
+    tags: List[str] = Field(default_factory=list)
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AIGuidanceCreateRequest(BaseModel):
+    title: str = Field(..., min_length=2, max_length=255)
+    category: str = Field(default="general", max_length=64)
+    trigger_condition: str = Field(..., min_length=5)
+    summary: str = Field(..., min_length=5)
+    prompt_template: str = Field(..., min_length=10)
+    strict_rules: List[str] = Field(default_factory=list)
+    style_guide: Optional[str] = ""
+    is_active: bool = True
+    tags: List[str] = Field(default_factory=list)
+
+
+class AIGuidanceUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    trigger_condition: Optional[str] = None
+    summary: Optional[str] = None
+    prompt_template: Optional[str] = None
+    strict_rules: Optional[List[str]] = None
+    style_guide: Optional[str] = None
+    is_active: Optional[bool] = None
+    tags: Optional[List[str]] = None
+
+
+@router.get("/ai-guidance", response_model=List[AIGuidancePlaybookItem])
+async def list_admin_ai_guidance(
+    category: Optional[str] = None,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List all AI Guidance playbooks, prompts, and strict rules.
+    Admin-only access.
+    """
+    from app.database.guidance_seed import ensure_default_guidance
+    await ensure_default_guidance(db)
+
+    stmt = select(AIGuidancePlaybook).order_by(AIGuidancePlaybook.created_at.desc())
+    if category and category.strip():
+        stmt = stmt.where(AIGuidancePlaybook.category == category.strip().lower())
+
+    result = await db.execute(stmt)
+    playbooks = result.scalars().all()
+
+    return [
+        AIGuidancePlaybookItem(
+            id=p.id,
+            title=p.title,
+            category=p.category,
+            trigger_condition=p.trigger_condition,
+            summary=p.summary,
+            prompt_template=p.prompt_template,
+            strict_rules=p.strict_rules or [],
+            style_guide=p.style_guide or "",
+            is_active=p.is_active,
+            tags=p.tags or [],
+            created_by=p.created_by,
+            created_at=p.created_at,
+            updated_at=p.updated_at,
+        )
+        for p in playbooks
+    ]
+
+
+@router.post("/ai-guidance", response_model=AIGuidancePlaybookItem, status_code=status.HTTP_201_CREATED)
+async def create_admin_ai_guidance(
+    payload: AIGuidanceCreateRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Create a new AI Guidance Playbook with prompts and strict rules.
+    Admin-only access.
+    """
+    playbook = AIGuidancePlaybook(
+        title=payload.title.strip(),
+        category=payload.category.strip().lower(),
+        trigger_condition=payload.trigger_condition.strip(),
+        summary=payload.summary.strip(),
+        prompt_template=payload.prompt_template.strip(),
+        strict_rules=[r.strip() for r in payload.strict_rules if r.strip()],
+        style_guide=payload.style_guide.strip() if payload.style_guide else "",
+        is_active=payload.is_active,
+        tags=[t.strip() for t in payload.tags if t.strip()],
+        created_by=admin.id,
+    )
+    db.add(playbook)
+    await db.commit()
+    await db.refresh(playbook)
+
+    return AIGuidancePlaybookItem(
+        id=playbook.id,
+        title=playbook.title,
+        category=playbook.category,
+        trigger_condition=playbook.trigger_condition,
+        summary=playbook.summary,
+        prompt_template=playbook.prompt_template,
+        strict_rules=playbook.strict_rules or [],
+        style_guide=playbook.style_guide or "",
+        is_active=playbook.is_active,
+        tags=playbook.tags or [],
+        created_by=playbook.created_by,
+        created_at=playbook.created_at,
+        updated_at=playbook.updated_at,
+    )
+
+
+@router.get("/ai-guidance/{guidance_id}", response_model=AIGuidancePlaybookItem)
+async def get_admin_ai_guidance_detail(
+    guidance_id: str,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve full details of a specific AI Guidance Playbook."""
+    stmt = select(AIGuidancePlaybook).where(AIGuidancePlaybook.id == guidance_id)
+    playbook = (await db.execute(stmt)).scalar_one_or_none()
+    if not playbook:
+        raise HTTPException(status_code=404, detail="AI Guidance Playbook not found.")
+
+    return AIGuidancePlaybookItem(
+        id=playbook.id,
+        title=playbook.title,
+        category=playbook.category,
+        trigger_condition=playbook.trigger_condition,
+        summary=playbook.summary,
+        prompt_template=playbook.prompt_template,
+        strict_rules=playbook.strict_rules or [],
+        style_guide=playbook.style_guide or "",
+        is_active=playbook.is_active,
+        tags=playbook.tags or [],
+        created_by=playbook.created_by,
+        created_at=playbook.created_at,
+        updated_at=playbook.updated_at,
+    )
+
+
+@router.put("/ai-guidance/{guidance_id}", response_model=AIGuidancePlaybookItem)
+async def update_admin_ai_guidance(
+    guidance_id: str,
+    payload: AIGuidanceUpdateRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an existing AI Guidance Playbook. Admin-only access."""
+    stmt = select(AIGuidancePlaybook).where(AIGuidancePlaybook.id == guidance_id)
+    playbook = (await db.execute(stmt)).scalar_one_or_none()
+    if not playbook:
+        raise HTTPException(status_code=404, detail="AI Guidance Playbook not found.")
+
+    if payload.title is not None:
+        playbook.title = payload.title.strip()
+    if payload.category is not None:
+        playbook.category = payload.category.strip().lower()
+    if payload.trigger_condition is not None:
+        playbook.trigger_condition = payload.trigger_condition.strip()
+    if payload.summary is not None:
+        playbook.summary = payload.summary.strip()
+    if payload.prompt_template is not None:
+        playbook.prompt_template = payload.prompt_template.strip()
+    if payload.strict_rules is not None:
+        playbook.strict_rules = [r.strip() for r in payload.strict_rules if r.strip()]
+    if payload.style_guide is not None:
+        playbook.style_guide = payload.style_guide.strip()
+    if payload.is_active is not None:
+        playbook.is_active = payload.is_active
+    if payload.tags is not None:
+        playbook.tags = [t.strip() for t in payload.tags if t.strip()]
+
+    await db.commit()
+    await db.refresh(playbook)
+
+    return AIGuidancePlaybookItem(
+        id=playbook.id,
+        title=playbook.title,
+        category=playbook.category,
+        trigger_condition=playbook.trigger_condition,
+        summary=playbook.summary,
+        prompt_template=playbook.prompt_template,
+        strict_rules=playbook.strict_rules or [],
+        style_guide=playbook.style_guide or "",
+        is_active=playbook.is_active,
+        tags=playbook.tags or [],
+        created_by=playbook.created_by,
+        created_at=playbook.created_at,
+        updated_at=playbook.updated_at,
+    )
+
+
+@router.delete("/ai-guidance/{guidance_id}")
+async def delete_admin_ai_guidance(
+    guidance_id: str,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an AI Guidance Playbook. Admin-only access."""
+    stmt = select(AIGuidancePlaybook).where(AIGuidancePlaybook.id == guidance_id)
+    playbook = (await db.execute(stmt)).scalar_one_or_none()
+    if not playbook:
+        raise HTTPException(status_code=404, detail="AI Guidance Playbook not found.")
+
+    await db.delete(playbook)
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": f"AI Guidance Playbook '{playbook.title}' deleted successfully.",
+    }
+
+
+# =====================================================================
+# Global AI Rules (Singleton) — Platform-wide unconditional guardrails
+# =====================================================================
+
+class AIGlobalRulesResponse(BaseModel):
+    id: int
+    rules_text: str
+    updated_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
+class AIGlobalRulesUpdateRequest(BaseModel):
+    rules_text: str = Field(..., description="Platform-wide unconditional AI guardrail rules. One rule per line.")
+
+
+@router.get("/ai-global-rules", response_model=AIGlobalRulesResponse)
+async def get_global_ai_rules(
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve the platform-wide global AI rules singleton. Admin-only."""
+    row = (await db.execute(select(AIGlobalRules).where(AIGlobalRules.id == 1))).scalar_one_or_none()
+    if not row:
+        # Auto-create empty singleton if missing
+        row = AIGlobalRules(id=1, rules_text="")
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+    return AIGlobalRulesResponse(
+        id=row.id,
+        rules_text=row.rules_text,
+        updated_by=row.updated_by,
+        updated_at=row.updated_at,
+    )
+
+
+@router.put("/ai-global-rules", response_model=AIGlobalRulesResponse)
+async def update_global_ai_rules(
+    payload: AIGlobalRulesUpdateRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the platform-wide global AI rules. Admin-only."""
+    row = (await db.execute(select(AIGlobalRules).where(AIGlobalRules.id == 1))).scalar_one_or_none()
+    if not row:
+        row = AIGlobalRules(id=1, rules_text="")
+        db.add(row)
+
+    row.rules_text = payload.rules_text.strip()
+    row.updated_by = admin.id
+    await db.commit()
+    await db.refresh(row)
+
+    return AIGlobalRulesResponse(
+        id=row.id,
+        rules_text=row.rules_text,
+        updated_by=row.updated_by,
+        updated_at=row.updated_at,
+    )

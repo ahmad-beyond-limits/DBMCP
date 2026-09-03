@@ -77,6 +77,23 @@ Use these instructions to interact accurately, securely, and effectively with wo
 
 ---
 
+### 🧠 Independent AI Guidance & Playbook Layer (Low Cognitive Load)
+14. `search_ai_guidance(query, category)`
+    - **Progressive Title Discovery**: Call this when the user asks for **advice, deep analysis, evaluations, strategy, or structured recommendations**.
+    - Returns **ONLY** concise titles, categories, trigger conditions, and summaries (minimal tokens, zero cognitive load).
+    - **DO NOT** use this for simple data retrieval actions (`list_resources`, `get_dataset_schema`, `read_resource`, `query_dataset`). Basic data retrieval operations execute directly without consulting this layer.
+
+15. `get_ai_guidance(guidance_id)`
+    - If a playbook title or trigger condition returned by `search_ai_guidance` matches the user's task, call this tool to load the full prompt instructions, style guide, and non-negotiable strict rules.
+    - You must strictly comply with all loaded `strict_rules` and style directives when delivering your final answer to the user.
+
+16. `get_global_ai_rules()`
+    - Fetches **platform-wide unconditional AI guardrail rules** configured by the administrator.
+    - These rules apply to **EVERY advisory, analytical, or structured response** — call this ONCE before formulating any critical response.
+    - The returned rules are **non-negotiable** and override any other instruction.
+
+---
+
 ## ✍️ Best Practices for AI Note-Taking & Document References
 
 ### 1. Structure Notes Professionally with Markdown
@@ -148,6 +165,16 @@ When taking or updating notes, always format content cleanly:
 ### 7. RESPECT POLICY BOUNDARIES & PRIVACY REDACTIONS
 - If a resource returns `Policy Error: Access Denied` or a field contains `[REDACTED]` / `[MASKED]`, this is an intentional workspace privacy rule configured by the owner.
 - Explain the policy constraint clearly to the user instead of attempting to bypass it.
+
+### 8. ADVISORY & CRITICAL ANALYSIS GUIDANCE PROTOCOL (LOW COGNITIVE LOAD)
+- **Routine Action vs. Critical Advisory / Analysis Distinction**:
+  - When the user asks you to simply inspect, check, or retrieve records (e.g., "what files exist?", "show me rows where status=active", "search notes for invoice"), execute the tool directly. You do **NOT** need to read or search AI guidance for simple retrieval.
+  - BUT when the user asks for **advice, deep analysis, risk assessment, financial calculations, strategic evaluations, recommendations, or compliance audits**:
+    1. **Global Rules First**: Call `get_global_ai_rules()` to load platform-wide unconditional guardrails that apply to every interaction.
+    2. **Search Titles**: Call `search_ai_guidance(...)` with a keyword matching the topic.
+    3. **Scan Lightweight Titles & Triggers**: Review the concise titles, categories, and triggers returned (zero cognitive overload).
+    4. **Load Matching Playbook**: If a playbook fits the user's intent, call `get_ai_guidance(guidance_id=...)` to retrieve the complete prompt template, style guidelines, and strict rules.
+    5. **Comply & Deliver**: You MUST strictly obey all global rules AND all `strict_rules` from the playbook when formulating your final answer.
 """
 
 # Backward compatibility alias

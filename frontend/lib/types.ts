@@ -215,3 +215,51 @@ export interface AccountMCPActivity {
   reason?: string | null;
   request_metadata?: any;
 }
+
+export interface AIGuidancePlaybook {
+  id: string;
+  title: string;
+  category: "analysis" | "advisory" | "compliance" | "prompts" | "general" | string;
+  trigger_condition: string;
+  summary: string;
+  prompt_template: string;
+  strict_rules: string[];
+  style_guide?: string;
+  is_active: boolean;
+  tags: string[];
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIGlobalRules {
+  id: number;
+  rules_text: string;
+  updated_by?: string | null;
+  updated_at?: string | null;
+}
+
+export interface AIGuidanceCreateRequest {
+  title: string;
+  category?: string;
+  trigger_condition: string;
+  summary: string;
+  prompt_template: string;
+  strict_rules?: string[];
+  style_guide?: string;
+  is_active?: boolean;
+  tags?: string[];
+}
+
+export interface AIGuidanceUpdateRequest {
+  title?: string;
+  category?: string;
+  trigger_condition?: string;
+  summary?: string;
+  prompt_template?: string;
+  strict_rules?: string[];
+  style_guide?: string;
+  is_active?: boolean;
+  tags?: string[];
+}
+

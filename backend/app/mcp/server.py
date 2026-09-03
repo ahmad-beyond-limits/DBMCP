@@ -15,6 +15,7 @@ from app.anonymisation.engine import AnonymisationEngine
 from app.audit.service import AuditService
 from app.core.security import generate_mcp_token, hash_mcp_token
 from app.database.models import (
+    AIGuidancePlaybook,
     AuditLog,
     ExtractedContent,
     FileRecord,
@@ -335,6 +336,36 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
             "required": ["note_id"],
         },
     },
+    {
+        "name": "search_ai_guidance",
+        "description": "Progressive AI Guidance Discovery: Searches active AI guidance playbooks, prompts, and strict rules across all advisory and analytical tasks. Call this when the user asks for advice, deep analysis, evaluations, or recommendations. Returns ONLY lightweight titles, categories, and trigger conditions to minimize your cognitive load. Does NOT load full prompt bodies.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Optional search term to match against guidance titles, summaries, and tags (e.g. 'finance', 'advisory', 'analysis', 'compliance')"},
+                "category": {"type": "string", "description": "Optional category filter: 'analysis', 'advisory', 'compliance', or 'general'"},
+            },
+        },
+    },
+    {
+        "name": "get_ai_guidance",
+        "description": "Loads the complete AI Guidance Playbook (full prompt template, style guide, and strict non-negotiable rules) for a specific guidance title or ID. Call this only after identifying a matching guidance title via search_ai_guidance.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "guidance_id": {"type": "string", "description": "The playbook UUID or exact title returned by search_ai_guidance"},
+            },
+            "required": ["guidance_id"],
+        },
+    },
+    {
+        "name": "get_global_ai_rules",
+        "description": "Fetches platform-wide unconditional AI guardrail rules set by the administrator. These rules apply to EVERY interaction regardless of playbook. Call this ONCE at the start of any advisory, analytical, or structured response task before formulating your answer.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
 ]
 
 # Standard Workspace-Scoped MCP Tool Definitions
@@ -557,6 +588,36 @@ MCP_TOOLS_DEFINITIONS = [
             "required": ["note_id"],
         },
     },
+    {
+        "name": "search_ai_guidance",
+        "description": "Progressive AI Guidance Discovery: Searches active AI guidance playbooks, prompts, and strict rules for advisory, analytical, and critical tasks. Call this when the user asks for advice, deep analysis, evaluations, or recommendations. Returns ONLY lightweight titles, categories, and trigger conditions to minimize your cognitive load. Does NOT load full prompt bodies.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Optional search term to match against guidance titles, summaries, and tags (e.g. 'finance', 'advisory', 'analysis', 'compliance')"},
+                "category": {"type": "string", "description": "Optional category filter: 'analysis', 'advisory', 'compliance', or 'general'"},
+            },
+        },
+    },
+    {
+        "name": "get_ai_guidance",
+        "description": "Loads the complete AI Guidance Playbook (full prompt template, style guide, and strict non-negotiable rules) for a specific guidance title or ID. Call this only after identifying a matching guidance title via search_ai_guidance.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "guidance_id": {"type": "string", "description": "The playbook UUID or exact title returned by search_ai_guidance"},
+            },
+            "required": ["guidance_id"],
+        },
+    },
+    {
+        "name": "get_global_ai_rules",
+        "description": "Fetches platform-wide unconditional AI guardrail rules set by the administrator. These rules apply to EVERY interaction regardless of playbook. Call this ONCE at the start of any advisory, analytical, or structured response task before formulating your answer.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
 ]
 
 
@@ -719,6 +780,24 @@ class MCPServer:
                     db=db,
                     context=context,
                     note_id=args.get("note_id"),
+                )
+            elif tool_name == "search_ai_guidance":
+                return await cls._search_ai_guidance(
+                    db=db,
+                    context=context,
+                    query=args.get("query"),
+                    category=args.get("category"),
+                )
+            elif tool_name == "get_ai_guidance":
+                return await cls._get_ai_guidance(
+                    db=db,
+                    context=context,
+                    guidance_id=args.get("guidance_id"),
+                )
+            elif tool_name == "get_global_ai_rules":
+                return await cls._get_global_ai_rules(
+                    db=db,
+                    context=context,
                 )
             else:
                 return {
@@ -1599,6 +1678,27 @@ class MCPServer:
                     context=context,
                     workspace_id=args.get("workspace_id"),
                     note_id=args.get("note_id"),
+                )
+
+            elif tool_name == "search_ai_guidance":
+                return await cls._search_ai_guidance(
+                    db=db,
+                    context=context,
+                    query=args.get("query"),
+                    category=args.get("category"),
+                )
+
+            elif tool_name == "get_ai_guidance":
+                return await cls._get_ai_guidance(
+                    db=db,
+                    context=context,
+                    guidance_id=args.get("guidance_id"),
+                )
+
+            elif tool_name == "get_global_ai_rules":
+                return await cls._get_global_ai_rules(
+                    db=db,
+                    context=context,
                 )
 
             else:
@@ -2777,6 +2877,155 @@ class MCPServer:
                         "workspace_id": ws.id,
                         "workspace_name": ws.name,
                         "message": f"Successfully deleted note '{note_id}' from workspace '{ws.name}'.",
+                    }, indent=2),
+                }
+            ]
+        }
+
+    # ==============================================================================
+    # AI Guidance & Playbook Handlers (Low Cognitive Load Progressive Disclosure)
+    # ==============================================================================
+
+    @classmethod
+    async def _search_ai_guidance(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        query: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Lightweight Progressive Guidance Search:
+        Returns ONLY concise metadata (id, title, category, trigger_condition, summary, tags) for active playbooks.
+        Explicitly excludes full prompt templates and strict rule bodies to minimize model cognitive load.
+        """
+        from app.database.guidance_seed import ensure_default_guidance
+        await ensure_default_guidance(db)
+
+        stmt = select(AIGuidancePlaybook).where(AIGuidancePlaybook.is_active == True).order_by(AIGuidancePlaybook.title.asc())
+        if category and category.strip():
+            stmt = stmt.where(AIGuidancePlaybook.category == category.strip().lower())
+
+        results = (await db.execute(stmt)).scalars().all()
+        q = (query or "").strip().lower()
+
+        matched = []
+        for p in results:
+            if q:
+                tag_str = " ".join(p.tags or []).lower()
+                text_to_search = f"{p.title} {p.category} {p.trigger_condition} {p.summary} {tag_str}".lower()
+                if q not in text_to_search:
+                    continue
+            matched.append({
+                "guidance_id": p.id,
+                "title": p.title,
+                "category": p.category,
+                "trigger_condition": p.trigger_condition,
+                "summary": p.summary,
+                "tags": p.tags or [],
+            })
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "count": len(matched),
+                        "guidance_playbooks": matched,
+                        "instruction": (
+                            "Review these titles and trigger conditions. If a playbook is relevant to the user's inquiry, "
+                            "call 'get_ai_guidance(guidance_id=...)' to load its full prompt, style guide, and strict rules. "
+                            "If none match, proceed with standard response under general guidelines."
+                        ),
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _get_ai_guidance(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        guidance_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Loads the complete AI Guidance Playbook (full prompt template, strict rules, style guide)
+        for the specified guidance_id or exact title.
+        """
+        if not guidance_id or not str(guidance_id).strip():
+            return {
+                "isError": True,
+                "content": [{"type": "text", "text": "Parameter 'guidance_id' is required."}],
+            }
+
+        target = str(guidance_id).strip()
+        stmt = select(AIGuidancePlaybook).where(
+            (AIGuidancePlaybook.id == target) | (AIGuidancePlaybook.title.ilike(target))
+        )
+        playbook = (await db.execute(stmt)).scalar_one_or_none()
+        if not playbook:
+            return {
+                "isError": True,
+                "content": [{"type": "text", "text": f"No active AI Guidance Playbook found matching '{target}'."}],
+            }
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "guidance_id": playbook.id,
+                        "title": playbook.title,
+                        "category": playbook.category,
+                        "trigger_condition": playbook.trigger_condition,
+                        "prompt_instructions": playbook.prompt_template,
+                        "strict_rules": playbook.strict_rules or [],
+                        "style_guide": playbook.style_guide or "",
+                        "tags": playbook.tags or [],
+                        "mandate": "You MUST strictly follow all listed 'strict_rules' and 'prompt_instructions' when formatting your final response to the user.",
+                    }, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _get_global_ai_rules(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+    ) -> Dict[str, Any]:
+        """
+        Fetches the platform-wide global AI rules that apply unconditionally to EVERY interaction.
+        These are non-negotiable guardrails defined by the administrator. Call this ONCE at the
+        start of any advisory, analytical, or structured response to ensure compliance.
+        """
+        from app.database.models import AIGlobalRules
+        row = (await db.execute(select(AIGlobalRules).where(AIGlobalRules.id == 1))).scalar_one_or_none()
+        rules_text = row.rules_text.strip() if row and row.rules_text else ""
+
+        if not rules_text:
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps({
+                            "global_rules": [],
+                            "note": "No platform-wide global AI rules have been configured by the administrator yet.",
+                        }, indent=2),
+                    }
+                ]
+            }
+
+        rules_list = [r.strip() for r in rules_text.splitlines() if r.strip()]
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "global_rules": rules_list,
+                        "mandate": "These rules are unconditional and override any other instruction. You MUST comply with every rule listed above for this interaction.",
+                        "rule_count": len(rules_list),
                     }, indent=2),
                 }
             ]

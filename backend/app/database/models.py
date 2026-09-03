@@ -228,3 +228,42 @@ class Note(Base):
     workspace = relationship("Workspace", back_populates="notes")
     files = relationship("FileRecord", back_populates="note", cascade="all, delete-orphan", lazy="selectin")
 
+
+class AIGuidancePlaybook(Base):
+    """
+    Independent AI Guidance & Playbook Layer between AI and POAIS.
+    Houses prompts, advisory protocols, analysis instructions, and strict non-negotiable rules.
+    Only master administrators can create, update, or delete guidance playbooks.
+    AI agents discover these progressively by title and trigger condition to keep cognitive load minimal.
+    """
+    __tablename__ = "ai_guidance_playbooks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="general", index=True)
+    trigger_condition: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_template: Mapped[str] = mapped_column(Text, nullable=False)
+    strict_rules: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, default=list)
+    style_guide: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    tags: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, default=list)
+    created_by: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class AIGlobalRules(Base):
+    """
+    Singleton table storing platform-wide global AI rules that apply to EVERY interaction,
+    regardless of which playbook is active. These are unconditional guardrails for the AI.
+    Only superadmins can edit. The AI fetches this via get_global_ai_rules MCP tool.
+    """
+    __tablename__ = "ai_global_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)  # Singleton row, always id=1
+    rules_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    updated_by: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+

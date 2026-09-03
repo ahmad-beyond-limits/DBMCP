@@ -11,7 +11,7 @@ from app.audit.service import AuditService
 from app.auth.router import get_current_user
 from app.core.rate_limit import rate_limit
 from app.core.security import generate_mcp_token
-from app.database.models import MCPCredential, User, ensure_utc, utc_now
+from app.database.models import AIGuidancePlaybook, MCPCredential, User, ensure_utc, utc_now
 from app.database.session import get_db
 from app.mcp.auth import AuthenticatedMCPContext, MCPAuthService
 from app.mcp.schemas import (
@@ -540,22 +540,73 @@ async def handle_mcp_rpc(
         res = await MCPServer.call_tool(db, context, "read_resource", {"resource_id": uri})
         return JSONRPCResponse(id=rpc_req.id, result=res)
 
-    # 5. Prompts List & Get (Permits AI clients to load skills prompt)
+    # 5. Prompts List & Get (Serves skills guide & active AI Guidance Playbooks)
     elif method in ["prompts/list", "list_prompts"]:
-        return JSONRPCResponse(
-            id=rpc_req.id,
-            result={
-                "prompts": [
-                    {
-                        "name": "poais_agent_skills",
-                        "description": "POAIS AI Agent Skills, Verification Directives & Operational Guide",
-                        "arguments": [],
-                    }
-                ]
-            },
-        )
+        prompts_list = [
+            {
+                "name": "poais_agent_skills",
+                "description": "POAIS AI Agent Skills, Verification Directives & Operational Guide",
+                "arguments": [],
+            }
+        ]
+        try:
+            stmt = select(AIGuidancePlaybook).where(AIGuidancePlaybook.is_active == True).order_by(AIGuidancePlaybook.title.asc())
+            playbooks = (await db.execute(stmt)).scalars().all()
+            for pb in playbooks:
+                # Normalize prompt name (lowercase alphanumeric with underscores)
+                norm_name = "".join(c if c.isalnum() else "_" for c in pb.title.lower()).strip("_")
+                prompts_list.append({
+                    "name": norm_name,
+                    "description": f"[{pb.category.upper()}] {pb.trigger_condition}",
+                    "arguments": [],
+                })
+        except Exception as e:
+            logger.warning(f"Could not load dynamic prompts: {e}")
+
+        return JSONRPCResponse(id=rpc_req.id, result={"prompts": prompts_list})
 
     elif method in ["prompts/get", "get_prompt"]:
+        prompt_name = params.get("name") or ""
+        clean_name = prompt_name.strip().lower()
+
+        # Check for matching active guidance playbook
+        if clean_name not in ["poais_agent_skills", "abox_agent_skills", "skills"]:
+            try:
+                stmt = select(AIGuidancePlaybook).where(AIGuidancePlaybook.is_active == True)
+                playbooks = (await db.execute(stmt)).scalars().all()
+                for pb in playbooks:
+                    norm_name = "".join(c if c.isalnum() else "_" for c in pb.title.lower()).strip("_")
+                    if clean_name in [norm_name, pb.id.lower(), pb.title.lower()]:
+                        full_prompt_text = (
+                            f"# AI Guidance Playbook: {pb.title}\n"
+                            f"**Category:** {pb.category}\n"
+                            f"**Trigger:** {pb.trigger_condition}\n\n"
+                            f"## Instructions & Role Guidance\n"
+                            f"{pb.prompt_template}\n\n"
+                            f"## Strict Mandatory Rules (Zero-Tolerance)\n"
+                            + "\n".join(f"- {rule}" for rule in (pb.strict_rules or [])) + "\n\n"
+                            f"## Style & Formatting Guidelines\n"
+                            f"{pb.style_guide or 'Adhere to clean, structured markdown.'}\n"
+                        )
+                        return JSONRPCResponse(
+                            id=rpc_req.id,
+                            result={
+                                "description": f"{pb.title} - {pb.summary}",
+                                "messages": [
+                                    {
+                                        "role": "user",
+                                        "content": {
+                                            "type": "text",
+                                            "text": full_prompt_text,
+                                        },
+                                    }
+                                ],
+                            },
+                        )
+            except Exception as e:
+                logger.warning(f"Error fetching dynamic prompt: {e}")
+
+        # Default standard skills guide
         return JSONRPCResponse(
             id=rpc_req.id,
             result={
