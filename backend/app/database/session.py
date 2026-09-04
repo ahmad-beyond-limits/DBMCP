@@ -317,5 +317,14 @@ async def init_db() -> None:
         except Exception as seed_err:
             logger.warning(f"Could not seed AI Guidance Playbooks: {seed_err}")
 
+        # Automatically reconcile any workspace memberships
+        try:
+            from app.database.reconcile_memberships import reconcile_workspace_memberships
+            async with AsyncSessionLocal() as session:
+                await reconcile_workspace_memberships(session)
+        except Exception as rec_err:
+            logger.warning(f"Could not reconcile workspace memberships: {rec_err}")
+
+
 
 

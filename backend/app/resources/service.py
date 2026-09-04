@@ -1,9 +1,12 @@
+import logging
 import os
 import uuid
 from typing import Optional, Tuple
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.audit.service import AuditService
 from app.core.config import settings
@@ -207,6 +210,20 @@ class ResourceService:
 
         storage = get_storage_backend()
         await storage.delete(file_record.storage_path)
+
+        # Prune dangling file references in notes within this workspace
+        try:
+            from app.database.models import Note
+            from sqlalchemy.orm.attributes import flag_modified
+            notes_stmt = select(Note).where(Note.workspace_id == workspace_id)
+            notes_res = await db.execute(notes_stmt)
+            notes = notes_res.scalars().all()
+            for n in notes:
+                if n.referenced_file_ids and file_id in n.referenced_file_ids:
+                    n.referenced_file_ids = [fid for fid in n.referenced_file_ids if fid != file_id]
+                    flag_modified(n, "referenced_file_ids")
+        except Exception as e:
+            logger.warning(f"Could not clean note file references on delete: {e}")
 
         await db.delete(file_record)
         await db.commit()

@@ -411,11 +411,11 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "read_resource",
-        "description": "Reads the extracted text of a permitted resource. All workspace anonymisation rules (masking, pseudonymisation, redaction) are applied at read time. Also supports reading 'abox://skills/workflow-guide' for full AI agent guidelines.",
+        "description": "Reads the extracted text of a permitted resource. All workspace anonymisation rules (masking, pseudonymisation, redaction) are applied at read time. Also supports reading 'poais://skills/workflow-guide' (or 'abox://skills/workflow-guide') for full AI agent guidelines.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "resource_id": {"type": "string", "description": "The resource UUID, filename, or 'abox://skills/workflow-guide'"},
+                "resource_id": {"type": "string", "description": "The resource UUID, filename, or 'poais://skills/workflow-guide'"},
             },
             "required": ["resource_id"],
         },
@@ -1784,11 +1784,28 @@ class MCPServer:
 
     @classmethod
     async def _account_list_workspaces(cls, db: AsyncSession, context: AuthenticatedMCPContext) -> Dict[str, Any]:
-        stmt = select(Workspace).where(Workspace.owner_id == context.user_id).order_by(desc(Workspace.created_at))
-        workspaces = (await db.execute(stmt)).scalars().all()
+        stmt = (
+            select(Workspace)
+            .outerjoin(
+                WorkspaceMember,
+                (WorkspaceMember.workspace_id == Workspace.id) & (WorkspaceMember.user_id == context.user_id),
+            )
+            .where(
+                or_(
+                    Workspace.owner_id == context.user_id,
+                    WorkspaceMember.user_id == context.user_id,
+                )
+            )
+            .order_by(desc(Workspace.created_at))
+        )
+        raw_workspaces = (await db.execute(stmt)).scalars().all()
 
+        seen_ids = set()
         results = []
-        for w in workspaces:
+        for w in raw_workspaces:
+            if w.id in seen_ids:
+                continue
+            seen_ids.add(w.id)
             f_stmt = select(FileRecord).where(FileRecord.workspace_id == w.id)
             files = (await db.execute(f_stmt)).scalars().all()
             results.append({
@@ -1829,8 +1846,15 @@ class MCPServer:
             created_at=utc_now(),
         )
         db.add(ws)
-        await db.commit()
-        await db.refresh(ws)
+        await db.flush()
+
+        # Add owner membership
+        membership = WorkspaceMember(
+            workspace_id=ws.id,
+            user_id=context.user_id,
+            role="OWNER",
+        )
+        db.add(membership)
 
         default_ops = [
             "workspace_info",
@@ -1841,10 +1865,22 @@ class MCPServer:
             "get_dataset_schema",
             "query_dataset",
             "edit_dataset",
+            "create_note",
+            "take_note",
+            "list_notes",
+            "get_note",
+            "read_note",
+            "update_note",
+            "modify_note",
+            "delete_note",
+            "search_ai_guidance",
+            "get_ai_guidance",
+            "get_global_ai_rules",
         ]
         for op in default_ops:
             db.add(OperationPolicy(workspace_id=ws.id, operation=op, decision="ALLOW"))
         await db.commit()
+        await db.refresh(ws)
 
         await AuditService.log_event(
             db=db,
@@ -1873,15 +1909,17 @@ class MCPServer:
         f_stmt = select(FileRecord).where(FileRecord.workspace_id == ws.id).order_by(desc(FileRecord.created_at))
         files = (await db.execute(f_stmt)).scalars().all()
 
-        m_stmt = select(WorkspaceMember).where(WorkspaceMember.workspace_id == ws.id)
-        members = (await db.execute(m_stmt)).scalars().all()
+        m_stmt = select(WorkspaceMember.user_id).where(WorkspaceMember.workspace_id == ws.id)
+        member_user_ids = set((await db.execute(m_stmt)).scalars().all())
+        if ws.owner_id:
+            member_user_ids.add(ws.owner_id)
 
         data = {
             "id": ws.id,
             "name": ws.name,
             "description": ws.description or "",
             "created_at": ws.created_at.isoformat() if ws.created_at else None,
-            "members_count": len(members) + 1,
+            "members_count": len(member_user_ids),
             "files_count": len(files),
             "files": [
                 {

@@ -577,12 +577,18 @@ async def handle_mcp_rpc(
                 for pb in playbooks:
                     norm_name = "".join(c if c.isalnum() else "_" for c in pb.title.lower()).strip("_")
                     if clean_name in [norm_name, pb.id.lower(), pb.title.lower()]:
+                        prompt_instructions = pb.prompt_template or ""
+                        args_passed = params.get("arguments") or {}
+                        if isinstance(args_passed, dict):
+                            for k, v in args_passed.items():
+                                prompt_instructions = prompt_instructions.replace(f"{{{k}}}", str(v))
+
                         full_prompt_text = (
                             f"# AI Guidance Playbook: {pb.title}\n"
                             f"**Category:** {pb.category}\n"
                             f"**Trigger:** {pb.trigger_condition}\n\n"
                             f"## Instructions & Role Guidance\n"
-                            f"{pb.prompt_template}\n\n"
+                            f"{prompt_instructions}\n\n"
                             f"## Strict Mandatory Rules (Zero-Tolerance)\n"
                             + "\n".join(f"- {rule}" for rule in (pb.strict_rules or [])) + "\n\n"
                             f"## Style & Formatting Guidelines\n"

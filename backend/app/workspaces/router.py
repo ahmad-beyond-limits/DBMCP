@@ -1,6 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,14 +31,27 @@ async def list_workspaces(
     # Workspaces where user is owner or member
     stmt = (
         select(Workspace, WorkspaceMember.role)
-        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
-        .where(WorkspaceMember.user_id == user.id)
+        .outerjoin(
+            WorkspaceMember,
+            (WorkspaceMember.workspace_id == Workspace.id) & (WorkspaceMember.user_id == user.id),
+        )
+        .where(
+            or_(
+                Workspace.owner_id == user.id,
+                WorkspaceMember.user_id == user.id,
+            )
+        )
         .order_by(Workspace.created_at.desc())
     )
     results = (await db.execute(stmt)).all()
 
+    seen_ids = set()
     workspaces_out = []
     for ws, role in results:
+        if ws.id in seen_ids:
+            continue
+        seen_ids.add(ws.id)
+        effective_role = role or ("OWNER" if ws.owner_id == user.id else "MEMBER")
         counts = await WorkspaceService.get_workspace_counts(db, ws.id)
         workspaces_out.append(
             WorkspaceResponse(
@@ -47,7 +60,7 @@ async def list_workspaces(
                 description=ws.description,
                 owner_id=ws.owner_id,
                 is_active=ws.is_active,
-                role=role,
+                role=effective_role,
                 files_count=counts["files_count"],
                 policies_count=counts["policies_count"],
                 credentials_count=counts["credentials_count"],
