@@ -126,7 +126,10 @@ class WorkspaceService:
     async def get_workspace_counts(db: AsyncSession, workspace_id: str) -> dict:
         """Fetch summary counts for files, policies, credentials, and notes."""
         files_q = await db.execute(
-            select(func.count(FileRecord.id)).where(FileRecord.workspace_id == workspace_id)
+            select(func.count(FileRecord.id)).where(
+                FileRecord.workspace_id == workspace_id,
+                FileRecord.note_id.is_(None),
+            )
         )
         policies_q = await db.execute(
             select(func.count(ResourcePolicy.id)).where(ResourcePolicy.workspace_id == workspace_id)

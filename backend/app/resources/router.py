@@ -1,6 +1,6 @@
 from typing import List
 from urllib.parse import quote
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,17 +20,18 @@ router = APIRouter(prefix="/workspaces/{workspace_id}/files", tags=["Files"])
 @router.get("", response_model=List[FileRecordResponse])
 async def list_workspace_files(
     workspace_id: str,
+    include_notes: bool = Query(False, description="Include note-attached files"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all files in the workspace (scoped by workspace_id)."""
+    """List all files in the workspace (scoped by workspace_id). Excludes note attachments by default."""
     await WorkspaceService.verify_access(db, workspace_id, user.id)
 
-    stmt = (
-        select(FileRecord)
-        .where(FileRecord.workspace_id == workspace_id)
-        .order_by(FileRecord.created_at.desc())
-    )
+    stmt = select(FileRecord).where(FileRecord.workspace_id == workspace_id)
+    if not include_notes:
+        stmt = stmt.where(FileRecord.note_id.is_(None))
+
+    stmt = stmt.order_by(FileRecord.created_at.desc())
     files = (await db.execute(stmt)).scalars().all()
     return files
 

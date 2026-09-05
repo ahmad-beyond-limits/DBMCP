@@ -25,6 +25,7 @@ class NoteService:
         """
         stmt = select(FileRecord).where(
             FileRecord.workspace_id == workspace_id,
+            FileRecord.note_id.is_(None),
         )
         ws_files = (await db.execute(stmt)).scalars().all()
         ws_file_map = {f.id: f for f in ws_files}

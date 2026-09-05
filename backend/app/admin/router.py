@@ -78,7 +78,7 @@ async def get_admin_stats(
     total_users = (await db.execute(select(func.count(User.id)))).scalar_one() or 0
     active_users = (await db.execute(select(func.count(User.id)).where(User.is_active == True))).scalar_one() or 0
     total_workspaces = (await db.execute(select(func.count(Workspace.id)))).scalar_one() or 0
-    total_files = (await db.execute(select(func.count(FileRecord.id)))).scalar_one() or 0
+    total_files = (await db.execute(select(func.count(FileRecord.id)).where(FileRecord.note_id.is_(None)))).scalar_one() or 0
     total_credentials = (await db.execute(select(func.count(MCPCredential.id)))).scalar_one() or 0
     total_audit_logs = (await db.execute(select(func.count(AuditLog.id)))).scalar_one() or 0
 
@@ -108,9 +108,10 @@ async def list_admin_users(
             select(func.count(Workspace.id)).where(Workspace.owner_id == u.id)
         )).scalar_one() or 0
 
-        # Get count of files across owned workspaces
+        # Get count of files across owned workspaces (excluding internal note attachments)
         files_count = (await db.execute(
             select(func.count(FileRecord.id)).where(
+                FileRecord.note_id.is_(None),
                 FileRecord.workspace_id.in_(
                     select(Workspace.id).where(Workspace.owner_id == u.id)
                 )
@@ -276,9 +277,12 @@ async def list_all_admin_workspaces(
         owner_result = await db.execute(select(User.username).where(User.id == ws.owner_id))
         owner_username = owner_result.scalar_one_or_none() or "Unknown"
 
-        # Count files
+        # Count files (excluding internal note attachments)
         files_count = (await db.execute(
-            select(func.count(FileRecord.id)).where(FileRecord.workspace_id == ws.id)
+            select(func.count(FileRecord.id)).where(
+                FileRecord.workspace_id == ws.id,
+                FileRecord.note_id.is_(None),
+            )
         )).scalar_one() or 0
 
         # Count credentials
