@@ -463,9 +463,9 @@ async def handle_mcp_rpc(
             result={
                 "protocolVersion": "2024-11-05",
                 "capabilities": {
-                    "tools": {"listChanged": False},
-                    "resources": {"subscribe": False, "listChanged": False},
-                    "prompts": {"listChanged": False},
+                    "tools": {"listChanged": True},
+                    "resources": {"subscribe": True, "listChanged": True},
+                    "prompts": {"listChanged": True},
                 },
                 "serverInfo": {
                     "name": "POAIS Policy-Oriented Gateway",
