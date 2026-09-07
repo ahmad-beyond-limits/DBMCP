@@ -70,7 +70,7 @@ class MCPAuthService:
         cred = (await db.execute(stmt)).scalar_one_or_none()
 
         if not cred:
-            logger.warning(f"MCP auth failure: Prefix {prefix} not found")
+            logger.warning("MCP auth failure: Unrecognized credential prefix")
             raise generic_error
 
         # Check revocation

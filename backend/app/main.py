@@ -9,6 +9,7 @@ from app.admin.router import router as admin_router
 from app.audit.router import router as audit_router
 from app.auth.router import router as auth_router
 from app.core.config import settings
+from app.core.logging_redactor import setup_secure_logging
 from app.database.session import init_db
 from app.mcp.router import router as mcp_router
 from app.notes.router import router as notes_router
@@ -16,10 +17,8 @@ from app.policies.router import router as policies_router
 from app.resources.router import router as resources_router
 from app.workspaces.router import router as workspaces_router
 
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+# Configure secure logging with automatic token & credential redaction
+setup_secure_logging(settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 
