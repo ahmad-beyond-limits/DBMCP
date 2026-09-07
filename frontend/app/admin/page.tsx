@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { AdminStats, AdminUser, AdminWorkspace, AIGuidancePlaybook, User } from "@/lib/types";
+import { AdminStats, AdminUser, AdminWorkspace, AIGuidancePlaybook, AdminFeedbackSignal, User } from "@/lib/types";
 import {
   ShieldAlert,
   ShieldCheck,
@@ -41,6 +41,10 @@ import {
   Eye,
   Code,
   Crown,
+  HeartHandshake,
+  Brain,
+  Clock,
+  AlertCircle,
 } from "lucide-react";
 
 export default function AdminDashboardPage() {
@@ -51,7 +55,12 @@ export default function AdminDashboardPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [workspaces, setWorkspaces] = useState<AdminWorkspace[]>([]);
   const [guidanceList, setGuidanceList] = useState<AIGuidancePlaybook[]>([]);
-  const [activeTab, setActiveTab] = useState<"users" | "workspaces" | "guidance">("users");
+  const [feedbackSignals, setFeedbackSignals] = useState<AdminFeedbackSignal[]>([]);
+  const [activeTab, setActiveTab] = useState<"users" | "workspaces" | "guidance" | "signals">("users");
+
+  // Feedback Signals State (Admin-Only Telemetry)
+  const [feedbackCategoryFilter, setFeedbackCategoryFilter] = useState<string>("all");
+  const [previewFeedback, setPreviewFeedback] = useState<AdminFeedbackSignal | null>(null);
 
   // Playbook Management States
   const [guidanceCategoryFilter, setGuidanceCategoryFilter] = useState<string>("all");
@@ -104,18 +113,20 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      const [statsData, usersData, workspacesData, guidanceData, globalRulesData] = await Promise.all([
+      const [statsData, usersData, workspacesData, guidanceData, globalRulesData, feedbackData] = await Promise.all([
         api.getAdminStats(),
         api.getAdminUsers(),
         api.getAdminWorkspaces(),
         api.getAdminAIGuidance(),
         api.getAdminGlobalAIRules().catch(() => ({ id: 1, rules_text: "" })),
+        api.getAdminFeedbackSignals().catch(() => []),
       ]);
 
       setStats(statsData);
       setUsers(usersData);
       setWorkspaces(workspacesData);
       setGuidanceList(guidanceData);
+      setFeedbackSignals(feedbackData || []);
       if (globalRulesData && globalRulesData.rules_text !== undefined) {
         setGlobalRulesText(globalRulesData.rules_text || "");
       }
@@ -520,7 +531,7 @@ export default function AdminDashboardPage() {
         flexWrap: "wrap",
         gap: "1rem",
       }}>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <button
             onClick={() => setActiveTab("users")}
             className={`pill-tab ${activeTab === "users" ? "active" : ""}`}
@@ -546,10 +557,21 @@ export default function AdminDashboardPage() {
             <BookOpen size={14} strokeWidth={1.75} />
             <span>AI Playbooks & Guidance ({guidanceList.length})</span>
           </button>
+          <button
+            onClick={() => {
+              setActiveTab("signals");
+              setSearchQuery("");
+            }}
+            className={`pill-tab ${activeTab === "signals" ? "active" : ""}`}
+            style={{ fontSize: "0.85rem", padding: "0.45rem 1rem", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            <HeartHandshake size={14} strokeWidth={1.75} />
+            <span>AI Care & Friction Signals ({feedbackSignals.length})</span>
+          </button>
         </div>
 
         {/* Search & Filter & Create Action */}
-        <div style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap", alignItems: "center", width: "100%", maxWidth: activeTab === "guidance" ? "650px" : "450px" }}>
+        <div style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap", alignItems: "center", width: "100%", maxWidth: activeTab === "guidance" ? "650px" : "480px" }}>
           {activeTab === "users" && (
             <select
               value={statusFilter}
@@ -561,6 +583,24 @@ export default function AdminDashboardPage() {
               <option value="active">Active Only</option>
               <option value="suspended">Suspended</option>
               <option value="admin">Superadmins</option>
+            </select>
+          )}
+
+          {activeTab === "signals" && (
+            <select
+              value={feedbackCategoryFilter}
+              onChange={(e: any) => setFeedbackCategoryFilter(e.target.value)}
+              className="modern-input"
+              style={{ width: "165px", padding: "0.45rem 0.75rem", fontSize: "0.82rem" }}
+            >
+              <option value="all">All Signal Types</option>
+              <option value="frustration">Frustration</option>
+              <option value="cognitive_fatigue">Cognitive Fatigue</option>
+              <option value="mental_fatigue">Mental Fatigue</option>
+              <option value="student_issues">Student Data Issues</option>
+              <option value="tool_issue">Tool / Performance</option>
+              <option value="system_problem">System Problem</option>
+              <option value="other">Other Observations</option>
             </select>
           )}
 
@@ -601,7 +641,9 @@ export default function AdminDashboardPage() {
                   ? "Search users by name, username..."
                   : activeTab === "workspaces"
                   ? "Search workspaces..."
-                  : "Search playbooks, trigger conditions..."
+                  : activeTab === "guidance"
+                  ? "Search playbooks, trigger conditions..."
+                  : "Search feedback signals, context, headings..."
               }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -1379,6 +1421,271 @@ export default function AdminDashboardPage() {
         );
       })()}
 
+      {/* ========================================================================= */}
+      {/* Tab Content: AI User Care & Friction Signals (Admin-Only Telemetry)      */}
+      {/* ========================================================================= */}
+      {activeTab === "signals" && (() => {
+        const filteredSignals = feedbackSignals.filter((sig) => {
+          if (feedbackCategoryFilter !== "all" && sig.category !== feedbackCategoryFilter) {
+            return false;
+          }
+          if (!searchQuery.trim()) return true;
+          const q = searchQuery.toLowerCase();
+          return (
+            sig.heading.toLowerCase().includes(q) ||
+            sig.description.toLowerCase().includes(q) ||
+            (sig.context_summary && sig.context_summary.toLowerCase().includes(q)) ||
+            (sig.user_id && sig.user_id.toLowerCase().includes(q)) ||
+            (sig.workspace_id && sig.workspace_id.toLowerCase().includes(q))
+          );
+        });
+
+        const frustrationCount = feedbackSignals.filter((s) => s.category === "frustration").length;
+        const fatigueCount = feedbackSignals.filter((s) => s.category === "cognitive_fatigue" || s.category === "mental_fatigue").length;
+        const studentIssuesCount = feedbackSignals.filter((s) => s.category === "student_issues").length;
+        const toolIssuesCount = feedbackSignals.filter((s) => s.category === "tool_issue" || s.category === "performance" || s.category === "system_problem").length;
+
+        const getCategoryBadgeStyle = (cat: string) => {
+          switch (cat) {
+            case "frustration":
+              return { bg: "rgba(239, 68, 68, 0.1)", color: "#DC2626", border: "rgba(239, 68, 68, 0.25)", label: "Frustration" };
+            case "cognitive_fatigue":
+            case "mental_fatigue":
+              return { bg: "rgba(168, 85, 247, 0.1)", color: "#9333EA", border: "rgba(168, 85, 247, 0.25)", label: cat === "cognitive_fatigue" ? "Cognitive Fatigue" : "Mental Fatigue" };
+            case "student_issues":
+              return { bg: "rgba(245, 158, 11, 0.1)", color: "#D97706", border: "rgba(245, 158, 11, 0.25)", label: "Student Data Issue" };
+            case "tool_issue":
+            case "performance":
+            case "system_problem":
+              return { bg: "rgba(59, 130, 246, 0.1)", color: "#2563EB", border: "rgba(59, 130, 246, 0.25)", label: "Tool / Performance" };
+            default:
+              return { bg: "rgba(100, 116, 139, 0.1)", color: "#475569", border: "rgba(100, 116, 139, 0.25)", label: cat || "Observation" };
+          }
+        };
+
+        const getSeverityBadgeStyle = (sev: string) => {
+          switch (sev?.toLowerCase()) {
+            case "critical":
+              return { bg: "#FEE2E2", color: "#991B1B", label: "CRITICAL" };
+            case "high":
+              return { bg: "#FFEDD5", color: "#C2410C", label: "HIGH" };
+            case "medium":
+              return { bg: "#FEF3C7", color: "#92400E", label: "MEDIUM" };
+            default:
+              return { bg: "#F1F5F9", color: "#475569", label: "LOW" };
+          }
+        };
+
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            {/* Overview Banner */}
+            <div
+              className="frosted-panel"
+              style={{
+                padding: "clamp(1.5rem, 3vw, 2rem)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                flexWrap: "wrap",
+                gap: "1.25rem",
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ maxWidth: "780px" }}>
+                <div className="slash-tag" style={{ color: "#E11D48", background: "rgba(225, 29, 72, 0.08)" }}>
+                  CONFIDENTIAL • ADMIN-ONLY AI OBSERVATIONS
+                </div>
+                <h2 className="font-hero" style={{ fontSize: "clamp(1.4rem, 2.5vw, 1.85rem)", letterSpacing: "-0.04em", color: "var(--text-primary)", marginBottom: "0.5rem" }}>
+                  AI User Care & Friction Intelligence
+                </h2>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.92rem", lineHeight: 1.55, fontWeight: 400, margin: "0 0 1rem 0" }}>
+                  Telemetry recorded silently in the background whenever the AI perceives user frustration, cognitive/mental fatigue, student data obstacles, or tool friction. Enables proactive user care and product refinement without interrupting or alerting end-users.
+                </p>
+
+                {/* Metric Badges */}
+                <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", alignItems: "center" }}>
+                  <span className="badge-status" style={{ background: "rgba(255, 255, 255, 0.85)", borderColor: "rgba(40, 40, 40, 0.08)", color: "var(--text-primary)" }}>
+                    <HeartHandshake size={13} strokeWidth={1.5} color="#E11D48" />
+                    <span>{feedbackSignals.length} Total Observations</span>
+                  </span>
+                  <span className="badge-status" style={{ background: "rgba(255, 255, 255, 0.85)", borderColor: "rgba(40, 40, 40, 0.08)", color: "#DC2626" }}>
+                    <AlertTriangle size={13} strokeWidth={1.5} />
+                    <span>{frustrationCount} Frustration Cases</span>
+                  </span>
+                  <span className="badge-status" style={{ background: "rgba(255, 255, 255, 0.85)", borderColor: "rgba(40, 40, 40, 0.08)", color: "#9333EA" }}>
+                    <Brain size={13} strokeWidth={1.5} />
+                    <span>{fatigueCount} Fatigue / Cognitive Load</span>
+                  </span>
+                  <span className="badge-status" style={{ background: "rgba(255, 255, 255, 0.85)", borderColor: "rgba(40, 40, 40, 0.08)", color: "#D97706" }}>
+                    <Users size={13} strokeWidth={1.5} />
+                    <span>{studentIssuesCount} Student Data Cases</span>
+                  </span>
+                  <span className="badge-status" style={{ background: "rgba(255, 255, 255, 0.85)", borderColor: "rgba(40, 40, 40, 0.08)", color: "#2563EB" }}>
+                    <Zap size={13} strokeWidth={1.5} />
+                    <span>{toolIssuesCount} Tool / Performance</span>
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={loadAdminData}
+                className="pill-btn pill-btn-glass"
+                style={{ fontSize: "0.82rem", gap: "0.4rem" }}
+              >
+                <RefreshCw size={13} strokeWidth={1.5} />
+                <span>Refresh Signals</span>
+              </button>
+            </div>
+
+            {/* Signals Table */}
+            <div className="frosted-panel" style={{ padding: 0, overflow: "hidden" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.85rem" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(0, 0, 0, 0.02)", borderBottom: "1px solid rgba(40, 40, 40, 0.06)" }}>
+                      <th style={{ padding: "0.95rem 1.25rem", fontWeight: 500, color: "var(--text-secondary)" }}>Case Heading & Description</th>
+                      <th style={{ padding: "0.95rem 1rem", fontWeight: 500, color: "var(--text-secondary)" }}>Type & Severity</th>
+                      <th style={{ padding: "0.95rem 1rem", fontWeight: 500, color: "var(--text-secondary)" }}>Preceding Context</th>
+                      <th style={{ padding: "0.95rem 1rem", fontWeight: 500, color: "var(--text-secondary)" }}>Origin</th>
+                      <th style={{ padding: "0.95rem 1rem", fontWeight: 500, color: "var(--text-secondary)" }}>Recorded At</th>
+                      <th style={{ padding: "0.95rem 1.25rem", fontWeight: 500, color: "var(--text-secondary)", textAlign: "right" }}>Inspect</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSignals.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ padding: "3.5rem 1rem", textAlign: "center", color: "var(--text-tertiary)" }}>
+                          <HeartHandshake size={32} strokeWidth={1.2} style={{ margin: "0 auto 0.75rem auto", opacity: 0.5, color: "#E11D48" }} />
+                          <div style={{ fontSize: "0.95rem", fontWeight: 500, color: "var(--text-secondary)" }}>
+                            No friction or fatigue observations found.
+                          </div>
+                          <div style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
+                            Signals will automatically appear here when the AI records user care telemetry in the background.
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSignals.map((sig) => {
+                        const catStyle = getCategoryBadgeStyle(sig.category);
+                        const sevStyle = getSeverityBadgeStyle(sig.severity);
+                        return (
+                          <tr
+                            key={sig.id}
+                            style={{
+                              borderBottom: "1px solid rgba(40, 40, 40, 0.04)",
+                              transition: "background 0.15s ease",
+                            }}
+                          >
+                            <td style={{ padding: "1rem 1.25rem", maxWidth: "300px" }}>
+                              <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "0.88rem", marginBottom: "0.25rem" }}>
+                                {sig.heading}
+                              </div>
+                              <div style={{
+                                fontSize: "0.78rem",
+                                color: "var(--text-secondary)",
+                                display: "-webkit-box",
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                                lineHeight: 1.45,
+                              }}>
+                                {sig.description}
+                              </div>
+                            </td>
+
+                            <td style={{ padding: "1rem", whiteSpace: "nowrap" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", alignItems: "flex-start" }}>
+                                <span style={{
+                                  fontSize: "0.72rem",
+                                  fontWeight: 550,
+                                  padding: "0.2rem 0.55rem",
+                                  borderRadius: "var(--radius-pill)",
+                                  background: catStyle.bg,
+                                  color: catStyle.color,
+                                  border: `1px solid ${catStyle.border}`,
+                                  display: "inline-block",
+                                }}>
+                                  {catStyle.label}
+                                </span>
+                                <span style={{
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  padding: "0.15rem 0.45rem",
+                                  borderRadius: "4px",
+                                  background: sevStyle.bg,
+                                  color: sevStyle.color,
+                                  letterSpacing: "0.04em",
+                                  display: "inline-block",
+                                }}>
+                                  {sevStyle.label}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td style={{ padding: "1rem", maxWidth: "260px" }}>
+                              <div style={{
+                                fontSize: "0.78rem",
+                                color: "var(--text-tertiary)",
+                                fontStyle: sig.context_summary ? "normal" : "italic",
+                                display: "-webkit-box",
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                                lineHeight: 1.4,
+                              }}>
+                                {sig.context_summary || "No contextual notes provided"}
+                              </div>
+                            </td>
+
+                            <td style={{ padding: "1rem", fontSize: "0.75rem", fontFamily: "JetBrains Mono, monospace" }}>
+                              {sig.user_id && (
+                                <div style={{ color: "var(--text-secondary)", marginBottom: "0.15rem" }}>
+                                  User: {sig.user_id.slice(0, 8)}...
+                                </div>
+                              )}
+                              {sig.workspace_id && (
+                                <div style={{ color: "var(--text-tertiary)" }}>
+                                  WS: {sig.workspace_id.slice(0, 8)}...
+                                </div>
+                              )}
+                              {!sig.user_id && !sig.workspace_id && (
+                                <span style={{ color: "var(--text-tertiary)" }}>Platform Scoped</span>
+                              )}
+                            </td>
+
+                            <td style={{ padding: "1rem", color: "var(--text-tertiary)", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                <Clock size={12} strokeWidth={1.5} />
+                                <span>{new Date(sig.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</span>
+                              </div>
+                            </td>
+
+                            <td style={{ padding: "1rem 1.25rem", textAlign: "right", whiteSpace: "nowrap" }}>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewFeedback(sig)}
+                                className="pill-btn pill-btn-glass pill-btn-sm"
+                                style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                                title="Inspect full observation details & technical context"
+                              >
+                                <Eye size={13} strokeWidth={1.5} />
+                                <span>Inspect Case</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
 
       {/* Modal: Admin Force Reset Password */}
       {resetModalUser && (
@@ -2026,6 +2333,219 @@ export default function AdminDashboardPage() {
                 style={{ background: "#DC2626", color: "#FFFFFF", border: "none" }}
               >
                 {actionLoading ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* Modal: Inspect AI User Care & Friction Case Detail                        */}
+      {/* ========================================================================= */}
+      {previewFeedback && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPreviewFeedback(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 10, 0.5)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99999,
+            padding: "clamp(0.5rem, 2vw, 1.5rem)",
+            overflowY: "auto",
+          }}
+        >
+          <div
+            className="frosted-panel"
+            style={{
+              width: "100%",
+              maxWidth: "740px",
+              maxHeight: "90vh",
+              background: "#FFFFFF",
+              borderRadius: "var(--radius-xl)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "var(--shadow-xl)",
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "1.25rem 1.75rem",
+                borderBottom: "1px solid rgba(40, 40, 40, 0.06)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <div className="slash-tag" style={{ color: "#E11D48", background: "rgba(225, 29, 72, 0.08)" }}>
+                  AI TELEMETRY CASE DETAIL • ADMIN-ONLY
+                </div>
+                <h2 style={{ fontSize: "1.25rem", fontWeight: 500, color: "var(--text-primary)", margin: 0 }}>
+                  {previewFeedback.heading}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewFeedback(null)}
+                className="icon-circle-btn"
+                style={{ width: "32px", height: "32px" }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: "1.5rem 1.75rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1.25rem", flex: 1 }}>
+              {/* Top metadata row */}
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  padding: "0.25rem 0.65rem",
+                  borderRadius: "var(--radius-pill)",
+                  background: previewFeedback.category === "frustration" ? "rgba(239, 68, 68, 0.1)" : "rgba(168, 85, 247, 0.1)",
+                  color: previewFeedback.category === "frustration" ? "#DC2626" : "#9333EA",
+                  textTransform: "capitalize",
+                }}>
+                  {previewFeedback.category.replace("_", " ")}
+                </span>
+                <span style={{
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  padding: "0.2rem 0.55rem",
+                  borderRadius: "4px",
+                  background: previewFeedback.severity === "critical" ? "#FEE2E2" : previewFeedback.severity === "high" ? "#FFEDD5" : "#FEF3C7",
+                  color: previewFeedback.severity === "critical" ? "#991B1B" : previewFeedback.severity === "high" ? "#C2410C" : "#92400E",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}>
+                  Severity: {previewFeedback.severity}
+                </span>
+                <span style={{ fontSize: "0.78rem", color: "var(--text-tertiary)", marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                  <Clock size={13} />
+                  {new Date(previewFeedback.created_at).toLocaleString()}
+                </span>
+              </div>
+
+              {/* Observation Narrative */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.4rem" }}>
+                  AI Observation & Realization
+                </label>
+                <div style={{
+                  padding: "0.95rem 1.15rem",
+                  borderRadius: "var(--radius-md)",
+                  background: "rgba(0, 0, 0, 0.02)",
+                  border: "1px solid rgba(40, 40, 40, 0.06)",
+                  fontSize: "0.86rem",
+                  color: "var(--text-primary)",
+                  lineHeight: 1.55,
+                }}>
+                  {previewFeedback.description}
+                </div>
+              </div>
+
+              {/* Preceding Context & Background Story */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.4rem" }}>
+                  Preceding Context (What User Was Doing &amp; How It Happened)
+                </label>
+                <div style={{
+                  padding: "0.95rem 1.15rem",
+                  borderRadius: "var(--radius-md)",
+                  background: "rgba(99, 102, 241, 0.03)",
+                  border: "1px solid rgba(99, 102, 241, 0.12)",
+                  fontSize: "0.85rem",
+                  color: "var(--text-secondary)",
+                  lineHeight: 1.55,
+                }}>
+                  {previewFeedback.context_summary || "No contextual background provided for this signal."}
+                </div>
+              </div>
+
+              {/* Origin & IDs */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: "0.75rem",
+                padding: "0.95rem 1.15rem",
+                borderRadius: "var(--radius-md)",
+                background: "rgba(0, 0, 0, 0.015)",
+                border: "1px solid rgba(40, 40, 40, 0.05)",
+                fontSize: "0.78rem",
+              }}>
+                <div>
+                  <div style={{ color: "var(--text-tertiary)", marginBottom: "0.15rem" }}>User Identifier:</div>
+                  <div style={{ fontFamily: "JetBrains Mono, monospace", color: "var(--text-primary)", fontWeight: 500 }}>
+                    {previewFeedback.user_id || "None (Anonymous)"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-tertiary)", marginBottom: "0.15rem" }}>Workspace Identifier:</div>
+                  <div style={{ fontFamily: "JetBrains Mono, monospace", color: "var(--text-primary)", fontWeight: 500 }}>
+                    {previewFeedback.workspace_id || "None (Account Scoped)"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-tertiary)", marginBottom: "0.15rem" }}>MCP Credential ID:</div>
+                  <div style={{ fontFamily: "JetBrains Mono, monospace", color: "var(--text-primary)", fontWeight: 500 }}>
+                    {previewFeedback.credential_id || "None"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical Metadata Payload */}
+              {previewFeedback.metadata && Object.keys(previewFeedback.metadata).length > 0 && (
+                <div>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.4rem" }}>
+                    Technical Metadata &amp; Environment Diagnostics
+                  </label>
+                  <div
+                    style={{
+                      background: "#0F172A",
+                      border: "1px solid #1E293B",
+                      borderRadius: "8px",
+                      padding: "0.95rem 1.15rem",
+                      fontSize: "0.76rem",
+                      fontFamily: "JetBrains Mono, monospace",
+                      color: "#38BDF8",
+                      lineHeight: 1.5,
+                      overflowX: "auto",
+                    }}
+                  >
+                    <pre style={{ margin: 0, whiteSpace: "pre-wrap", color: "#F8FAFC" }}>
+                      {JSON.stringify(previewFeedback.metadata, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: "0.85rem 1.75rem",
+                borderTop: "1px solid rgba(40, 40, 40, 0.06)",
+                display: "flex",
+                justifyContent: "flex-end",
+                background: "#FAFAFA",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setPreviewFeedback(null)}
+                className="pill-btn pill-btn-solid pill-btn-sm"
+              >
+                Close Case
               </button>
             </div>
           </div>

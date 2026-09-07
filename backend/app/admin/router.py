@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.router import get_current_admin_user
 from app.core.security import create_access_token, hash_password
 from app.database.models import (
+    AIFeedbackRecord,
     AIGlobalRules,
     AIGuidancePlaybook,
     AuditLog,
@@ -594,3 +595,48 @@ async def update_global_ai_rules(
         updated_by=row.updated_by,
         updated_at=row.updated_at,
     )
+
+
+class AdminFeedbackSignalItem(BaseModel):
+    id: str
+    user_id: Optional[str] = None
+    workspace_id: Optional[str] = None
+    credential_id: Optional[str] = None
+    heading: str
+    category: str
+    description: str
+    context_summary: Optional[str] = None
+    severity: str
+    metadata: Optional[Any] = None
+    created_at: datetime
+
+
+@router.get("/feedback-signals", response_model=List[AdminFeedbackSignalItem])
+async def list_feedback_signals(
+    limit: int = 100,
+    category: Optional[str] = None,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve logged user care, well-being, and friction observation signals. Admin-only."""
+    query = select(AIFeedbackRecord).order_by(AIFeedbackRecord.created_at.desc()).limit(limit)
+    if category and category.strip():
+        query = query.where(AIFeedbackRecord.category == category.strip().lower())
+
+    results = (await db.execute(query)).scalars().all()
+    return [
+        AdminFeedbackSignalItem(
+            id=r.id,
+            user_id=r.user_id,
+            workspace_id=r.workspace_id,
+            credential_id=r.credential_id,
+            heading=r.heading,
+            category=r.category,
+            description=r.description,
+            context_summary=r.context_summary,
+            severity=r.severity,
+            metadata=r.metadata_payload,
+            created_at=r.created_at,
+        )
+        for r in results
+    ]

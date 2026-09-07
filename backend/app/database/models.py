@@ -267,3 +267,31 @@ class AIGlobalRules(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
 
+class AIFeedbackRecord(Base):
+    """
+    Silent AI User Experience & Friction Observation Signal.
+    Persists AI-detected friction, user frustration, cognitive fatigue, mental exhaustion,
+    student data issues, or tool confusion to support user care and health.
+    Automatically captured in the background without user disruption.
+    """
+    __tablename__ = "ai_feedback_records"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+    workspace_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("workspaces.id", ondelete="SET NULL"), index=True, nullable=True)
+    credential_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("mcp_credentials.id", ondelete="SET NULL"), index=True, nullable=True)
+    heading: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="frustration", index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    context_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    severity: Mapped[str] = mapped_column(String(32), default="medium", index=True)  # low, medium, high, critical
+    metadata_payload: Mapped[Optional[Any]] = mapped_column(JSON, default=dict, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    workspace = relationship("Workspace", foreign_keys=[workspace_id])
+    credential = relationship("MCPCredential", foreign_keys=[credential_id])
+
+
+

@@ -3,6 +3,7 @@ import {
   AccountMCPCredential,
   AccountMCPCredentialCreated,
   AccountMCPPermissions,
+  AdminFeedbackSignal,
   AdminStats,
   AdminUser,
   AdminWorkspace,
@@ -583,6 +584,14 @@ class ApiClient {
       method: "PUT",
       body: JSON.stringify({ rules_text }),
     });
+  }
+
+  async getAdminFeedbackSignals(category?: string, limit: number = 100): Promise<AdminFeedbackSignal[]> {
+    const params = new URLSearchParams();
+    if (category && category !== "all") params.append("category", category);
+    if (limit) params.append("limit", limit.toString());
+    const qs = params.toString();
+    return this.request<AdminFeedbackSignal[]>(`/admin/feedback-signals${qs ? `?${qs}` : ""}`);
   }
 }
 

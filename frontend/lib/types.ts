@@ -263,3 +263,17 @@ export interface AIGuidanceUpdateRequest {
   tags?: string[];
 }
 
+export interface AdminFeedbackSignal {
+  id: string;
+  user_id?: string | null;
+  workspace_id?: string | null;
+  credential_id?: string | null;
+  heading: string;
+  category: string;
+  description: string;
+  context_summary?: string | null;
+  severity: "low" | "medium" | "high" | "critical" | string;
+  metadata?: any;
+  created_at: string;
+}
+
