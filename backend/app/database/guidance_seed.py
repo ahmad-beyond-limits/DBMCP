@@ -104,25 +104,19 @@ def get_starter_playbooks() -> List[AIGuidancePlaybook]:
 
 
 async def ensure_default_guidance(db: AsyncSession) -> None:
-    """Ensures default starter playbooks exist and stay synchronized in the database."""
+    """Ensures default starter playbooks exist in the database without overwriting admin edits."""
     try:
         starter_playbooks = get_starter_playbooks()
+        added = False
         for pb in starter_playbooks:
             existing = (await db.execute(
                 select(AIGuidancePlaybook).where(AIGuidancePlaybook.title == pb.title)
             )).scalar_one_or_none()
             if not existing:
                 db.add(pb)
-            else:
-                existing.category = pb.category
-                existing.trigger_condition = pb.trigger_condition
-                existing.summary = pb.summary
-                existing.prompt_template = pb.prompt_template
-                existing.strict_rules = pb.strict_rules
-                existing.style_guide = pb.style_guide
-                existing.tags = pb.tags
-                existing.is_active = pb.is_active
-        await db.commit()
-        logger.info("Successfully synchronized default AI Guidance Playbooks.")
+                added = True
+        if added:
+            await db.commit()
+            logger.info("Successfully seeded default AI Guidance Playbooks.")
     except Exception as e:
         logger.warning(f"Could not auto-seed default AI Guidance Playbooks: {e}")

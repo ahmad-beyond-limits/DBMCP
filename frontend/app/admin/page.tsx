@@ -114,24 +114,25 @@ export default function AdminDashboardPage() {
       }
 
       const [statsData, usersData, workspacesData, guidanceData, globalRulesData, feedbackData] = await Promise.all([
-        api.getAdminStats(),
-        api.getAdminUsers(),
-        api.getAdminWorkspaces(),
-        api.getAdminAIGuidance(),
+        api.getAdminStats().catch((err) => { console.error("Failed to load admin stats:", err); return null; }),
+        api.getAdminUsers().catch((err) => { console.error("Failed to load admin users:", err); return []; }),
+        api.getAdminWorkspaces().catch((err) => { console.error("Failed to load admin workspaces:", err); return []; }),
+        api.getAdminAIGuidance().catch((err) => { console.error("Failed to load guidance playbooks:", err); return []; }),
         api.getAdminGlobalAIRules().catch(() => ({ id: 1, rules_text: "" })),
-        api.getAdminFeedbackSignals().catch(() => []),
+        api.getAdminFeedbackSignals().catch((err) => { console.error("Failed to load feedback signals:", err); return []; }),
       ]);
 
-      setStats(statsData);
-      setUsers(usersData);
-      setWorkspaces(workspacesData);
-      setGuidanceList(guidanceData);
+      if (statsData) setStats(statsData);
+      setUsers(usersData || []);
+      setWorkspaces(workspacesData || []);
+      setGuidanceList(guidanceData || []);
       setFeedbackSignals(feedbackData || []);
       if (globalRulesData && globalRulesData.rules_text !== undefined) {
         setGlobalRulesText(globalRulesData.rules_text || "");
       }
     } catch (err: any) {
-      router.push("/dashboard");
+      console.error("Failed to authenticate or load master admin console:", err);
+      setActionMsg({ type: "error", text: err.message || "Failed to load master admin console" });
     } finally {
       setLoading(false);
     }
