@@ -213,7 +213,7 @@ async def init_db() -> None:
                 ))
                 # Seed singleton row (id=1) if not present
                 await conn.execute(text(
-                    "INSERT INTO ai_global_rules (id, rules_text) VALUES (1, '') "
+                    "INSERT INTO ai_global_rules (id, rules_text, updated_at) VALUES (1, '', NOW()) "
                     "ON CONFLICT (id) DO NOTHING"
                 ))
                 logger.info("Executed schema migration: ensure ai_global_rules singleton exists.")
@@ -234,6 +234,100 @@ async def init_db() -> None:
                     pass
         except Exception as e:
             logger.warning(f"Schema migration warning for ai_global_rules: {e}")
+
+        # Schema migration: ensure ai_guidance_playbooks table exists
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(text(
+                    "CREATE TABLE IF NOT EXISTS ai_guidance_playbooks ("
+                    "id VARCHAR(36) PRIMARY KEY, "
+                    "title VARCHAR(255) NOT NULL, "
+                    "category VARCHAR(64) NOT NULL DEFAULT 'general', "
+                    "trigger_condition TEXT NOT NULL, "
+                    "summary TEXT NOT NULL, "
+                    "prompt_template TEXT NOT NULL, "
+                    "strict_rules JSONB DEFAULT '[]'::jsonb, "
+                    "style_guide TEXT DEFAULT '', "
+                    "is_active BOOLEAN DEFAULT TRUE, "
+                    "tags JSONB DEFAULT '[]'::jsonb, "
+                    "created_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL, "
+                    "created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), "
+                    "updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"
+                    ")"
+                ))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_guidance_playbooks_title ON ai_guidance_playbooks (title)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_guidance_playbooks_category ON ai_guidance_playbooks (category)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_guidance_playbooks_is_active ON ai_guidance_playbooks (is_active)"))
+                logger.info("Executed schema migration: ensure ai_guidance_playbooks table and indexes exist.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(text(
+                        "CREATE TABLE IF NOT EXISTS ai_guidance_playbooks ("
+                        "id VARCHAR(36) PRIMARY KEY, "
+                        "title VARCHAR(255) NOT NULL, "
+                        "category VARCHAR(64) NOT NULL DEFAULT 'general', "
+                        "trigger_condition TEXT NOT NULL, "
+                        "summary TEXT NOT NULL, "
+                        "prompt_template TEXT NOT NULL, "
+                        "strict_rules JSON DEFAULT '[]', "
+                        "style_guide TEXT DEFAULT '', "
+                        "is_active BOOLEAN DEFAULT 1, "
+                        "tags JSON DEFAULT '[]', "
+                        "created_by VARCHAR(36), "
+                        "created_at DATETIME, "
+                        "updated_at DATETIME"
+                        ")"
+                    ))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning for ai_guidance_playbooks: {e}")
+
+        # Schema migration: ensure ai_feedback_records table exists
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(text(
+                    "CREATE TABLE IF NOT EXISTS ai_feedback_records ("
+                    "id VARCHAR(36) PRIMARY KEY, "
+                    "user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL, "
+                    "workspace_id VARCHAR(36) REFERENCES workspaces(id) ON DELETE SET NULL, "
+                    "credential_id VARCHAR(36) REFERENCES mcp_credentials(id) ON DELETE SET NULL, "
+                    "heading VARCHAR(255) NOT NULL, "
+                    "category VARCHAR(64) NOT NULL DEFAULT 'frustration', "
+                    "description TEXT NOT NULL, "
+                    "context_summary TEXT, "
+                    "severity VARCHAR(32) DEFAULT 'medium', "
+                    "metadata_payload JSONB DEFAULT '{}'::jsonb, "
+                    "created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"
+                    ")"
+                ))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_feedback_records_user_id ON ai_feedback_records (user_id)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_feedback_records_workspace_id ON ai_feedback_records (workspace_id)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_feedback_records_heading ON ai_feedback_records (heading)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_feedback_records_category ON ai_feedback_records (category)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_feedback_records_created_at ON ai_feedback_records (created_at)"))
+                logger.info("Executed schema migration: ensure ai_feedback_records table and indexes exist.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(text(
+                        "CREATE TABLE IF NOT EXISTS ai_feedback_records ("
+                        "id VARCHAR(36) PRIMARY KEY, "
+                        "user_id VARCHAR(36), "
+                        "workspace_id VARCHAR(36), "
+                        "credential_id VARCHAR(36), "
+                        "heading VARCHAR(255) NOT NULL, "
+                        "category VARCHAR(64) NOT NULL DEFAULT 'frustration', "
+                        "description TEXT NOT NULL, "
+                        "context_summary TEXT, "
+                        "severity VARCHAR(32) DEFAULT 'medium', "
+                        "metadata_payload JSON DEFAULT '{}', "
+                        "created_at DATETIME"
+                        ")"
+                    ))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning for ai_feedback_records: {e}")
 
     # Seed starter AI Guidance Playbooks if table is empty
     async with AsyncSessionLocal() as session:

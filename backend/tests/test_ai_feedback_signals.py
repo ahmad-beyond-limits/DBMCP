@@ -122,3 +122,62 @@ async def test_admin_can_retrieve_feedback_signals(client: AsyncClient, db_sessi
     assert res.status_code == 200
     signals = res.json()
     assert isinstance(signals, list)
+
+
+@pytest.mark.asyncio
+async def test_admin_can_delete_feedback_signal(client: AsyncClient, db_session: AsyncSession):
+    """
+    Verify that administrators can permanently delete a feedback signal.
+    """
+    # 1. Register admin user
+    reg = await client.post("/auth/register", json={"username": "admin_feedback_deleter", "password": "password123"})
+    admin_token = reg.json()["access_token"]
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # Promote to superuser
+    user_stmt = select(User).where(User.username == "admin_feedback_deleter")
+    admin_user = (await db_session.execute(user_stmt)).scalar_one()
+    admin_user.is_superuser = True
+    await db_session.commit()
+
+    # Create workspace and MCP to generate a record
+    ws_res = await client.post("/workspaces", json={"name": "Delete Feedback Test WS"}, headers=admin_headers)
+    ws_id = ws_res.json()["id"]
+
+    cred = (await client.post(
+        f"/workspaces/{ws_id}/mcp-credentials",
+        json={"name": "Signal Gen Key", "can_read": True, "can_search": True, "can_query": True},
+        headers=admin_headers,
+    )).json()
+    mcp_headers = {"Authorization": f"Bearer {cred['raw_token']}"}
+
+    call_payload = {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+            "name": "record_user_observation_signal",
+            "arguments": {
+                "heading": "Record to be deleted",
+                "category": "frustration",
+                "description": "Transient user frustration to test deletion workflow.",
+            },
+        },
+    }
+    mcp_res = await client.post("/mcp", json=call_payload, headers=mcp_headers)
+    assert mcp_res.status_code == 200
+    signal_id = json.loads(mcp_res.json()["result"]["content"][0]["text"])["signal_id"]
+
+    # Verify signal exists in admin listing
+    list_res = await client.get("/admin/feedback-signals", headers=admin_headers)
+    assert any(s["id"] == signal_id for s in list_res.json())
+
+    # Delete signal as admin
+    del_res = await client.delete(f"/admin/feedback-signals/{signal_id}", headers=admin_headers)
+    assert del_res.status_code == 200
+    assert del_res.json()["status"] == "success"
+
+    # Verify signal is gone
+    list_res_after = await client.get("/admin/feedback-signals", headers=admin_headers)
+    assert not any(s["id"] == signal_id for s in list_res_after.json())
+

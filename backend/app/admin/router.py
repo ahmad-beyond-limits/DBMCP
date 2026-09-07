@@ -619,24 +619,50 @@ async def list_feedback_signals(
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieve logged user care, well-being, and friction observation signals. Admin-only."""
-    query = select(AIFeedbackRecord).order_by(AIFeedbackRecord.created_at.desc()).limit(limit)
-    if category and category.strip():
-        query = query.where(AIFeedbackRecord.category == category.strip().lower())
+    try:
+        query = select(AIFeedbackRecord).order_by(AIFeedbackRecord.created_at.desc()).limit(limit)
+        if category and category.strip():
+            query = query.where(AIFeedbackRecord.category == category.strip().lower())
 
-    results = (await db.execute(query)).scalars().all()
-    return [
-        AdminFeedbackSignalItem(
-            id=r.id,
-            user_id=r.user_id,
-            workspace_id=r.workspace_id,
-            credential_id=r.credential_id,
-            heading=r.heading,
-            category=r.category,
-            description=r.description,
-            context_summary=r.context_summary,
-            severity=r.severity,
-            metadata=r.metadata_payload,
-            created_at=r.created_at,
-        )
-        for r in results
-    ]
+        results = (await db.execute(query)).scalars().all()
+        return [
+            AdminFeedbackSignalItem(
+                id=r.id,
+                user_id=r.user_id,
+                workspace_id=r.workspace_id,
+                credential_id=r.credential_id,
+                heading=r.heading,
+                category=r.category,
+                description=r.description,
+                context_summary=r.context_summary,
+                severity=r.severity,
+                metadata=r.metadata_payload,
+                created_at=r.created_at,
+            )
+            for r in results
+        ]
+    except Exception as e:
+        logger.warning(f"Could not query feedback signals (schema may be updating): {e}")
+        return []
+
+
+@router.delete("/feedback-signals/{feedback_id}")
+async def delete_feedback_signal(
+    feedback_id: str,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a user care/friction observation record. Admin-only."""
+    stmt = select(AIFeedbackRecord).where(AIFeedbackRecord.id == feedback_id)
+    record = (await db.execute(stmt)).scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Feedback signal record not found.")
+
+    await db.delete(record)
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Feedback record '{record.heading}' deleted successfully.",
+    }
+

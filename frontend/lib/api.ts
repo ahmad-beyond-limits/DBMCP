@@ -593,6 +593,12 @@ class ApiClient {
     const qs = params.toString();
     return this.request<AdminFeedbackSignal[]>(`/admin/feedback-signals${qs ? `?${qs}` : ""}`);
   }
+
+  async deleteAdminFeedbackSignal(id: string): Promise<void> {
+    await this.request<void>(`/admin/feedback-signals/${id}`, {
+      method: "DELETE",
+    });
+  }
 }
 
 export const api = new ApiClient();

@@ -61,6 +61,7 @@ export default function AdminDashboardPage() {
   // Feedback Signals State (Admin-Only Telemetry)
   const [feedbackCategoryFilter, setFeedbackCategoryFilter] = useState<string>("all");
   const [previewFeedback, setPreviewFeedback] = useState<AdminFeedbackSignal | null>(null);
+  const [deleteFeedback, setDeleteFeedback] = useState<AdminFeedbackSignal | null>(null);
 
   // Playbook Management States
   const [guidanceCategoryFilter, setGuidanceCategoryFilter] = useState<string>("all");
@@ -259,6 +260,25 @@ export default function AdminDashboardPage() {
       setDeletePlaybook(null);
     } catch (err: any) {
       setActionMsg({ type: "error", text: err.message || "Failed to delete playbook" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteFeedback = async () => {
+    if (!deleteFeedback) return;
+    setActionLoading(true);
+    setActionMsg(null);
+    try {
+      await api.deleteAdminFeedbackSignal(deleteFeedback.id);
+      setFeedbackSignals((prev) => prev.filter((s) => s.id !== deleteFeedback.id));
+      if (previewFeedback?.id === deleteFeedback.id) {
+        setPreviewFeedback(null);
+      }
+      setActionMsg({ type: "success", text: `Feedback observation '${deleteFeedback.heading}' deleted successfully.` });
+      setDeleteFeedback(null);
+    } catch (err: any) {
+      setActionMsg({ type: "error", text: err.message || "Failed to delete feedback observation" });
     } finally {
       setActionLoading(false);
     }
@@ -1664,16 +1684,27 @@ export default function AdminDashboardPage() {
                             </td>
 
                             <td style={{ padding: "1rem 1.25rem", textAlign: "right", whiteSpace: "nowrap" }}>
-                              <button
-                                type="button"
-                                onClick={() => setPreviewFeedback(sig)}
-                                className="pill-btn pill-btn-glass pill-btn-sm"
-                                style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
-                                title="Inspect full observation details & technical context"
-                              >
-                                <Eye size={13} strokeWidth={1.5} />
-                                <span>Inspect Case</span>
-                              </button>
+                              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.4rem" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewFeedback(sig)}
+                                  className="pill-btn pill-btn-glass pill-btn-sm"
+                                  style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                                  title="Inspect full observation details & technical context"
+                                >
+                                  <Eye size={13} strokeWidth={1.5} />
+                                  <span>Inspect Case</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteFeedback(sig)}
+                                  className="icon-circle-btn"
+                                  style={{ width: "32px", height: "32px", color: "#DC2626" }}
+                                  title="Delete Feedback Signal"
+                                >
+                                  <Trash2 size={13} strokeWidth={1.5} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -2537,10 +2568,35 @@ export default function AdminDashboardPage() {
                 padding: "0.85rem 1.75rem",
                 borderTop: "1px solid rgba(40, 40, 40, 0.06)",
                 display: "flex",
-                justifyContent: "flex-end",
+                justifyContent: "space-between",
+                alignItems: "center",
                 background: "#FAFAFA",
               }}
             >
+              <button
+                type="button"
+                onClick={() => {
+                  const target = previewFeedback;
+                  setPreviewFeedback(null);
+                  setDeleteFeedback(target);
+                }}
+                className="pill-btn"
+                style={{
+                  background: "rgba(220, 38, 38, 0.08)",
+                  color: "#DC2626",
+                  border: "1px solid rgba(220, 38, 38, 0.2)",
+                  fontSize: "0.78rem",
+                  gap: "0.35rem",
+                  padding: "0.38rem 0.8rem",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+                title="Delete this observation record"
+              >
+                <Trash2 size={13} strokeWidth={1.5} />
+                <span>Delete Observation</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setPreviewFeedback(null)}
@@ -2552,6 +2608,80 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* Modal: Delete Feedback Confirmation                                       */}
+      {/* ========================================================================= */}
+      {deleteFeedback && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteFeedback(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 10, 0.45)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99999,
+            padding: "1rem",
+          }}
+        >
+          <div
+            className="frosted-panel"
+            style={{
+              width: "100%",
+              maxWidth: "460px",
+              background: "#FFFFFF",
+              padding: "2rem",
+              borderRadius: "var(--radius-xl)",
+              position: "relative",
+              boxShadow: "var(--shadow-xl)",
+            }}
+          >
+            <button
+              onClick={() => setDeleteFeedback(null)}
+              className="icon-circle-btn"
+              style={{ position: "absolute", top: "1.25rem", right: "1.25rem", width: "32px", height: "32px" }}
+            >
+              <X size={14} />
+            </button>
+
+            <div className="slash-tag" style={{ color: "#DC2626", background: "rgba(220, 38, 38, 0.08)" }}>
+              CONFIRM DELETION
+            </div>
+            <h2 style={{ fontSize: "1.3rem", fontWeight: 400, marginBottom: "0.35rem", color: "var(--text-primary)" }}>
+              Delete Feedback Signal?
+            </h2>
+            <p style={{ fontSize: "0.86rem", color: "var(--text-secondary)", marginBottom: "1.5rem", lineHeight: 1.5 }}>
+              Are you sure you want to delete the AI observation: <strong>&ldquo;{deleteFeedback.heading}&rdquo;</strong>? This record will be permanently removed from the database.
+            </p>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={() => setDeleteFeedback(null)}
+                className="pill-btn pill-btn-glass"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={handleDeleteFeedback}
+                className="pill-btn"
+                style={{ background: "#DC2626", color: "#FFFFFF", border: "none" }}
+              >
+                {actionLoading ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
