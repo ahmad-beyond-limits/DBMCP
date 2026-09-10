@@ -237,3 +237,73 @@ async def test_form_session_invalid_or_tampered_token(client: AsyncClient):
     assert "Invalid or tampered form session token" in tampered_res.json()["detail"]
 
 
+def test_clean_token_string_and_padding_defense():
+    """
+    Guarantees that tokens with URL encodings (%20, %3D), markdown punctuation,
+    trailing brackets, quotes, or newlines are cleaned and NEVER crash with Invalid payload padding.
+    """
+    from app.forms.service import clean_token_string, create_form_session_token, verify_form_session_token
+
+    # 1. Clean token helper test
+    raw = "  'https://dbmcp.onrender.com/forms/view?session=abc12345%20%3D' ) "
+    cleaned = clean_token_string("abc12345%20%3D)")
+    assert ")" not in cleaned
+    assert "%" not in cleaned
+
+    # 2. Short session token generation & verification
+    token = create_form_session_token(
+        workspace_id="ws-123",
+        file_id="file-456",
+        action="insert",
+        target_identifier="Student S002",
+    )
+    assert len(token) == 32  # Clean 32-character hex ID
+    assert "." not in token  # No fragile JWT dots in URL
+
+    # Verify session payload
+    payload = verify_form_session_token(token)
+    assert payload["workspace_id"] == "ws-123"
+    assert payload["action"] == "insert"
+    assert payload["target_identifier"] == "Student S002"
+
+    # Even if ChatGPT appends trailing brackets or quotes:
+    mangled_token = f"({token}))"
+    payload_mangled = verify_form_session_token(mangled_token)
+    assert payload_mangled["workspace_id"] == "ws-123"
+
+
+@pytest.mark.asyncio
+async def test_standalone_view_preloads_session(client: AsyncClient):
+    """
+    Verifies that /forms/view?session=... correctly preloads session data server-side
+    without any Invalid payload padding error.
+    """
+    from app.forms.service import create_form_session_token
+    # Setup workspace and dataset
+    reg = await client.post("/auth/register", json={"username": "preload_tester", "password": "password123"})
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    ws_id = (await client.post("/workspaces", json={"name": "Preload WS"}, headers=headers)).json()["id"]
+
+    csv_data = b"id,name,score\n1,Alex,90\n"
+    file_res = await client.post(
+        f"/workspaces/{ws_id}/files",
+        files={"file": ("test.csv", csv_data, "text/csv")},
+        headers=headers,
+    )
+    file_id = file_res.json()["id"]
+
+    token = create_form_session_token(
+        workspace_id=ws_id,
+        file_id=file_id,
+        action="insert",
+    )
+
+    # Load standalone form view with short session token
+    res = await client.get(f"/forms/view?session={token}")
+    assert res.status_code == 200
+    assert "preloaded-session" in res.text
+    assert "test.csv" in res.text
+    assert "Invalid payload padding" not in res.text
+
+
+

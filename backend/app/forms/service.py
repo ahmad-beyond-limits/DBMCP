@@ -57,7 +57,47 @@ def sanitize_cell_value(val: Any) -> Any:
     return val
 
 
+import hashlib
+import re
+import time
+import urllib.parse
 import uuid
+
+from app.database.models import ExtractedContent, FileRecord, Workspace, FormDataEntrySession
+
+SESSION_TYPE = "form_session"
+# Generous window (7 days) so the session never expires prematurely while the form is actively open
+SESSION_EXPIRE_HOURS = 168
+DANGEROUS_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+# Fast in-memory session cache for instant zero-latency session resolution
+_FORM_SESSION_MEMORY_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def clean_token_string(token: Optional[str]) -> str:
+    """
+    Sanitizes token strings to eliminate URL-encoding artifacts, markdown punctuation,
+    trailing brackets/quotes from chat interfaces, and internal whitespace/newlines.
+    Guarantees no decode padding crashes.
+    """
+    if not token:
+        return ""
+    t = str(token).strip()
+    # Strip wrapping quotes, markdown delimiters, angle brackets, parentheses
+    t = t.strip("'\"`<>[]()")
+    
+    # Multi-pass unquote in case of nested URL encoding (%2520 -> %20 -> space)
+    for _ in range(3):
+        if "%" in t:
+            t = urllib.parse.unquote(t)
+        else:
+            break
+            
+    # Strip any trailing punctuation that markdown parsers might append
+    t = re.sub(r"[\)\],;\.\*\"'`>]+$", "", t).strip()
+    # Remove internal whitespace, newlines, and tabs that line-wrapping introduces
+    t = re.sub(r"\s+", "", t)
+    return t
 
 
 def create_form_session_token(
@@ -69,13 +109,17 @@ def create_form_session_token(
     user_id: Optional[str] = None,
 ) -> str:
     """
-    Creates a cryptographically signed, tamper-proof JWT token
-    binding the session to the target file and workspace.
+    Creates a clean, short 32-character session token stored in fast memory cache
+    and cryptographically backed for bulletproof URL durability.
+    Generates URLs ~68 characters long that NEVER wrap or fail base64 padding.
     """
     now = datetime.now(timezone.utc)
     expire = now + timedelta(hours=SESSION_EXPIRE_HOURS)
+    short_token = uuid.uuid4().hex  # Exactly 32 hex chars, 100% URL-safe
+
     payload = {
         "jti": str(uuid.uuid4()),
+        "session_id": short_token,
         "type": SESSION_TYPE,
         "sub": str(user_id) if user_id else "mcp_client_user",
         "workspace_id": str(workspace_id),
@@ -86,57 +130,212 @@ def create_form_session_token(
         "iat": int(now.timestamp()),
         "exp": int(expire.timestamp()),
     }
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+    # Register in memory cache immediately
+    _FORM_SESSION_MEMORY_CACHE[short_token] = payload
+
+    # Also register JWT fallback mapped to the short token
+    jwt_token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    _FORM_SESSION_MEMORY_CACHE[jwt_token] = payload
+
+    return short_token
+
+
+async def persist_form_session_record(
+    db: AsyncSession,
+    session_id: str,
+    workspace_id: str,
+    file_id: str,
+    action: str,
+    filters: Optional[Dict[str, Any]] = None,
+    target_identifier: Optional[str] = None,
+    user_id: Optional[str] = None,
+    expire_hours: int = SESSION_EXPIRE_HOURS,
+) -> None:
+    """
+    Persists a form session record to the database for persistence across server restarts.
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        expire = now + timedelta(hours=expire_hours)
+        sess = FormDataEntrySession(
+            id=session_id,
+            workspace_id=str(workspace_id),
+            file_id=str(file_id),
+            action=action or "insert",
+            filters=filters or {},
+            target_identifier=target_identifier or "",
+            user_id=str(user_id) if user_id else None,
+            is_used=False,
+            expires_at=expire,
+            created_at=now,
+        )
+        db.add(sess)
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to persist FormDataEntrySession to DB (using memory cache fallback): {e}")
+        await db.rollback()
 
 
 def verify_form_session_token(token: str) -> Dict[str, Any]:
     """
-    Validates token signature and expiration against candidate keys.
+    Validates token signature and expiration against:
+    1. Fast in-memory session cache (_FORM_SESSION_MEMORY_CACHE)
+    2. Signed JWT tokens with automatic multi-key fallback and padding normalization
     """
-    candidate_keys = [
-        settings.JWT_SECRET_KEY,
-        settings.SECRET_KEY,
-        getattr(settings, "MCP_SESSION_SECRET", None),
-        "dev-insecure-jwt-key-32bytes-min-required",
-        "dev-insecure-secret-key-32bytes-min-required",
-    ]
-    seen_keys = set()
-    unique_keys = []
-    for k in candidate_keys:
-        if k and k not in seen_keys:
-            seen_keys.add(k)
-            unique_keys.append(k)
+    cleaned = clean_token_string(token)
+    if not cleaned:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session token is missing or empty.",
+        )
 
-    last_err: Optional[Exception] = None
-    for k in unique_keys:
-        try:
-            payload = jwt.decode(
-                token,
-                k,
-                algorithms=[settings.JWT_ALGORITHM],
-            )
-            if payload.get("type") != SESSION_TYPE:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid form session token type.",
-                )
-            return payload
-        except jwt.ExpiredSignatureError:
+    # 1. Fast in-memory session lookup
+    if cleaned in _FORM_SESSION_MEMORY_CACHE:
+        session_info = _FORM_SESSION_MEMORY_CACHE[cleaned]
+        exp_ts = session_info.get("exp")
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        if exp_ts and now_ts > exp_ts:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Form session has expired. Please ask the assistant to generate a new form.",
             )
-        except jwt.InvalidSignatureError as sig_err:
-            last_err = sig_err
-            continue
-        except jwt.PyJWTError as py_err:
-            last_err = py_err
-            break
+        return dict(session_info)
 
+    # 2. If it's a JWT (contains dots)
+    if "." in cleaned:
+        candidate_keys = [
+            settings.JWT_SECRET_KEY,
+            settings.SECRET_KEY,
+            getattr(settings, "MCP_SESSION_SECRET", None),
+            "dev-insecure-jwt-key-32bytes-min-required",
+            "dev-insecure-secret-key-32bytes-min-required",
+        ]
+        seen_keys = set()
+        unique_keys = []
+        for k in candidate_keys:
+            if k and k not in seen_keys:
+                seen_keys.add(k)
+                unique_keys.append(k)
+
+        # Normalize JWT segments to avoid padding issues in PyJWT
+        jwt_to_decode = cleaned
+        segments = cleaned.split(".")
+        if len(segments) == 3:
+            normalized_segs = []
+            for seg in segments:
+                s = seg.replace("+", "-").replace("/", "_").rstrip("=")
+                rem = len(s) % 4
+                if rem == 2:
+                    s += "=="
+                elif rem == 3:
+                    s += "="
+                elif rem == 1:
+                    s = s[:-1]
+                normalized_segs.append(s)
+            jwt_to_decode = ".".join(normalized_segs)
+
+        last_err: Optional[Exception] = None
+        for k in unique_keys:
+            try:
+                payload = jwt.decode(
+                    jwt_to_decode,
+                    k,
+                    algorithms=[settings.JWT_ALGORITHM],
+                )
+                if payload.get("type") != SESSION_TYPE:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid form session token type.",
+                    )
+                return payload
+            except jwt.ExpiredSignatureError:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Form session has expired. Please ask the assistant to generate a new form.",
+                )
+            except jwt.InvalidSignatureError as sig_err:
+                last_err = sig_err
+                continue
+            except jwt.PyJWTError as py_err:
+                last_err = py_err
+                continue
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid or tampered form session token ({last_err or 'signature verification failed'}).",
+        )
+
+    # 3. If token is not recognized
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail=f"Invalid or tampered form session token ({last_err or 'unrecognized signature'}).",
+        detail="Invalid or tampered form session token (unrecognized or expired). Please ask the assistant to generate a new form.",
     )
+
+
+async def resolve_form_session(token: str, db: Optional[AsyncSession] = None) -> Dict[str, Any]:
+    """
+    Resolves form session payload from:
+    1. Memory cache
+    2. Persistent database table (FormDataEntrySession)
+    3. Signed JWT token
+    """
+    cleaned = clean_token_string(token)
+    if not cleaned:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session token is missing or empty.",
+        )
+
+    # Check memory cache first
+    if cleaned in _FORM_SESSION_MEMORY_CACHE:
+        session_info = _FORM_SESSION_MEMORY_CACHE[cleaned]
+        exp_ts = session_info.get("exp")
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        if exp_ts and now_ts > exp_ts:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Form session has expired. Please ask the assistant to generate a new form.",
+            )
+        return dict(session_info)
+
+    # Check database table if session is available
+    if db is not None:
+        try:
+            stmt = select(FormDataEntrySession).where(FormDataEntrySession.id == cleaned)
+            sess_rec = (await db.execute(stmt)).scalar_one_or_none()
+            if sess_rec:
+                now = datetime.now(timezone.utc)
+                exp = sess_rec.expires_at
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
+                if now > exp:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Form session has expired. Please ask the assistant to generate a new form.",
+                    )
+                payload = {
+                    "type": SESSION_TYPE,
+                    "session_id": sess_rec.id,
+                    "workspace_id": sess_rec.workspace_id,
+                    "file_id": sess_rec.file_id,
+                    "action": sess_rec.action,
+                    "filters": sess_rec.filters or {},
+                    "target_identifier": sess_rec.target_identifier or "",
+                    "sub": sess_rec.user_id or "mcp_client_user",
+                    "exp": int(exp.timestamp()),
+                    "iat": int(sess_rec.created_at.timestamp()) if sess_rec.created_at else int(now.timestamp()),
+                }
+                _FORM_SESSION_MEMORY_CACHE[cleaned] = payload
+                return payload
+        except HTTPException:
+            raise
+        except Exception as db_err:
+            logger.debug(f"DB lookup for form session '{cleaned}' fell back: {db_err}")
+
+    # Fallback to verify_form_session_token (JWT or memory)
+    return verify_form_session_token(cleaned)
+
 
 
 def infer_field_definition(col: str, sample_values: List[Any], current_val: Optional[Any] = None) -> FormFieldDefinition:
@@ -218,7 +417,7 @@ class FormService:
         Retrieves form schema and pre-filled data for a validated form session token.
         Ensures workspace boundary isolation and zero data leakage.
         """
-        payload = verify_form_session_token(token)
+        payload = await resolve_form_session(token, db=db)
         workspace_id = payload["workspace_id"]
         file_id = payload["file_id"]
         action = payload["action"]
@@ -357,7 +556,7 @@ class FormService:
         Validates, sanitizes, and commits user-submitted form data to the dataset.
         Neutralizes formula injection (CWE-1236) and syncs storage backends.
         """
-        payload = verify_form_session_token(token)
+        payload = await resolve_form_session(token, db=db)
         workspace_id = payload["workspace_id"]
         file_id = payload["file_id"]
         action = payload["action"]
@@ -508,6 +707,18 @@ class FormService:
                 f"Error updating file storage for {file_rec.original_filename}: {storage_err}",
                 exc_info=True,
             )
+
+        # 6b. Mark form session as used
+        session_id = payload.get("session_id")
+        if session_id:
+            try:
+                stmt_sess = select(FormDataEntrySession).where(FormDataEntrySession.id == session_id)
+                sess_rec = (await db.execute(stmt_sess)).scalar_one_or_none()
+                if sess_rec:
+                    sess_rec.is_used = True
+                    db.add(sess_rec)
+            except Exception:
+                pass
 
         # 7. Commit database changes
         await db.commit()

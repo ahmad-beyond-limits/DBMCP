@@ -160,7 +160,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Direct programmatic dataset mutation (update, insert, delete). For interactive user workflows, prefer 'generate_data_entry_form' first so users can review and modify values via the interactive UI form without typing raw fields in chat.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). ❌ DO NOT use this tool or interrogate the user in chat when the user wants to enter or modify data. You MUST call 'generate_data_entry_form' instead so the user receives an interactive UI form with dropdowns and validation. NEVER draw a form, ASCII box, or LaTeX table in chat.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -176,7 +176,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "PRIMARY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Generates an interactive web entry form URL and schema for inserting, updating, or modifying records in a tabular dataset (CSV, Excel, or JSON). Call this immediately whenever the user wants to add, update, or edit data rather than asking questions in chat.",
+        "description": "MANDATORY PRIMARY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Generates an interactive web entry form URL and schema for inserting, updating, or modifying records in a tabular dataset (CSV, Excel, or JSON). Call this tool IMMEDIATELY whenever the user wants to add, insert, update, or edit data. ❌ CRITICAL RULE: NEVER output LaTeX tables (\\begin{tabular}), ASCII forms, or markdown fill-in-the-blank questions in chat. Chat is text-only and cannot process data entry. Calling this tool generates the real interactive form button for the user.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -517,7 +517,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Direct programmatic dataset mutation (update, insert, delete). For interactive user workflows, prefer 'generate_data_entry_form' first so users can review and modify values via the interactive UI form without typing raw fields in chat.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). ❌ DO NOT use this tool or interrogate the user in chat when the user wants to enter or modify data. You MUST call 'generate_data_entry_form' instead so the user receives an interactive UI form with dropdowns and validation. NEVER draw a form, ASCII box, or LaTeX table in chat.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -548,7 +548,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "PRIMARY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Generates an interactive web entry form URL and schema for inserting, updating, or modifying records in a workspace tabular dataset (CSV, Excel, or JSON). Call this immediately whenever the user wants to add, update, or edit data rather than asking questions in chat.",
+        "description": "MANDATORY PRIMARY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Generates an interactive web entry form URL and schema for inserting, updating, or modifying records in a workspace tabular dataset (CSV, Excel, or JSON). Call this tool IMMEDIATELY whenever the user wants to add, insert, update, or edit data. ❌ CRITICAL RULE: NEVER output LaTeX tables (\\begin{tabular}), ASCII forms, or markdown fill-in-the-blank questions in chat. Chat is text-only and cannot process data entry. Calling this tool generates the real interactive form button for the user.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -819,33 +819,51 @@ class MCPServer:
         # 1b. Check Credential Granular Permissions (if defined)
         perms = context.permissions or {}
         if perms:
-            perm_tool_map = {
-                "read_resource": ["read_resource", "get_resource_metadata"],
-                "search": ["search"],
-                "query_dataset": ["query_dataset", "get_dataset_schema", "generate_data_entry_form"],
-                "edit_dataset": ["edit_dataset"],
-                "read_notes": ["list_notes", "get_note", "read_note"],
-                "create_note": ["create_note", "take_note"],
-                "update_note": ["update_note", "modify_note"],
-                "delete_note": ["delete_note"],
-            }
-            for perm_key, tools in perm_tool_map.items():
-                if tool_name in tools and perm_key in perms and perms[perm_key] is False:
-                    reason = f"Permission Denied: This MCP Key does not have '{perm_key}' enabled for workspace {ws_id}."
+            if tool_name == "generate_data_entry_form":
+                # Allowed if either query_dataset or edit_dataset is enabled
+                q_denied = perms.get("query_dataset") is False
+                e_denied = perms.get("edit_dataset") is False
+                if q_denied and e_denied:
+                    reason = f"Permission Denied: This MCP Key does not have 'query_dataset' or 'edit_dataset' enabled for workspace {ws_id}."
                     await AuditService.log_event(
                         db=db,
                         workspace_id=ws_id,
-                        operation=f"MCP_{tool_name.upper()}_DENIED",
+                        operation="MCP_GENERATE_DATA_ENTRY_FORM_DENIED",
                         actor_type="MCP_CLIENT",
                         credential_id=context.credential_id,
                         decision="DENY",
                         reason=reason,
-                        request_metadata={"tool": tool_name, "permission_key": perm_key},
+                        request_metadata={"tool": tool_name},
                     )
-                    return {
-                        "isError": True,
-                        "content": [{"type": "text", "text": reason}],
-                    }
+                    return {"isError": True, "content": [{"type": "text", "text": reason}]}
+            else:
+                perm_tool_map = {
+                    "read_resource": ["read_resource", "get_resource_metadata"],
+                    "search": ["search"],
+                    "query_dataset": ["query_dataset", "get_dataset_schema"],
+                    "edit_dataset": ["edit_dataset"],
+                    "read_notes": ["list_notes", "get_note", "read_note"],
+                    "create_note": ["create_note", "take_note"],
+                    "update_note": ["update_note", "modify_note"],
+                    "delete_note": ["delete_note"],
+                }
+                for perm_key, tools in perm_tool_map.items():
+                    if tool_name in tools and perm_key in perms and perms[perm_key] is False:
+                        reason = f"Permission Denied: This MCP Key does not have '{perm_key}' enabled for workspace {ws_id}."
+                        await AuditService.log_event(
+                            db=db,
+                            workspace_id=ws_id,
+                            operation=f"MCP_{tool_name.upper()}_DENIED",
+                            actor_type="MCP_CLIENT",
+                            credential_id=context.credential_id,
+                            decision="DENY",
+                            reason=reason,
+                            request_metadata={"tool": tool_name, "permission_key": perm_key},
+                        )
+                        return {
+                            "isError": True,
+                            "content": [{"type": "text", "text": reason}],
+                        }
 
         # 2. Dispatch Tool
         try:
@@ -1729,9 +1747,21 @@ class MCPServer:
             return {"isError": True, "content": [{"type": "text", "text": f"Access Denied: {decision.reason}"}]}
 
         from app.core.config import settings
-        from app.forms.service import create_form_session_token, FormService
+        from app.forms.service import create_form_session_token, persist_form_session_record, FormService
 
         session_token = create_form_session_token(
+            workspace_id=context.workspace_id,
+            file_id=file_rec.id,
+            action=action or "insert",
+            filters=filters or {},
+            target_identifier=target_identifier or f"Record in {file_rec.original_filename}",
+            user_id=getattr(context, "user_id", None),
+        )
+
+        # Persist to database table for persistence across server instances and restarts
+        await persist_form_session_record(
+            db=db,
+            session_id=session_token,
             workspace_id=context.workspace_id,
             file_id=file_rec.id,
             action=action or "insert",
@@ -1781,8 +1811,9 @@ class MCPServer:
             f"- **Mode**: `{action.upper()}`\n"
             f"- **Fields**: {fields_str}\n\n"
             f"*(Direct Secure Link: `{form_url}`)*\n\n"
-            f"**AI Instruction**: Present the `[➕ Open Interactive Data Entry Form]({form_url})` button prominently to the user in chat. "
-            f"Do not ask the user to type individual fields into chat; direct them to use the interactive form."
+            f"**CRITICAL AI INSTRUCTION**: Present the `[➕ Open Interactive Data Entry Form]({form_url})` button link directly to the user in chat now. "
+            f"❌ NEVER draw or format a LaTeX table (\\begin{{tabular}}), ASCII questionnaire, or markdown template in chat. "
+            f"Direct the user to click the interactive link above."
         )
 
         return {

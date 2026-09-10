@@ -8,12 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.rate_limit import get_client_ip, rate_limit
 from app.database.session import get_db
 from app.forms.schemas import FormSessionResponse, FormSubmitRequest, FormSubmitResponse
-from app.forms.service import FormService
+from app.forms.service import FormService, clean_token_string
 
 router = APIRouter(prefix="/forms", tags=["Forms"])
 
 
-STANDALONE_FORM_HTML = """<!DOCTYPE html>
+STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -483,7 +483,8 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
-    let sessionToken = urlParams.get('session') || urlParams.get('token');
+    let rawParam = urlParams.get('session') || urlParams.get('token') || '';
+    let sessionToken = rawParam.trim().replace(/^['"`<([\])]+|['"`<([\])>]+$/g, '');
     let sessionData = null;
     let isSubmitted = false;
 
@@ -744,7 +745,7 @@ async def view_form_standalone(
     Serves a beautiful, self-contained, mobile-optimized interactive form web application
     directly from FastAPI. Preloads session data server-side for zero-latency instant rendering.
     """
-    effective_token = session or token
+    effective_token = clean_token_string(session or token)
     if not effective_token:
         err_json = json.dumps({
             "title": "No Session Token Provided",
@@ -800,7 +801,8 @@ async def get_form_session(
     Retrieves the dataset field definitions, inferred input controls, and pre-filled
     values for an AI-generated data entry form session. Publicly authorized via signed JWT.
     """
-    return await FormService.get_session_data(db=db, token=token)
+    cleaned = clean_token_string(token)
+    return await FormService.get_session_data(db=db, token=cleaned)
 
 
 @router.post(
@@ -818,9 +820,10 @@ async def submit_form_data(
     to the target dataset file, and invalidates the session token. Publicly authorized via signed JWT.
     """
     client_ip = get_client_ip(request)
+    cleaned = clean_token_string(req.session_token)
     return await FormService.submit_form(
         db=db,
-        token=req.session_token,
+        token=cleaned,
         submitted_values=req.values,
         client_ip=client_ip,
     )

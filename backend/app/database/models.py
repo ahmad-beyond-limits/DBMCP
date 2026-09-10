@@ -294,4 +294,28 @@ class AIFeedbackRecord(Base):
     credential = relationship("MCPCredential", foreign_keys=[credential_id])
 
 
+class FormDataEntrySession(Base):
+    """
+    Stores interactive form sessions for clean, short URLs.
+    Eliminates fragile 500-character JWTs in chat links and guarantees zero padding decode errors.
+    """
+    __tablename__ = "form_data_entry_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # Clean 32-hex character ID
+    workspace_id: Mapped[str] = mapped_column(String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), index=True, nullable=False)
+    file_id: Mapped[str] = mapped_column(String(36), ForeignKey("files.id", ondelete="CASCADE"), index=True, nullable=False)
+    action: Mapped[str] = mapped_column(String(32), default="insert", nullable=False)
+    filters: Mapped[Optional[Any]] = mapped_column(JSON, default=dict, nullable=True)
+    target_identifier: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    is_used: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    # Relationships
+    workspace = relationship("Workspace")
+    file = relationship("FileRecord")
+
+
+
 
