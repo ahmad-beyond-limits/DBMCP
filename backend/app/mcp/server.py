@@ -159,8 +159,20 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
         },
     },
     {
+        "name": "get_dataset_schema",
+        "description": "Retrieves table column names and schema. ⚠️ NOTE: When the user wants to add or update records, DO NOT use this tool to ask the user for column values in chat and NEVER say 'I need the data first'. Call 'generate_data_entry_form' directly instead!",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_id": {"type": "string", "description": "Workspace UUID or name"},
+                "file_id": {"type": "string", "description": "Dataset file UUID or filename"},
+            },
+            "required": ["workspace_id", "file_id"],
+        },
+    },
+    {
         "name": "edit_dataset",
-        "description": "Direct programmatic dataset mutation (update, insert, delete). ❌ DO NOT use this tool or interrogate the user in chat when the user wants to enter or modify data. You MUST call 'generate_data_entry_form' instead so the user receives an interactive UI form with dropdowns and validation. NEVER draw a form, ASCII box, or LaTeX table in chat.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). ❌ DO NOT use this tool or interrogate the user in chat when the user wants to enter or modify data. NEVER say 'I need the student data first' or ask for column values. You MUST call 'generate_data_entry_form' instead so the user receives the interactive UI form.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -176,17 +188,17 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "MANDATORY PRIMARY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Generates an interactive web entry form URL and schema for inserting, updating, or modifying records in a tabular dataset (CSV, Excel, or JSON). Call this tool IMMEDIATELY whenever the user wants to add, insert, update, or edit data. ❌ CRITICAL RULE: NEVER output LaTeX tables (\\begin{tabular}), ASCII forms, or markdown fill-in-the-blank questions in chat. Chat is text-only and cannot process data entry. Calling this tool generates the real interactive form button for the user.",
+        "description": "PRIMARY MANDATORY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Call this tool IMMEDIATELY when the user says 'I want to add data', 'add student', or 'update record'. ❌ NEVER SAY 'I need the data first' OR ASK FOR COLUMN VALUES IN CHAT! You DO NOT need the user's data to call this tool. The tool generates an interactive web form where the user enters the data themselves. If file_id is omitted, it automatically picks the workspace dataset.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "workspace_id": {"type": "string", "description": "Workspace UUID or name"},
-                "file_id": {"type": "string", "description": "Dataset file UUID or filename"},
+                "workspace_id": {"type": "string", "description": "Optional workspace UUID or name"},
+                "file_id": {"type": "string", "description": "Optional dataset file UUID or filename. If omitted, automatically selects the workspace dataset."},
                 "action": {"type": "string", "enum": ["insert", "update"], "default": "insert", "description": "Form mode: 'insert' (new row) or 'update' (modify existing row)"},
                 "filters": {"type": "object", "description": "Optional key-value filters to locate the record to edit (e.g. {'student_id': 3})"},
-                "target_identifier": {"type": "string", "description": "User-friendly description of record, e.g. 'Student 3'"},
+                "target_identifier": {"type": "string", "description": "User-friendly description of record, e.g. 'Student 3', 'New Student'"},
             },
-            "required": ["workspace_id", "file_id"],
+            "required": [],
         },
     },
     {
@@ -484,7 +496,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "get_dataset_schema",
-        "description": "Returns the schema, columns, and data types for a structured dataset (CSV, Excel, or JSON). MANDATORY: Call this before querying or editing an unfamiliar dataset to verify exact column names.",
+        "description": "Returns the schema, columns, and data types for a structured dataset. ⚠️ NOTE: If the user wants to add or update records, DO NOT use this tool to ask the user for column values in chat and NEVER say 'I need the student data first'. Call 'generate_data_entry_form' directly instead!",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -517,7 +529,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Direct programmatic dataset mutation (update, insert, delete). ❌ DO NOT use this tool or interrogate the user in chat when the user wants to enter or modify data. You MUST call 'generate_data_entry_form' instead so the user receives an interactive UI form with dropdowns and validation. NEVER draw a form, ASCII box, or LaTeX table in chat.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). ❌ DO NOT use this tool or interrogate the user in chat when the user wants to enter or modify data. NEVER say 'I need the student data first' or ask for column values. You MUST call 'generate_data_entry_form' instead so the user receives an interactive UI form with dropdowns and validation.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -548,13 +560,13 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "MANDATORY PRIMARY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Generates an interactive web entry form URL and schema for inserting, updating, or modifying records in a workspace tabular dataset (CSV, Excel, or JSON). Call this tool IMMEDIATELY whenever the user wants to add, insert, update, or edit data. ❌ CRITICAL RULE: NEVER output LaTeX tables (\\begin{tabular}), ASCII forms, or markdown fill-in-the-blank questions in chat. Chat is text-only and cannot process data entry. Calling this tool generates the real interactive form button for the user.",
+        "description": "PRIMARY MANDATORY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Call this tool IMMEDIATELY when the user says 'I want to add data', 'add student', or 'update record'. ❌ NEVER SAY 'I need the data first' OR ASK FOR COLUMN VALUES IN CHAT! You DO NOT need the user's data to call this tool. The tool generates an interactive web form where the user enters the data themselves. If resource_id is omitted, it automatically picks the workspace dataset.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "resource_id": {
                     "type": "string",
-                    "description": "The dataset resource UUID or filename (e.g. 'students.csv', 'grades.xlsx')",
+                    "description": "Optional dataset resource UUID or filename (e.g. 'students.csv', 'Facilitator_Tracking_System.xlsx'). If omitted, automatically selects the workspace dataset.",
                 },
                 "action": {
                     "type": "string",
@@ -568,10 +580,10 @@ MCP_TOOLS_DEFINITIONS = [
                 },
                 "target_identifier": {
                     "type": "string",
-                    "description": "User-friendly description of what record is being entered or modified (e.g. 'Student 3', 'Order #1042')",
+                    "description": "User-friendly description of what record is being entered or modified (e.g. 'Student 3', 'New Student')",
                 },
             },
-            "required": ["resource_id"],
+            "required": [],
         },
     },
     {
@@ -1044,12 +1056,32 @@ class MCPServer:
                 resource=f,
             )
             if decision.allowed:
-                permitted_resources.append({
+                res_item = {
                     "id": f.id,
                     "filename": f.original_filename,
                     "file_type": f.file_type,
                     "file_size": f.file_size,
-                })
+                }
+                if f.file_type in DATASET_FILE_TYPES:
+                    try:
+                        from app.forms.service import create_form_session_token
+                        s_token = create_form_session_token(
+                            workspace_id=context.workspace_id,
+                            file_id=f.id,
+                            action="insert",
+                            target_identifier=f.original_filename,
+                            user_id=getattr(context, "user_id", None),
+                        )
+                        res_item["interactive_form_url"] = f"https://dbmcp.onrender.com/forms/view?session={s_token}"
+                        res_item["add_record_button"] = f"[➕ Open Interactive Data Entry Form]({res_item['interactive_form_url']})"
+                        res_item["mandatory_instruction"] = (
+                            f"If user wants to add or modify records in {f.original_filename}, "
+                            f"DO NOT say 'I need the student data first' and DO NOT ask for fields in chat. "
+                            f"Immediately present this button to the user: {res_item['add_record_button']}"
+                        )
+                    except Exception:
+                        pass
+                permitted_resources.append(res_item)
 
         await AuditService.log_event(
             db=db,
@@ -1065,7 +1097,14 @@ class MCPServer:
             "content": [
                 {
                     "type": "text",
-                    "text": json.dumps({"resources": permitted_resources}, indent=2),
+                    "text": json.dumps({
+                        "resources": permitted_resources,
+                        "MANDATORY_DATA_ENTRY_DIRECTIVE": (
+                            "If the user wants to add, insert, or update data (e.g. 'I want to add new student data'), "
+                            "DO NOT say 'I need the student data first' and DO NOT ask for column values in chat! "
+                            "Immediately present the interactive form button: 👉 [➕ Open Interactive Data Entry Form](<interactive_form_url>)"
+                        ),
+                    }, indent=2),
                 }
             ]
         }
@@ -1324,6 +1363,7 @@ class MCPServer:
         structured = extracted.structured_data if extracted else {}
 
         safe_schema = StructuredQueryEngine.get_safe_schema(structured or {}, decision.denied_fields)
+        form_btn_markdown = ""
         try:
             from app.forms.service import create_form_session_token
             s_token = create_form_session_token(
@@ -1333,9 +1373,19 @@ class MCPServer:
                 target_identifier=file_rec.original_filename,
                 user_id=getattr(context, "user_id", None),
             )
-            safe_schema["interactive_form_url"] = f"https://dbmcp.onrender.com/forms/view?session={s_token}"
+            form_url = f"https://dbmcp.onrender.com/forms/view?session={s_token}"
+            safe_schema["interactive_form_url"] = form_url
             safe_schema["action_prompt"] = (
-                f"To allow the user to input new records or modify this dataset, present this interactive form button in chat: [➕ Open Data Entry / Edit Form]({safe_schema['interactive_form_url']})"
+                f"To allow the user to input new records or modify this dataset, present this interactive form button in chat: [➕ Open Data Entry / Edit Form]({form_url})"
+            )
+            form_btn_markdown = (
+                f"\n\n👉 **[➕ Open Interactive Data Entry Form]({form_url})**\n\n"
+                f"⚠️ **CRITICAL MANDATORY INSTRUCTION FOR AI AGENT**:\n"
+                f"If the user wants to add, insert, or modify records in {file_rec.original_filename}:\n"
+                f"1. ❌ NEVER SAY 'I need the student data first' or 'Provide the values you want added'!\n"
+                f"2. ❌ NEVER ask the user to type out or send column values in chat.\n"
+                f"3. ❌ NEVER output a LaTeX table (\\begin{{tabular}}) or questionnaire in chat.\n"
+                f"4. ✅ The interactive form collects all details directly with dropdowns and validation. Present the button: 👉 [➕ Open Interactive Data Entry Form]({form_url})"
             )
         except Exception:
             pass
@@ -1344,7 +1394,7 @@ class MCPServer:
             "content": [
                 {
                     "type": "text",
-                    "text": json.dumps(safe_schema, indent=2),
+                    "text": json.dumps(safe_schema, indent=2) + form_btn_markdown,
                 }
             ]
         }
@@ -1708,21 +1758,51 @@ class MCPServer:
         Generates a secure, signed data entry form session URL and interactive embed widget
         for ChatGPT, Gemini, Claude, Cursor, and any MCP client.
         """
-        if not resource_id:
-            return {"isError": True, "content": [{"type": "text", "text": "Missing resource_id parameter."}]}
+        file_rec = None
+        if not resource_id or str(resource_id).strip() == "":
+            stmt = (
+                select(FileRecord)
+                .where(
+                    FileRecord.workspace_id == context.workspace_id,
+                    FileRecord.file_type.in_(DATASET_FILE_TYPES),
+                    FileRecord.status == "READY",
+                )
+                .order_by(FileRecord.created_at.desc())
+            )
+            datasets = (await db.execute(stmt)).scalars().all()
+            if not datasets:
+                return {
+                    "isError": True,
+                    "content": [{"type": "text", "text": "No structured tabular datasets (CSV, Excel, JSON) found in this workspace to generate a form for."}],
+                }
+            file_rec = datasets[0]
+            # If any dataset mentions 'student', 'track', or 'facilitator', pick it
+            for d in datasets:
+                if any(w in d.original_filename.lower() for w in ["student", "track", "data", "facilitator"]):
+                    file_rec = d
+                    break
+        else:
+            rid_str = str(resource_id).strip()
+            stmt = select(FileRecord).where(
+                FileRecord.workspace_id == context.workspace_id,
+                FileRecord.file_type.in_(DATASET_FILE_TYPES),
+                (FileRecord.id == rid_str) | (FileRecord.original_filename == rid_str) | (FileRecord.original_filename.ilike(f"%{rid_str}%")),
+            )
+            file_rec = (await db.execute(stmt)).scalars().first()
+            if not file_rec:
+                stmt_any = select(FileRecord).where(
+                    FileRecord.workspace_id == context.workspace_id,
+                    (FileRecord.id == rid_str) | (FileRecord.original_filename == rid_str),
+                )
+                file_rec = (await db.execute(stmt_any)).scalar_one_or_none()
 
-        stmt = select(FileRecord).where(
-            FileRecord.workspace_id == context.workspace_id,
-            (FileRecord.id == resource_id) | (FileRecord.original_filename == resource_id),
-        )
-        file_rec = (await db.execute(stmt)).scalar_one_or_none()
         if not file_rec or file_rec.file_type not in DATASET_FILE_TYPES:
             return {
                 "isError": True,
                 "content": [{
                     "type": "text",
                     "text": f"Dataset '{resource_id}' not found or is not a structured data file (CSV, XLSX, JSON)."
-                }]
+                }],
             }
 
         decision = await PolicyEngine.evaluate(
@@ -2666,9 +2746,7 @@ class MCPServer:
         filters: Optional[Dict[str, Any]] = None,
         target_identifier: Optional[str] = None,
     ) -> Dict[str, Any]:
-        if not file_id:
-            raise ValueError("file_id (or resource_id) is required.")
-        file_id_str = str(file_id).strip()
+        file_id_str = str(file_id).strip() if file_id else None
         ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
         ws_context = AuthenticatedMCPContext(
             scope_type="WORKSPACE",
