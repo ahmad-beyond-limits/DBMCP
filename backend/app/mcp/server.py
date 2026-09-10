@@ -1704,8 +1704,12 @@ class MCPServer:
 
         form_session_info = await FormService.get_session_data(db, session_token)
 
-        base_url = (settings.FRONTEND_URL or settings.APP_URL or "http://localhost:3000").rstrip("/")
-        form_url = f"{base_url}/forms?session={session_token}"
+        # Determine public form URL (works standalone on mobile and desktop with zero login required)
+        if os.getenv("RENDER") or "onrender.com" in str(settings.DATABASE_URL) or settings.APP_ENV == "production" or "localhost" in getattr(settings, "FRONTEND_URL", "localhost"):
+            form_url = f"https://dbmcp.onrender.com/forms/view?session={session_token}"
+        else:
+            base_url = (settings.FRONTEND_URL or settings.APP_URL or "http://localhost:3000").rstrip("/")
+            form_url = f"{base_url}/forms?session={session_token}"
 
         title_str = form_session_info.title
         field_names = [f.label for f in form_session_info.fields]

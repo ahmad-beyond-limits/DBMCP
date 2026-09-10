@@ -63,8 +63,8 @@ class ApiClient {
     });
 
     if (response.status === 401 && typeof window !== "undefined") {
-      // Token might be expired
-      if (!endpoint.startsWith("/auth/")) {
+      // Token might be expired - do NOT redirect for public endpoints (auth or forms)
+      if (!endpoint.startsWith("/auth/") && !endpoint.startsWith("/forms/")) {
         localStorage.removeItem("dbmcp_access_token");
         window.location.href = "/login";
       }

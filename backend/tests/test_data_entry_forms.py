@@ -78,7 +78,7 @@ async def test_form_generation_session_and_submission(client: AsyncClient):
     assert "metadata" in res_data
     session_token = res_data["metadata"]["session_token"]
     form_url = res_data["metadata"]["form_url"]
-    assert "/forms?session=" in form_url
+    assert "/forms" in form_url and "session=" in form_url
 
     # 4. GET /forms/session to load the form schema
     session_res = await client.get(f"/forms/session?token={session_token}")
@@ -206,3 +206,15 @@ async def test_form_security_tampered_token(client: AsyncClient):
     res = await client.get("/forms/session?token=invalid.tampered.token")
     assert res.status_code == 401
     assert "Invalid or tampered" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_standalone_html_form_view(client: AsyncClient):
+    """
+    Verifies that the standalone mobile-friendly HTML view serves 200 OK without requiring login.
+    """
+    res = await client.get("/forms/view?session=any_token")
+    assert res.status_code == 200
+    assert "text/html" in res.headers.get("content-type", "")
+    assert "POAIS | Interactive Data Entry" in res.text
+
