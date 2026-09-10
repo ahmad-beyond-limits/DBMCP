@@ -175,6 +175,21 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
         },
     },
     {
+        "name": "generate_data_entry_form",
+        "description": "Generates a dynamic, interactive web entry form URL and schema for a workspace dataset (CSV, Excel, JSON). Use this whenever the user wants to add or update data (e.g. 'add student 3', 'update score for Alice'). Returns a responsive form URL where the user enters data and submits.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_id": {"type": "string", "description": "Workspace UUID or name"},
+                "file_id": {"type": "string", "description": "Dataset file UUID or filename"},
+                "action": {"type": "string", "enum": ["insert", "update"], "default": "insert", "description": "Form mode: 'insert' (new row) or 'update' (modify existing row)"},
+                "filters": {"type": "object", "description": "Optional key-value filters to locate the record to edit (e.g. {'student_id': 3})"},
+                "target_identifier": {"type": "string", "description": "User-friendly description of record, e.g. 'Student 3'"},
+            },
+            "required": ["workspace_id", "file_id"],
+        },
+    },
+    {
         "name": "delete_file",
         "description": "Permanently deletes a file/resource from a workspace.",
         "inputSchema": {
@@ -532,6 +547,34 @@ MCP_TOOLS_DEFINITIONS = [
         },
     },
     {
+        "name": "generate_data_entry_form",
+        "description": "Generates a dynamic, interactive web entry form URL and schema for a workspace dataset (CSV, Excel, JSON). Use this whenever the user wants to add or update data (e.g. 'add student 3', 'update score for Alice'). Returns a responsive web form URL with pre-filled inputs and single-click submit.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "resource_id": {
+                    "type": "string",
+                    "description": "The dataset resource UUID or filename (e.g. 'students.csv', 'grades.xlsx')",
+                },
+                "action": {
+                    "type": "string",
+                    "enum": ["insert", "update"],
+                    "default": "insert",
+                    "description": "Form mode: 'insert' to add a brand new record, or 'update' to edit an existing record",
+                },
+                "filters": {
+                    "type": "object",
+                    "description": "Optional key-value filters to identify the specific record to update (e.g. {'student_id': 3} or {'name': 'Alice'})",
+                },
+                "target_identifier": {
+                    "type": "string",
+                    "description": "User-friendly description of what record is being entered or modified (e.g. 'Student 3', 'Order #1042')",
+                },
+            },
+            "required": ["resource_id"],
+        },
+    },
+    {
         "name": "create_note",
         "description": "Creates and saves a structured note or knowledge scratchpad entry in this workspace. Can reference workspace documents.",
         "inputSchema": {
@@ -779,7 +822,7 @@ class MCPServer:
             perm_tool_map = {
                 "read_resource": ["read_resource", "get_resource_metadata"],
                 "search": ["search"],
-                "query_dataset": ["query_dataset", "get_dataset_schema"],
+                "query_dataset": ["query_dataset", "get_dataset_schema", "generate_data_entry_form"],
                 "edit_dataset": ["edit_dataset"],
                 "read_notes": ["list_notes", "get_note", "read_note"],
                 "create_note": ["create_note", "take_note"],
@@ -837,6 +880,15 @@ class MCPServer:
                     filters=args.get("filters"),
                     updates=args.get("updates"),
                     new_row=args.get("new_row"),
+                )
+            elif tool_name == "generate_data_entry_form":
+                return await cls._generate_data_entry_form(
+                    db=db,
+                    context=context,
+                    resource_id=args.get("resource_id"),
+                    action=args.get("action", "insert"),
+                    filters=args.get("filters"),
+                    target_identifier=args.get("target_identifier"),
                 )
             elif tool_name in ["create_note", "take_note"]:
                 return await cls._create_note(
@@ -1587,6 +1639,127 @@ class MCPServer:
         }
 
     @classmethod
+    async def _generate_data_entry_form(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        resource_id: Optional[str],
+        action: str = "insert",
+        filters: Optional[Dict[str, Any]] = None,
+        target_identifier: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generates a secure, signed data entry form session URL and interactive embed widget
+        for ChatGPT, Gemini, Claude, Cursor, and any MCP client.
+        """
+        if not resource_id:
+            return {"isError": True, "content": [{"type": "text", "text": "Missing resource_id parameter."}]}
+
+        stmt = select(FileRecord).where(
+            FileRecord.workspace_id == context.workspace_id,
+            (FileRecord.id == resource_id) | (FileRecord.original_filename == resource_id),
+        )
+        file_rec = (await db.execute(stmt)).scalar_one_or_none()
+        if not file_rec or file_rec.file_type not in DATASET_FILE_TYPES:
+            return {
+                "isError": True,
+                "content": [{
+                    "type": "text",
+                    "text": f"Dataset '{resource_id}' not found or is not a structured data file (CSV, XLSX, JSON)."
+                }]
+            }
+
+        decision = await PolicyEngine.evaluate(
+            db=db,
+            workspace_id=context.workspace_id,
+            actor=context,
+            operation="query_dataset",
+            resource=file_rec,
+        )
+        if not decision.allowed:
+            await AuditService.log_event(
+                db=db,
+                workspace_id=context.workspace_id,
+                operation="DATA_ENTRY_FORM_DENIED",
+                actor_type="MCP_CLIENT",
+                credential_id=context.credential_id,
+                resource_type="dataset",
+                resource_id=file_rec.id,
+                decision="DENY",
+                reason=decision.reason,
+            )
+            return {"isError": True, "content": [{"type": "text", "text": f"Access Denied: {decision.reason}"}]}
+
+        from app.core.config import settings
+        from app.forms.service import create_form_session_token, FormService
+
+        session_token = create_form_session_token(
+            workspace_id=context.workspace_id,
+            file_id=file_rec.id,
+            action=action or "insert",
+            filters=filters or {},
+            target_identifier=target_identifier or f"Record in {file_rec.original_filename}",
+            user_id=getattr(context, "user_id", None),
+        )
+
+        form_session_info = await FormService.get_session_data(db, session_token)
+
+        base_url = (settings.FRONTEND_URL or settings.APP_URL or "http://localhost:3000").rstrip("/")
+        form_url = f"{base_url}/forms?session={session_token}"
+
+        title_str = form_session_info.title
+        field_names = [f.label for f in form_session_info.fields]
+        fields_str = ", ".join(field_names[:10])
+        if len(field_names) > 10:
+            fields_str += f" (+{len(field_names) - 10} more)"
+
+        await AuditService.log_event(
+            db=db,
+            workspace_id=context.workspace_id,
+            operation="FORM_DATA_ENTRY_GENERATED",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            resource_type="dataset",
+            resource_id=file_rec.id,
+            decision="ALLOW",
+            reason=f"Generated interactive entry form for {file_rec.original_filename} (action: {action})",
+            request_metadata={
+                "action": action,
+                "target_identifier": target_identifier,
+                "fields_count": len(form_session_info.fields),
+            },
+        )
+
+        response_text = (
+            f"### 📋 {title_str}\n\n"
+            f"An interactive data entry form is ready for **{file_rec.original_filename}**.\n\n"
+            f"- **Target**: {target_identifier or file_rec.original_filename}\n"
+            f"- **Action**: {action.upper()}\n"
+            f"- **Fields**: {fields_str}\n\n"
+            f"👉 **[Click Here to Open and Fill the Form]({form_url})**\n\n"
+            f"---\n"
+            f"*Or open this direct secure link:* `{form_url}`\n\n"
+            f"*(Note: Submitting this form will securely commit the data directly to {file_rec.original_filename} in workspace storage.)*"
+        )
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": response_text,
+                }
+            ],
+            "metadata": {
+                "form_url": form_url,
+                "session_token": session_token,
+                "action": action,
+                "filename": file_rec.original_filename,
+                "fields": [f.model_dump() for f in form_session_info.fields],
+                "expires_at": form_session_info.expires_at,
+            }
+        }
+
+    @classmethod
     async def _record_user_observation_signal(
         cls,
         db: AsyncSession,
@@ -1747,6 +1920,19 @@ class MCPServer:
                     filters=args.get("filters"),
                     updates=args.get("updates"),
                     new_row=args.get("new_row"),
+                )
+
+            elif tool_name == "generate_data_entry_form":
+                require_perm("read_data", "Generate interactive data entry forms")
+                target_file_id = args.get("file_id") or args.get("resource_id")
+                return await cls._account_generate_data_entry_form(
+                    db=db,
+                    context=context,
+                    workspace_id=args.get("workspace_id"),
+                    file_id=target_file_id,
+                    action=args.get("action", "insert"),
+                    filters=args.get("filters"),
+                    target_identifier=args.get("target_identifier"),
                 )
 
             elif tool_name == "delete_file":
@@ -2039,6 +2225,7 @@ class MCPServer:
             "get_dataset_schema",
             "query_dataset",
             "edit_dataset",
+            "generate_data_entry_form",
             "create_note",
             "take_note",
             "list_notes",
@@ -2392,6 +2579,39 @@ class MCPServer:
             filters=filters,
             updates=updates,
             new_row=new_row,
+        )
+
+    @classmethod
+    async def _account_generate_data_entry_form(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        workspace_id: str,
+        file_id: str,
+        action: str = "insert",
+        filters: Optional[Dict[str, Any]] = None,
+        target_identifier: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if not file_id:
+            raise ValueError("file_id (or resource_id) is required.")
+        file_id_str = str(file_id).strip()
+        ws = await cls._resolve_account_workspace(db, context.user_id, workspace_id)
+        ws_context = AuthenticatedMCPContext(
+            scope_type="WORKSPACE",
+            workspace_id=ws.id,
+            credential_id=context.credential_id,
+            credential_prefix=context.credential_prefix,
+            workspace_name=ws.name,
+            user_id=context.user_id,
+            permissions={"query_dataset": True, "read_resource": True},
+        )
+        return await cls._generate_data_entry_form(
+            db=db,
+            context=ws_context,
+            resource_id=file_id_str,
+            action=action,
+            filters=filters,
+            target_identifier=target_identifier,
         )
 
     @classmethod

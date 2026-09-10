@@ -14,6 +14,9 @@ import {
   AuditLog,
   ExtractedContent,
   FileRecord,
+  FormFieldDefinition,
+  FormSessionResponse,
+  FormSubmitResponse,
   MCPCredential,
   MCPCredentialCreated,
   Note,
@@ -597,6 +600,17 @@ class ApiClient {
   async deleteAdminFeedbackSignal(id: string): Promise<void> {
     await this.request<void>(`/admin/feedback-signals/${id}`, {
       method: "DELETE",
+    });
+  }
+
+  async getFormSession(token: string): Promise<FormSessionResponse> {
+    return this.request<FormSessionResponse>(`/forms/session?token=${encodeURIComponent(token)}`);
+  }
+
+  async submitFormData(token: string, values: Record<string, any>): Promise<FormSubmitResponse> {
+    return this.request<FormSubmitResponse>(`/forms/submit`, {
+      method: "POST",
+      body: JSON.stringify({ session_token: token, values }),
     });
   }
 }

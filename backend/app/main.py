@@ -11,6 +11,7 @@ from app.auth.router import router as auth_router
 from app.core.config import settings
 from app.core.logging_redactor import setup_secure_logging
 from app.database.session import init_db
+from app.forms.router import router as forms_router
 from app.mcp.router import router as mcp_router
 from app.notes.router import router as notes_router
 from app.policies.router import router as policies_router
@@ -94,6 +95,7 @@ app.include_router(resources_router)
 app.include_router(policies_router)
 app.include_router(mcp_router)
 app.include_router(audit_router)
+app.include_router(forms_router)
 
 
 @app.get("/icon.svg", include_in_schema=False)

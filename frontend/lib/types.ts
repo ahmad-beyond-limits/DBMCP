@@ -277,3 +277,41 @@ export interface AdminFeedbackSignal {
   created_at: string;
 }
 
+export interface FormFieldDefinition {
+  name: string;
+  label: string;
+  type: "text" | "number" | "date" | "boolean" | "select";
+  options?: string[];
+  required: boolean;
+  current_value?: any;
+  placeholder?: string;
+}
+
+export interface FormSessionResponse {
+  session_token: string;
+  workspace_id: string;
+  workspace_name: string;
+  file_id: string;
+  filename: string;
+  action: "insert" | "update";
+  title: string;
+  description?: string;
+  target_identifier?: string;
+  fields: FormFieldDefinition[];
+  prefilled_values: Record<string, any>;
+  expires_at: string;
+}
+
+export interface FormSubmitRequest {
+  session_token: string;
+  values: Record<string, any>;
+}
+
+export interface FormSubmitResponse {
+  status: string;
+  message: string;
+  action: string;
+  filename: string;
+  affected_records: number;
+  record: Record<string, any>;
+}
