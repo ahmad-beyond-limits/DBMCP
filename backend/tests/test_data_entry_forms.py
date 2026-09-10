@@ -197,6 +197,11 @@ async def test_form_update_flow(client: AsyncClient):
     assert sub_res.status_code == 200
     assert sub_res.json()["record"]["math_score"] == "99"
 
+    # Token must now be revoked after submission
+    reused_res = await client.get(f"/forms/session?token={session_token}")
+    assert reused_res.status_code == 401
+    assert "closed or has already been submitted" in reused_res.json()["detail"]
+
 
 @pytest.mark.asyncio
 async def test_form_security_tampered_token(client: AsyncClient):
@@ -211,10 +216,37 @@ async def test_form_security_tampered_token(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_standalone_html_form_view(client: AsyncClient):
     """
-    Verifies that the standalone mobile-friendly HTML view serves 200 OK without requiring login.
+    Verifies that the standalone mobile-friendly HTML view serves 200 OK without requiring login
+    and displays POAIS Soft Clinical brand typography and layout.
     """
     res = await client.get("/forms/view?session=any_token")
     assert res.status_code == 200
     assert "text/html" in res.headers.get("content-type", "")
     assert "POAIS | Interactive Data Entry" in res.text
+    assert "slash-tag" in res.text
+    assert "Session expires when page closes" in res.text
+
+
+@pytest.mark.asyncio
+async def test_form_session_expires_on_page_close_beacon(client: AsyncClient):
+    """
+    Verifies that when a user exits or closes the tab, the /forms/expire beacon
+    immediately revokes the session token, preventing reuse.
+    """
+    from app.forms.service import create_form_session_token
+    token = create_form_session_token(
+        workspace_id="00000000-0000-0000-0000-000000000000",
+        file_id="00000000-0000-0000-0000-000000000000",
+        action="insert",
+    )
+    # 1. Send page close beacon
+    expire_res = await client.post(f"/forms/expire?session={token}")
+    assert expire_res.status_code == 200
+    assert expire_res.json()["status"] == "expired"
+
+    # 2. Attempting to retrieve session with the revoked token must fail with 401
+    check_res = await client.get(f"/forms/session?token={token}")
+    assert check_res.status_code == 401
+    assert "closed or has already been submitted" in check_res.json()["detail"]
+
 

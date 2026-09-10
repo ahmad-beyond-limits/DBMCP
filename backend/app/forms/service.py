@@ -22,9 +22,42 @@ from app.structured.query_engine import _matches_filter, _get_row_val
 
 logger = logging.getLogger(__name__)
 
+import hashlib
+import time
+
 SESSION_TYPE = "form_session"
-SESSION_EXPIRE_HOURS = 2
+# Generous window (7 days) so the session never expires while the form is actively open
+SESSION_EXPIRE_HOURS = 168
 DANGEROUS_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+# Registry of invalidated/closed sessions (keyed by SHA256 of token)
+_REVOKED_TOKENS: Dict[str, float] = {}
+
+
+def revoke_form_session_token(token: str) -> None:
+    """
+    Explicitly marks a form session token as expired (e.g. when page unloads or after submission).
+    """
+    if not token:
+        return
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now = time.time()
+    _REVOKED_TOKENS[token_hash] = now
+    # Prune tokens revoked more than 7 days ago to prevent unbounded growth
+    cutoff = now - (7 * 86400)
+    for k in list(_REVOKED_TOKENS.keys()):
+        if _REVOKED_TOKENS[k] < cutoff:
+            _REVOKED_TOKENS.pop(k, None)
+
+
+def is_form_session_revoked(token: str) -> bool:
+    """
+    Checks if the session token has been revoked / closed.
+    """
+    if not token:
+        return True
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return token_hash in _REVOKED_TOKENS
 
 
 def sanitize_cell_value(val: Any) -> Any:
@@ -58,7 +91,7 @@ def create_form_session_token(
     user_id: Optional[str] = None,
 ) -> str:
     """
-    Creates a cryptographically signed, tamper-proof, short-lived JWT token
+    Creates a cryptographically signed, tamper-proof JWT token
     binding the session to the target file and workspace.
     """
     now = datetime.now(timezone.utc)
@@ -79,8 +112,13 @@ def create_form_session_token(
 
 def verify_form_session_token(token: str) -> Dict[str, Any]:
     """
-    Validates token signature and expiration.
+    Validates token signature, expiration, and revocation status.
     """
+    if is_form_session_revoked(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This form session was closed or has already been submitted and is no longer active.",
+        )
     try:
         payload = jwt.decode(
             token,
@@ -444,6 +482,9 @@ class FormService:
                 "modified_count": modified_count,
             },
         )
+
+        # 9. Invalidate / revoke session token so form cannot be resubmitted
+        revoke_form_session_token(token)
 
         return FormSubmitResponse(
             status="success",
