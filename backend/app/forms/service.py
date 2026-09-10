@@ -82,6 +82,9 @@ def sanitize_cell_value(val: Any) -> Any:
     return val
 
 
+import uuid
+
+
 def create_form_session_token(
     workspace_id: str,
     file_id: str,
@@ -97,6 +100,7 @@ def create_form_session_token(
     now = datetime.now(timezone.utc)
     expire = now + timedelta(hours=SESSION_EXPIRE_HOURS)
     payload = {
+        "jti": str(uuid.uuid4()),
         "type": SESSION_TYPE,
         "sub": str(user_id) if user_id else "mcp_client_user",
         "workspace_id": str(workspace_id),
@@ -531,9 +535,6 @@ class FormService:
                 "modified_count": modified_count,
             },
         )
-
-        # 9. Invalidate / revoke session token so form cannot be resubmitted
-        revoke_form_session_token(token)
 
         return FormSubmitResponse(
             status="success",

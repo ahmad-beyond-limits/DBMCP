@@ -462,7 +462,8 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
       </p>
       <div class="committed-grid" id="committedGrid"></div>
       <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
-        <button class="btn btn-primary" onclick="window.close()">Close Window</button>
+        <button type="button" class="btn btn-reset" style="background: var(--bg-input); border: 1px solid var(--border);" id="addAnotherBtn">+ Add Another Record</button>
+        <button type="button" class="btn btn-primary" onclick="window.close()">Close Window</button>
       </div>
     </div>
   </div>
@@ -656,6 +657,26 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
           grid.appendChild(cell);
         });
       }
+
+      document.getElementById('addAnotherBtn').onclick = () => {
+        document.getElementById('successState').style.display = 'none';
+        document.getElementById('formContent').style.display = 'block';
+        const inputs = document.querySelectorAll('#fieldsGrid input, #fieldsGrid select');
+        inputs.forEach(input => {
+          if (input.tagName === 'SELECT') {
+            input.selectedIndex = 0;
+          } else {
+            input.value = '';
+          }
+        });
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = false;
+        document.getElementById('submitText').textContent = 'Submit Record';
+        const topIndicator = document.getElementById('topSessionIndicator');
+        if (topIndicator) {
+          topIndicator.innerHTML = '<span class="live-dot"></span> Active Session';
+        }
+      };
     }
   </script>
 </body>

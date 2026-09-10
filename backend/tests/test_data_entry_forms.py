@@ -197,10 +197,10 @@ async def test_form_update_flow(client: AsyncClient):
     assert sub_res.status_code == 200
     assert sub_res.json()["record"]["math_score"] == "99"
 
-    # Token must now be revoked after submission
+    # Form session remains accessible so user can add another record or reload
     reused_res = await client.get(f"/forms/session?token={session_token}")
-    assert reused_res.status_code == 401
-    assert "closed or has already been submitted" in reused_res.json()["detail"]
+    assert reused_res.status_code == 200
+    assert reused_res.json()["filename"] == "grades.csv"
 
 
 @pytest.mark.asyncio
