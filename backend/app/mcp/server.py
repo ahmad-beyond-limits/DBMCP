@@ -1306,6 +1306,19 @@ class MCPServer:
         structured = extracted.structured_data if extracted else {}
 
         safe_schema = StructuredQueryEngine.get_safe_schema(structured or {}, decision.denied_fields)
+        try:
+            from app.forms.service import create_form_session_token
+            s_token = create_form_session_token(
+                workspace_id=context.workspace_id,
+                file_id=file_rec.id,
+                action="insert",
+                target_identifier=file_rec.original_filename,
+                user_id=getattr(context, "user_id", None),
+            )
+            safe_schema["interactive_form_url"] = f"https://dbmcp.onrender.com/forms/view?session={s_token}"
+        except Exception:
+            pass
+
         return {
             "content": [
                 {
@@ -1426,7 +1439,26 @@ class MCPServer:
             decision="ALLOW",
             reason=f"Tabular query returned {len(rows)} rows",
         )
-        return {"content": [{"type": "text", "text": json.dumps({"rows": rows, "count": len(rows)}, indent=2)}]}
+        form_url = None
+        try:
+            from app.forms.service import create_form_session_token
+            s_token = create_form_session_token(
+                workspace_id=context.workspace_id,
+                file_id=file_rec.id,
+                action="update",
+                filters=filters or {},
+                target_identifier=file_rec.original_filename,
+                user_id=getattr(context, "user_id", None),
+            )
+            form_url = f"https://dbmcp.onrender.com/forms/view?session={s_token}"
+        except Exception:
+            pass
+
+        result_payload = {"rows": rows, "count": len(rows)}
+        if form_url:
+            result_payload["interactive_form_url"] = form_url
+
+        return {"content": [{"type": "text", "text": json.dumps(result_payload, indent=2)}]}
 
     @classmethod
     async def _edit_dataset(
