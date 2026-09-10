@@ -255,13 +255,27 @@ class FormService:
         if not columns and rows:
             columns = list(rows[0].keys())
 
-        # Locate matching record if updating
+        # Locate matching record: check filters and target_identifier
         target_row: Optional[Dict[str, Any]] = None
-        if action == "update":
+        if filters:
             for r in rows:
-                if not filters or _matches_filter(r, filters):
+                if _matches_filter(r, filters):
                     target_row = r
                     break
+
+        # Fallback: search target_identifier (e.g. S002, 101, Alice) across all cell values
+        if target_row is None and target_identifier:
+            tid = str(target_identifier).strip().lower()
+            tokens = [t.strip().lower() for t in tid.replace("(", " ").replace(")", " ").split() if len(t.strip()) > 1]
+            for r in rows:
+                row_vals = [str(v).strip().lower() for v in r.values() if v is not None]
+                if any(t in row_vals or any(t in rv for rv in row_vals) for t in tokens):
+                    target_row = r
+                    break
+
+        # If a matching row is located, automatically treat as "update" and prefill its existing values!
+        if target_row is not None:
+            action = "update"
 
         # Build column sample map for type inference
         sample_map: Dict[str, List[Any]] = {c: [] for c in columns}
@@ -284,6 +298,29 @@ class FormService:
 
             field_def = infer_field_definition(col, sample_map.get(col, []), current_val=current_val)
             fields.append(field_def)
+
+        # Also prefill any filter values for blank fields (e.g. student_id: S002)
+        if filters:
+            for k, v in filters.items():
+                for c in columns:
+                    if k.strip().lower() == c.strip().lower() and (c not in prefilled or prefilled[c] is None or prefilled[c] == ""):
+                        prefilled[c] = v
+                        for f in fields:
+                            if f.name == c:
+                                f.current_value = v
+
+        # If still blank, and target_identifier has an ID token (e.g. S002), prefill into primary ID column
+        if action == "insert" and target_identifier:
+            words = str(target_identifier).strip().split()
+            id_candidate = words[-1] if words else str(target_identifier).strip()
+            for c in columns:
+                if any(x in c.lower() for x in ["id", "code", "roll", "reg", "key"]):
+                    if c not in prefilled or not prefilled[c]:
+                        prefilled[c] = id_candidate
+                        for f in fields:
+                            if f.name == c:
+                                f.current_value = id_candidate
+                        break
 
         # Construct title
         if action == "update":
@@ -361,47 +398,59 @@ class FormService:
         modified_count = 0
         final_record: Dict[str, Any] = {}
 
-        # 4. Perform mutation
-        if action == "update":
-            matched = False
+        # 4. Perform mutation (Intelligent Auto-Upsert)
+        matched_row: Optional[Dict[str, Any]] = None
+
+        # Check by filters
+        if filters:
             for row in rows:
-                if not filters or _matches_filter(row, filters):
-                    matched = True
-                    for uk, uv in sanitized_values.items():
-                        target_key = uk
-                        for existing_k in list(row.keys()):
-                            if existing_k.strip().lower() == uk.strip().lower():
-                                target_key = existing_k
+                if _matches_filter(row, filters):
+                    matched_row = row
+                    break
+
+        # Check by primary ID / key values submitted
+        if matched_row is None:
+            for id_col in ["student_id", "id", "roll_no", "reg_no", "user_id", "code", "email"]:
+                for sk, sv in sanitized_values.items():
+                    if sk.strip().lower() == id_col and sv:
+                        for row in rows:
+                            for rk, rv in row.items():
+                                if rk.strip().lower() == id_col and str(rv).strip().lower() == str(sv).strip().lower():
+                                    matched_row = row
+                                    break
+                            if matched_row is not None:
                                 break
-                        row[target_key] = uv
-                    modified_count += 1
-                    final_record = dict(row)
-                    break  # Modify the single targeted record
+                    if matched_row is not None:
+                        break
+                if matched_row is not None:
+                    break
 
-            if not matched:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Target record matching the filter criteria could not be found to update.",
-                )
-
-        elif action == "insert":
-            # Build complete row with columns
+        if matched_row is not None:
+            # Update the existing record
+            action = "update"
+            for uk, uv in sanitized_values.items():
+                target_key = uk
+                for existing_k in list(matched_row.keys()):
+                    if existing_k.strip().lower() == uk.strip().lower():
+                        target_key = existing_k
+                        break
+                matched_row[target_key] = uv
+            modified_count = 1
+            final_record = dict(matched_row)
+        else:
+            # Append new record
+            action = "insert"
             new_row_dict: Dict[str, Any] = {}
             for c in columns:
-                # Find in sanitized_values
                 val = ""
                 for k, v in sanitized_values.items():
                     if k.strip().lower() == c.strip().lower():
                         val = v
                         break
                 new_row_dict[c] = val
-
             rows.append(new_row_dict)
             modified_count = 1
             final_record = new_row_dict
-
-        else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported action '{action}'")
 
         # 5. Persist updated structured data and plain text
         new_structured = {

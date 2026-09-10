@@ -490,20 +490,7 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
       loadSession();
     }
 
-    // REQUIREMENT: Once form opens it never session expires, it must expire as page closed
-    function handlePageClose() {
-      if (sessionToken && !isSubmitted) {
-        const expireUrl = '/forms/expire?session=' + encodeURIComponent(sessionToken);
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon(expireUrl);
-        } else {
-          fetch(expireUrl, { method: 'POST', keepalive: true });
-        }
-      }
-    }
-
-    window.addEventListener('pagehide', handlePageClose);
-    window.addEventListener('beforeunload', handlePageClose);
+    // Session remains active throughout the page lifecycle until submitted or completed
 
     async function loadSession() {
       try {

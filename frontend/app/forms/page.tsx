@@ -74,26 +74,6 @@ function FormContent() {
     loadForm();
   }, [sessionToken]);
 
-  useEffect(() => {
-    if (!sessionToken) return;
-
-    const handleUnload = () => {
-      if (!submitResult) {
-        const url = `/forms/expire?session=${encodeURIComponent(sessionToken)}`;
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon(url);
-        }
-      }
-    };
-
-    window.addEventListener("pagehide", handleUnload);
-    window.addEventListener("beforeunload", handleUnload);
-
-    return () => {
-      window.removeEventListener("pagehide", handleUnload);
-      window.removeEventListener("beforeunload", handleUnload);
-    };
-  }, [sessionToken, submitResult]);
 
   const handleInputChange = (fieldName: string, value: any) => {
     setFormValues((prev) => ({ ...prev, [fieldName]: value }));
