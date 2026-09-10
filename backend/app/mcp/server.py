@@ -160,7 +160,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Mutates (inserts, updates, or deletes) rows in a tabular dataset in a workspace. MANDATORY: Verify with query_dataset after mutation.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). For interactive user workflows, prefer 'generate_data_entry_form' first so users can review and modify values via the interactive UI form without typing raw fields in chat.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -176,7 +176,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Generates an interactive web entry form URL and schema for inserting or updating records in a workspace tabular dataset (CSV, Excel, or JSON). Returns a pre-filled, secure form session URL.",
+        "description": "PRIMARY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Generates an interactive web entry form URL and schema for inserting, updating, or modifying records in a tabular dataset (CSV, Excel, or JSON). Call this immediately whenever the user wants to add, update, or edit data rather than asking questions in chat.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -517,7 +517,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Modifies records in a structured dataset (CSV, Excel, or JSON) by inserting, updating, or deleting rows based on filter criteria.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). For interactive user workflows, prefer 'generate_data_entry_form' first so users can review and modify values via the interactive UI form without typing raw fields in chat.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -548,7 +548,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Generates an interactive web entry form URL and schema for inserting or updating records in a workspace tabular dataset (CSV, Excel, or JSON). Returns a pre-filled, secure form session URL.",
+        "description": "PRIMARY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Generates an interactive web entry form URL and schema for inserting, updating, or modifying records in a workspace tabular dataset (CSV, Excel, or JSON). Call this immediately whenever the user wants to add, update, or edit data rather than asking questions in chat.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1316,6 +1316,9 @@ class MCPServer:
                 user_id=getattr(context, "user_id", None),
             )
             safe_schema["interactive_form_url"] = f"https://dbmcp.onrender.com/forms/view?session={s_token}"
+            safe_schema["action_prompt"] = (
+                f"To allow the user to input new records or modify this dataset, present this interactive form button in chat: [➕ Open Data Entry / Edit Form]({safe_schema['interactive_form_url']})"
+            )
         except Exception:
             pass
 
@@ -1457,6 +1460,9 @@ class MCPServer:
         result_payload = {"rows": rows, "count": len(rows)}
         if form_url:
             result_payload["interactive_form_url"] = form_url
+            result_payload["action_prompt"] = (
+                f"To allow the user to modify, update, or add records to this dataset, present this interactive form button in chat: [➕ Open Data Entry / Edit Form]({form_url})"
+            )
 
         return {"content": [{"type": "text", "text": json.dumps(result_payload, indent=2)}]}
 
@@ -1769,13 +1775,14 @@ class MCPServer:
         response_text = (
             f"### 📋 {title_str}\n\n"
             f"An interactive data entry form is ready for **{file_rec.original_filename}**.\n\n"
-            f"- **Target**: {target_identifier or file_rec.original_filename}\n"
-            f"- **Action**: {action.upper()}\n"
+            f"👉 **[➕ Open Interactive Data Entry Form]({form_url})**\n\n"
+            f"- **Dataset**: `{file_rec.original_filename}`\n"
+            f"- **Target**: `{target_identifier or file_rec.original_filename}`\n"
+            f"- **Mode**: `{action.upper()}`\n"
             f"- **Fields**: {fields_str}\n\n"
-            f"👉 **[Click Here to Open and Fill the Form]({form_url})**\n\n"
-            f"---\n"
-            f"*Or open this direct secure link:* `{form_url}`\n\n"
-            f"*(Note: Submitting this form will securely commit the data directly to {file_rec.original_filename} in workspace storage.)*"
+            f"*(Direct Secure Link: `{form_url}`)*\n\n"
+            f"**AI Instruction**: Present the `[➕ Open Interactive Data Entry Form]({form_url})` button prominently to the user in chat. "
+            f"Do not ask the user to type individual fields into chat; direct them to use the interactive form."
         )
 
         return {
