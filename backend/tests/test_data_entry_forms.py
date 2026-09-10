@@ -224,29 +224,16 @@ async def test_standalone_html_form_view(client: AsyncClient):
     assert "text/html" in res.headers.get("content-type", "")
     assert "POAIS | Interactive Data Entry" in res.text
     assert "slash-tag" in res.text
-    assert "Session expires when page closes" in res.text
+    assert "Tamper-Proof JWT Security" in res.text
 
 
 @pytest.mark.asyncio
-async def test_form_session_expires_on_page_close_beacon(client: AsyncClient):
+async def test_form_session_invalid_or_tampered_token(client: AsyncClient):
     """
-    Verifies that when a user exits or closes the tab, the /forms/expire beacon
-    immediately revokes the session token, preventing reuse.
+    Verifies that a tampered or invalid session token is securely rejected with 401 Unauthorized.
     """
-    from app.forms.service import create_form_session_token
-    token = create_form_session_token(
-        workspace_id="00000000-0000-0000-0000-000000000000",
-        file_id="00000000-0000-0000-0000-000000000000",
-        action="insert",
-    )
-    # 1. Send page close beacon
-    expire_res = await client.post(f"/forms/expire?session={token}")
-    assert expire_res.status_code == 200
-    assert expire_res.json()["status"] == "expired"
-
-    # 2. Attempting to retrieve session with the revoked token must fail with 401
-    check_res = await client.get(f"/forms/session?token={token}")
-    assert check_res.status_code == 401
-    assert "closed or has already been submitted" in check_res.json()["detail"]
+    tampered_res = await client.get("/forms/session?token=invalid.tampered.signature")
+    assert tampered_res.status_code == 401
+    assert "Invalid or tampered form session token" in tampered_res.json()["detail"]
 
 

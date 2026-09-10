@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.rate_limit import get_client_ip, rate_limit
 from app.database.session import get_db
 from app.forms.schemas import FormSessionResponse, FormSubmitRequest, FormSubmitResponse
-from app.forms.service import FormService, revoke_form_session_token
+from app.forms.service import FormService
 
 router = APIRouter(prefix="/forms", tags=["Forms"])
 
@@ -475,7 +475,7 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
       <span>Policy-Oriented AI Space • Granular Model Context Protocol (MCP) Governance.</span>
     </div>
     <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-tertiary);">
-      Session expires when page closes
+      Tamper-Proof JWT Security • Scoped to Workspace
     </div>
   </footer>
 
@@ -485,25 +485,42 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
     let sessionData = null;
     let isSubmitted = false;
 
+    function esc(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     if (!sessionToken) {
-      showError("No session token was provided in the link.", "Please ask your AI assistant to generate a new data entry form link.");
+      showError("No Session Token Provided", "Please ask your AI assistant to generate a new data entry form link.");
     } else {
       loadSession();
     }
-
-    // Session remains active throughout the page lifecycle until submitted or completed
 
     async function loadSession() {
       try {
         const res = await fetch('/forms/session?token=' + encodeURIComponent(sessionToken));
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || 'Form session expired or invalid');
+          const errMsg = err.detail || ('HTTP ' + res.status + ': Failed to retrieve form session');
+          showError("Session Verification Failed", errMsg);
+          return;
         }
         sessionData = await res.json();
+      } catch (networkErr) {
+        showError("Connection Error", "Unable to connect to the backend server. Please check your connection and reload.");
+        return;
+      }
+
+      try {
         renderForm();
-      } catch (e) {
-        showError("Form Session Expired or Closed", e.message || "This secure session has expired or was closed. Please request a new form from your AI assistant.");
+      } catch (renderErr) {
+        console.error("Form render error:", renderErr);
+        showError("Form Display Error", "Error rendering form fields: " + (renderErr.message || renderErr));
       }
     }
 
@@ -512,11 +529,11 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
       document.getElementById('formContent').style.display = 'none';
       document.getElementById('successState').style.display = 'none';
       document.getElementById('errorState').style.display = 'block';
-      document.getElementById('errorTitle').textContent = title;
-      document.getElementById('errorDesc').textContent = desc;
+      document.getElementById('errorTitle').textContent = title || "Unable to Load Form";
+      document.getElementById('errorDesc').textContent = desc || "Please request a new form from your AI assistant.";
       const topIndicator = document.getElementById('topSessionIndicator');
       if (topIndicator) {
-        topIndicator.innerHTML = '<span style="color:#DC2626;">●</span> Session Expired';
+        topIndicator.innerHTML = '<span style="color:#DC2626;">●</span> Session Inactive';
         topIndicator.style.background = '#FEF2F2';
         topIndicator.style.borderColor = '#FECACA';
         topIndicator.style.color = '#DC2626';
@@ -555,7 +572,8 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
       sessionData.fields.forEach(field => {
         const group = document.createElement('div');
         group.className = 'field-group';
-        if (field.name.toLowerCase().includes('desc') || field.name.toLowerCase().includes('address') || field.name.toLowerCase().includes('bio')) {
+        const lowerName = (field.name || '').toLowerCase();
+        if (lowerName.includes('desc') || lowerName.includes('address') || lowerName.includes('bio')) {
           group.className += ' col-span-2';
         }
 
@@ -565,28 +583,28 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
 
         let inputHtml = '';
         if (field.type === 'select' && field.options && field.options.length > 0) {
-          inputHtml = `<select name="${field.name}">
-            <option value="">-- Select ${field.label} --</option>
-            ${field.options.map(opt => `<option value="${opt}" ${String(opt) === String(prefilled) ? 'selected' : ''}>${opt}</option>`).join('')}
+          inputHtml = `<select name="${esc(field.name)}">
+            <option value="">-- Select ${esc(field.label)} --</option>
+            ${field.options.map(opt => `<option value="${esc(opt)}" ${String(opt) === String(prefilled) ? 'selected' : ''}>${esc(opt)}</option>`).join('')}
           </select>`;
         } else if (field.type === 'number') {
-          inputHtml = `<input type="number" step="any" inputmode="decimal" name="${field.name}" value="${prefilled}" placeholder="${field.placeholder || '0'}">`;
+          inputHtml = `<input type="number" step="any" inputmode="decimal" name="${esc(field.name)}" value="${esc(prefilled)}" placeholder="${esc(field.placeholder || '0')}">`;
         } else if (field.type === 'date') {
-          inputHtml = `<input type="date" name="${field.name}" value="${prefilled}">`;
+          inputHtml = `<input type="date" name="${esc(field.name)}" value="${esc(prefilled)}">`;
         } else if (field.type === 'boolean') {
           const isTrue = String(prefilled).toLowerCase() === 'true' || prefilled === true || prefilled === 1;
-          inputHtml = `<select name="${field.name}">
+          inputHtml = `<select name="${esc(field.name)}">
             <option value="true" ${isTrue ? 'selected' : ''}>True / Yes</option>
             <option value="false" ${!isTrue ? 'selected' : ''}>False / No</option>
           </select>`;
         } else {
-          inputHtml = `<input type="text" name="${field.name}" value="${prefilled}" placeholder="${field.placeholder || 'Enter ' + field.label}">`;
+          inputHtml = `<input type="text" name="${esc(field.name)}" value="${esc(prefilled)}" placeholder="${esc(field.placeholder || 'Enter ' + field.label)}">`;
         }
 
         group.innerHTML = `
           <div class="label-row">
-            <label>${field.label} ${field.required ? '<span style="color:#DC2626;">*</span>' : ''}</label>
-            <span class="field-type">${field.type}</span>
+            <label>${esc(field.label)} ${field.required ? '<span style="color:#DC2626;">*</span>' : ''}</label>
+            <span class="field-type">${esc(field.type)}</span>
           </div>
           ${inputHtml}
         `;
@@ -697,26 +715,6 @@ async def view_form_standalone(
     return HTMLResponse(content=STANDALONE_FORM_HTML, status_code=200)
 
 
-@router.post("/expire")
-@router.get("/expire")
-async def expire_form_session(
-    request: Request,
-    session: Optional[str] = Query(None, description="Form session token to expire"),
-):
-    """
-    Explicitly expires/revokes a form session token when the user closes their browser window or navigates away.
-    Called via navigator.sendBeacon or fetch when the tab unloads.
-    """
-    token = session
-    if not token:
-        try:
-            body = await request.json()
-            token = body.get("session") or body.get("session_token")
-        except Exception:
-            pass
-    if token:
-        revoke_form_session_token(token)
-    return {"status": "expired"}
 
 
 @router.get(

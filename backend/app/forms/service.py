@@ -30,34 +30,9 @@ SESSION_TYPE = "form_session"
 SESSION_EXPIRE_HOURS = 168
 DANGEROUS_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
-# Registry of invalidated/closed sessions (keyed by SHA256 of token)
-_REVOKED_TOKENS: Dict[str, float] = {}
-
-
-def revoke_form_session_token(token: str) -> None:
-    """
-    Explicitly marks a form session token as expired (e.g. when page unloads or after submission).
-    """
-    if not token:
-        return
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    now = time.time()
-    _REVOKED_TOKENS[token_hash] = now
-    # Prune tokens revoked more than 7 days ago to prevent unbounded growth
-    cutoff = now - (7 * 86400)
-    for k in list(_REVOKED_TOKENS.keys()):
-        if _REVOKED_TOKENS[k] < cutoff:
-            _REVOKED_TOKENS.pop(k, None)
-
-
-def is_form_session_revoked(token: str) -> bool:
-    """
-    Checks if the session token has been revoked / closed.
-    """
-    if not token:
-        return True
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    return token_hash in _REVOKED_TOKENS
+# Generous window (7 days) so the session never expires prematurely while the form is actively open
+SESSION_EXPIRE_HOURS = 168
+DANGEROUS_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
 def sanitize_cell_value(val: Any) -> Any:
@@ -116,13 +91,8 @@ def create_form_session_token(
 
 def verify_form_session_token(token: str) -> Dict[str, Any]:
     """
-    Validates token signature, expiration, and revocation status.
+    Validates token signature and expiration.
     """
-    if is_form_session_revoked(token):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="This form session was closed or has already been submitted and is no longer active.",
-        )
     try:
         payload = jwt.decode(
             token,
@@ -194,18 +164,20 @@ def infer_field_definition(col: str, sample_values: List[Any], current_val: Opti
             placeholder="YYYY-MM-DD",
         )
 
-    # 4. Select dropdown check (categoric fields with limited distinct options)
-    str_samples = [str(v).strip() for v in valid_samples]
-    unique_vals = list(dict.fromkeys(str_samples))
-    if len(valid_samples) >= 3 and 1 < len(unique_vals) <= 12 and all(len(u) < 40 for u in unique_vals):
-        return FormFieldDefinition(
-            name=col,
-            label=clean_label,
-            type="select",
-            options=unique_vals,
-            current_value=current_val,
-            placeholder=f"Select {clean_label.lower()}",
-        )
+    # 4. Select dropdown check (categoric fields with limited distinct options, excluding ID/Code/Key fields)
+    is_id_field = any(k in col_lower for k in ("id", "code", "key", "roll", "reg", "uuid", "guid", "number", "num", "no."))
+    if not is_id_field:
+        str_samples = [str(v).strip() for v in valid_samples]
+        unique_vals = list(dict.fromkeys(str_samples))
+        if len(valid_samples) >= 3 and 1 < len(unique_vals) <= 12 and all(len(u) < 40 for u in unique_vals):
+            return FormFieldDefinition(
+                name=col,
+                label=clean_label,
+                type="select",
+                options=unique_vals,
+                current_value=current_val,
+                placeholder=f"Select {clean_label.lower()}",
+            )
 
     # 5. Default text
     return FormFieldDefinition(
