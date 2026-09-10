@@ -176,7 +176,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Generates a dynamic, interactive web entry form URL and schema for a workspace dataset (CSV, Excel, JSON). Use this whenever the user wants to add or update data (e.g. 'add student 3', 'update score for Alice'). Returns a responsive form URL where the user enters data and submits.",
+        "description": "Generates an interactive web entry form URL and schema for inserting or updating records in a workspace tabular dataset (CSV, Excel, or JSON). Returns a pre-filled, secure form session URL.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -495,7 +495,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "query_dataset",
-        "description": "Executes controlled queries or aggregations over structured datasets (CSV, Excel, or JSON). Supports exact matching and comparison operators ($gt, $gte, $lt, $lte, $eq, $ne, $in, $contains). Use this tool to verify and reconfirm any data changes after calling edit_dataset.",
+        "description": "Executes controlled queries, projections, and aggregations over structured datasets (CSV, Excel, or JSON). Supports exact matching and comparison operators ($gt, $gte, $lt, $lte, $eq, $ne, $in, $contains).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -517,7 +517,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Edits, updates, inserts, or deletes records in a structured dataset (CSV, Excel, or JSON). MANDATORY RULE: After executing edit_dataset, you MUST IMMEDIATELY call query_dataset with the filter criteria to verify and reconfirm that the data change has persisted in storage before replying to the user.",
+        "description": "Modifies records in a structured dataset (CSV, Excel, or JSON) by inserting, updating, or deleting rows based on filter criteria.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -548,7 +548,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Generates a dynamic, interactive web entry form URL and schema for a workspace dataset (CSV, Excel, JSON). Use this whenever the user wants to add or update data (e.g. 'add student 3', 'update score for Alice'). Returns a responsive web form URL with pre-filled inputs and single-click submit.",
+        "description": "Generates an interactive web entry form URL and schema for inserting or updating records in a workspace tabular dataset (CSV, Excel, or JSON). Returns a pre-filled, secure form session URL.",
         "inputSchema": {
             "type": "object",
             "properties": {

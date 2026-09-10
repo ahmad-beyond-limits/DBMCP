@@ -51,9 +51,8 @@ Use these instructions to interact accurately, securely, and effectively with wo
      - `action: "delete"`: removes rows matching `filters`.
 
 7. `generate_data_entry_form(resource_id, action, filters, target_identifier)`
-   - Generates a dedicated, dynamic interactive web entry form URL and schema for a workspace dataset (CSV, Excel, JSON).
-   - Use this whenever the user expresses the desire to enter, add, or update data (e.g. "I want to add data for student 3", "open a form to update grades").
-   - Returns a secure, responsive form URL with pre-filled inputs and single-click submit.
+   - Generates an interactive web entry form URL and schema for a workspace dataset (CSV, Excel, JSON).
+   - Returns a pre-filled, secure form session URL for user data entry.
 
 8. `search(query, limit)`
    - Perform semantic and keyword searches across permitted documents with policy-compliant results.
