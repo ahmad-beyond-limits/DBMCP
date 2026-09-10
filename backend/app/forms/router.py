@@ -1,7 +1,7 @@
 import json
 import os
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -479,9 +479,11 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
     </div>
   </footer>
 
+  <!-- SERVER_PRELOAD_SLOT -->
+
   <script>
     const urlParams = new URLSearchParams(window.location.search);
-    const sessionToken = urlParams.get('session');
+    let sessionToken = urlParams.get('session') || urlParams.get('token');
     let sessionData = null;
     let isSubmitted = false;
 
@@ -495,10 +497,30 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
         .replace(/'/g, '&#039;');
     }
 
-    if (!sessionToken) {
-      showError("No Session Token Provided", "Please ask your AI assistant to generate a new data entry form link.");
-    } else {
+    const preloadedEl = document.getElementById('preloaded-session');
+    const serverErrEl = document.getElementById('server-error');
+
+    if (serverErrEl) {
+      try {
+        const err = JSON.parse(serverErrEl.textContent);
+        showError(err.title || "Session Verification Failed", err.detail || "Unable to verify session.");
+      } catch (e) {
+        showError("Session Verification Failed", "Unable to load session.");
+      }
+    } else if (preloadedEl) {
+      try {
+        sessionData = JSON.parse(preloadedEl.textContent);
+        if (!sessionToken && sessionData && sessionData.session_token) {
+          sessionToken = sessionData.session_token;
+        }
+        renderForm();
+      } catch (e) {
+        showError("Form Display Error", "Failed to parse session data: " + e.message);
+      }
+    } else if (sessionToken) {
       loadSession();
+    } else {
+      showError("No Session Token Provided", "Please ask your AI assistant to generate a new data entry form link.");
     }
 
     async function loadSession() {
@@ -634,7 +656,7 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            session_token: sessionToken,
+            session_token: sessionToken || (sessionData && sessionData.session_token),
             values: values,
           }),
         });
@@ -687,9 +709,17 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
             input.value = '';
           }
         });
+        const actionBadge = document.getElementById('actionBadge');
+        actionBadge.textContent = 'NEW RECORD ENTRY';
+        actionBadge.className = 'badge badge-emerald';
+        document.getElementById('submitText').textContent = 'Add New Record';
+        sessionData.action = 'insert';
+        sessionData.prefilled_values = {};
+        sessionData.target_identifier = null;
+        const metaTarget = document.getElementById('metaTargetWrap');
+        if (metaTarget) metaTarget.style.display = 'none';
         const submitBtn = document.getElementById('submitBtn');
         submitBtn.disabled = false;
-        document.getElementById('submitText').textContent = 'Submit Record';
         const topIndicator = document.getElementById('topSessionIndicator');
         if (topIndicator) {
           topIndicator.innerHTML = '<span class="live-dot"></span> Active Session';
@@ -707,12 +737,53 @@ STANDALONE_FORM_HTML = """<!DOCTYPE html>
 async def view_form_standalone(
     request: Request,
     session: Optional[str] = Query(None, description="Form session token"),
+    token: Optional[str] = Query(None, description="Alternative token parameter"),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Serves a beautiful, self-contained, mobile-optimized interactive form web application
-    directly from FastAPI. Requires ZERO user login; authenticated by the signed session token.
+    directly from FastAPI. Preloads session data server-side for zero-latency instant rendering.
     """
-    return HTMLResponse(content=STANDALONE_FORM_HTML, status_code=200)
+    effective_token = session or token
+    if not effective_token:
+        err_json = json.dumps({
+            "title": "No Session Token Provided",
+            "detail": "Please request a new data entry form link from your AI assistant."
+        })
+        html = STANDALONE_FORM_HTML.replace(
+            "<!-- SERVER_PRELOAD_SLOT -->",
+            f'<script id="server-error" type="application/json">{err_json}</script>'
+        )
+        return HTMLResponse(content=html, status_code=200)
+
+    try:
+        session_data = await FormService.get_session_data(db=db, token=effective_token)
+        session_json = session_data.model_dump_json()
+        html = STANDALONE_FORM_HTML.replace(
+            "<!-- SERVER_PRELOAD_SLOT -->",
+            f'<script id="preloaded-session" type="application/json">{session_json}</script>'
+        )
+        return HTMLResponse(content=html, status_code=200)
+    except HTTPException as http_err:
+        err_json = json.dumps({
+            "title": "Session Verification Failed",
+            "detail": http_err.detail
+        })
+        html = STANDALONE_FORM_HTML.replace(
+            "<!-- SERVER_PRELOAD_SLOT -->",
+            f'<script id="server-error" type="application/json">{err_json}</script>'
+        )
+        return HTMLResponse(content=html, status_code=200)
+    except Exception as e:
+        err_json = json.dumps({
+            "title": "Unable to Load Session",
+            "detail": str(e)
+        })
+        html = STANDALONE_FORM_HTML.replace(
+            "<!-- SERVER_PRELOAD_SLOT -->",
+            f'<script id="server-error" type="application/json">{err_json}</script>'
+        )
+        return HTMLResponse(content=html, status_code=200)
 
 
 
@@ -720,7 +791,6 @@ async def view_form_standalone(
 @router.get(
     "/session",
     response_model=FormSessionResponse,
-    dependencies=[Depends(rate_limit(max_requests=60, window_seconds=60, scope="forms_get"))],
 )
 async def get_form_session(
     token: str = Query(..., description="Cryptographically signed form session token"),

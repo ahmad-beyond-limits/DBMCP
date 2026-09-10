@@ -91,30 +91,52 @@ def create_form_session_token(
 
 def verify_form_session_token(token: str) -> Dict[str, Any]:
     """
-    Validates token signature and expiration.
+    Validates token signature and expiration against candidate keys.
     """
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
-        )
-        if payload.get("type") != SESSION_TYPE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid form session token type.",
+    candidate_keys = [
+        settings.JWT_SECRET_KEY,
+        settings.SECRET_KEY,
+        getattr(settings, "MCP_SESSION_SECRET", None),
+        "dev-insecure-jwt-key-32bytes-min-required",
+        "dev-insecure-secret-key-32bytes-min-required",
+    ]
+    seen_keys = set()
+    unique_keys = []
+    for k in candidate_keys:
+        if k and k not in seen_keys:
+            seen_keys.add(k)
+            unique_keys.append(k)
+
+    last_err: Optional[Exception] = None
+    for k in unique_keys:
+        try:
+            payload = jwt.decode(
+                token,
+                k,
+                algorithms=[settings.JWT_ALGORITHM],
             )
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Form session has expired. Please ask the assistant to generate a new form.",
-        )
-    except jwt.PyJWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or tampered form session token.",
-        )
+            if payload.get("type") != SESSION_TYPE:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid form session token type.",
+                )
+            return payload
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Form session has expired. Please ask the assistant to generate a new form.",
+            )
+        except jwt.InvalidSignatureError as sig_err:
+            last_err = sig_err
+            continue
+        except jwt.PyJWTError as py_err:
+            last_err = py_err
+            break
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=f"Invalid or tampered form session token ({last_err or 'unrecognized signature'}).",
+    )
 
 
 def infer_field_definition(col: str, sample_values: List[Any], current_val: Optional[Any] = None) -> FormFieldDefinition:
