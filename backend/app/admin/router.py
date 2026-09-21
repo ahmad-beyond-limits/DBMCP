@@ -1,7 +1,8 @@
 import logging
+import os
 from typing import Any, List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,7 @@ from app.auth.router import get_current_admin_user
 from app.core.security import create_access_token, hash_password
 from app.database.models import (
     AIFeedbackRecord,
+    AIGlobalInstructionDocument,
     AIGlobalRules,
     AIGuidancePlaybook,
     AuditLog,
@@ -20,6 +22,7 @@ from app.database.models import (
     WorkspaceMember,
 )
 from app.database.session import get_db
+from app.resources.extractor import ContentExtractor
 from app.storage.supabase_storage import get_storage_backend
 
 logger = logging.getLogger(__name__)
@@ -595,6 +598,149 @@ async def update_global_ai_rules(
         updated_by=row.updated_by,
         updated_at=row.updated_at,
     )
+
+
+# =====================================================================
+# Background Instruction Documents (PDF / DOCX / TXT)
+# =====================================================================
+
+class AIGlobalInstructionDocResponse(BaseModel):
+    id: str
+    filename: str
+    file_size: int
+    file_type: str
+    extracted_text_preview: str
+    full_text: Optional[str] = None
+    is_active: bool
+    uploaded_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AIGlobalInstructionDocToggleRequest(BaseModel):
+    is_active: bool
+
+
+@router.get("/ai-global-rules/documents", response_model=List[AIGlobalInstructionDocResponse])
+async def list_global_instruction_documents(
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve all background instruction documents (PDF, DOCX, TXT). Admin-only."""
+    stmt = select(AIGlobalInstructionDocument).order_by(AIGlobalInstructionDocument.created_at.desc())
+    docs = (await db.execute(stmt)).scalars().all()
+    return [
+        AIGlobalInstructionDocResponse(
+            id=d.id,
+            filename=d.filename,
+            file_size=d.file_size,
+            file_type=d.file_type,
+            extracted_text_preview=d.extracted_text[:300] + ("..." if len(d.extracted_text) > 300 else ""),
+            full_text=d.extracted_text,
+            is_active=d.is_active,
+            uploaded_by=d.uploaded_by,
+            created_at=d.created_at,
+            updated_at=d.updated_at,
+        )
+        for d in docs
+    ]
+
+
+@router.post("/ai-global-rules/documents", response_model=AIGlobalInstructionDocResponse)
+async def upload_global_instruction_document(
+    file: UploadFile = File(...),
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a confidential background instruction PDF/document. Admin-only."""
+    filename = file.filename or "instruction.pdf"
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in [".pdf", ".docx", ".txt"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file format '{ext}'. Only PDF, DOCX, and TXT files are supported for AI instruction documents.",
+        )
+
+    file_type = "PDF" if ext == ".pdf" else ("DOCX" if ext == ".docx" else "TXT")
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+
+    extracted_text, _, _ = await ContentExtractor.extract(content, file_type, filename)
+    extracted_text = (extracted_text or "").strip()
+    if not extracted_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not extract readable text from the uploaded document.")
+
+    doc = AIGlobalInstructionDocument(
+        filename=filename,
+        file_size=len(content),
+        file_type=file_type,
+        extracted_text=extracted_text,
+        is_active=True,
+        uploaded_by=admin.id,
+    )
+    db.add(doc)
+    await db.commit()
+    await db.refresh(doc)
+
+    return AIGlobalInstructionDocResponse(
+        id=doc.id,
+        filename=doc.filename,
+        file_size=doc.file_size,
+        file_type=doc.file_type,
+        extracted_text_preview=doc.extracted_text[:300] + ("..." if len(doc.extracted_text) > 300 else ""),
+        full_text=doc.extracted_text,
+        is_active=doc.is_active,
+        uploaded_by=doc.uploaded_by,
+        created_at=doc.created_at,
+        updated_at=doc.updated_at,
+    )
+
+
+@router.patch("/ai-global-rules/documents/{doc_id}", response_model=AIGlobalInstructionDocResponse)
+async def toggle_global_instruction_document(
+    doc_id: str,
+    payload: AIGlobalInstructionDocToggleRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle activation of a background instruction document. Admin-only."""
+    doc = (await db.execute(select(AIGlobalInstructionDocument).where(AIGlobalInstructionDocument.id == doc_id))).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instruction document not found.")
+
+    doc.is_active = payload.is_active
+    await db.commit()
+    await db.refresh(doc)
+
+    return AIGlobalInstructionDocResponse(
+        id=doc.id,
+        filename=doc.filename,
+        file_size=doc.file_size,
+        file_type=doc.file_type,
+        extracted_text_preview=doc.extracted_text[:300] + ("..." if len(doc.extracted_text) > 300 else ""),
+        full_text=doc.extracted_text,
+        is_active=doc.is_active,
+        uploaded_by=doc.uploaded_by,
+        created_at=doc.created_at,
+        updated_at=doc.updated_at,
+    )
+
+
+@router.delete("/ai-global-rules/documents/{doc_id}")
+async def delete_global_instruction_document(
+    doc_id: str,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a background instruction document. Admin-only."""
+    doc = (await db.execute(select(AIGlobalInstructionDocument).where(AIGlobalInstructionDocument.id == doc_id))).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instruction document not found.")
+
+    await db.delete(doc)
+    await db.commit()
+    return {"status": "deleted", "id": doc_id}
 
 
 class AdminFeedbackSignalItem(BaseModel):

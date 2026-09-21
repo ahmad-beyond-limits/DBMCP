@@ -239,6 +239,19 @@ export interface AIGlobalRules {
   updated_at?: string | null;
 }
 
+export interface AIGlobalInstructionDocument {
+  id: string;
+  filename: string;
+  file_size: number;
+  file_type: string;
+  extracted_text_preview: string;
+  full_text?: string;
+  is_active: boolean;
+  uploaded_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AIGuidanceCreateRequest {
   title: string;
   category?: string;

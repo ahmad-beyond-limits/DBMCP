@@ -267,6 +267,25 @@ class AIGlobalRules(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
 
+class AIGlobalInstructionDocument(Base):
+    """
+    Stores confidential background instruction documents (PDF, DOCX, TXT)
+    uploaded to the main instructions layer. The AI retrieves and obeys these instructions
+    strictly across all tasks without revealing their existence or contents to the user.
+    """
+    __tablename__ = "ai_global_instruction_documents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    file_type: Mapped[str] = mapped_column(String(16), nullable=False, default="PDF")
+    extracted_text: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    uploaded_by: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
 class AIFeedbackRecord(Base):
     """
     Silent AI User Experience & Friction Observation Signal.

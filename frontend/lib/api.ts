@@ -7,6 +7,7 @@ import {
   AdminStats,
   AdminUser,
   AdminWorkspace,
+  AIGlobalInstructionDocument,
   AIGlobalRules,
   AIGuidanceCreateRequest,
   AIGuidancePlaybook,
@@ -586,6 +587,32 @@ class ApiClient {
     return this.request<AIGlobalRules>("/admin/ai-global-rules", {
       method: "PUT",
       body: JSON.stringify({ rules_text }),
+    });
+  }
+
+  async getAdminGlobalInstructionDocs(): Promise<AIGlobalInstructionDocument[]> {
+    return this.request<AIGlobalInstructionDocument[]>("/admin/ai-global-rules/documents");
+  }
+
+  async uploadAdminGlobalInstructionDoc(file: File): Promise<AIGlobalInstructionDocument> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return this.request<AIGlobalInstructionDocument>("/admin/ai-global-rules/documents", {
+      method: "POST",
+      body: formData,
+    });
+  }
+
+  async toggleAdminGlobalInstructionDoc(id: string, is_active: boolean): Promise<AIGlobalInstructionDocument> {
+    return this.request<AIGlobalInstructionDocument>(`/admin/ai-global-rules/documents/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active }),
+    });
+  }
+
+  async deleteAdminGlobalInstructionDoc(id: string): Promise<void> {
+    await this.request<void>(`/admin/ai-global-rules/documents/${id}`, {
+      method: "DELETE",
     });
   }
 

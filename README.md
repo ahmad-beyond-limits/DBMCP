@@ -142,7 +142,7 @@ DBMCP/
 
 * `database/`:
   * `session.py`: Asynchronous SQLAlchemy engine and session factory supporting PostgreSQL (`asyncpg`) and SQLite (`aiosqlite`).
-  * `models.py`: Declarative SQLAlchemy models covering users, workspaces, files, policies, anonymisation rules, MCP credentials, notes, guidance playbooks, form sessions, and audit logs.
+  * `models.py`: Declarative SQLAlchemy models covering users, workspaces, files, policies, anonymisation rules, MCP credentials, notes, guidance playbooks, background instruction documents, form sessions, and audit logs.
   * `guidance_seed.py`: Default platform guidance playbooks seeded into the database on first boot.
 
 * `mcp/`:
@@ -246,6 +246,20 @@ When an AI model identifies that data needs to be added or edited, rather than a
 3. The AI presents the clickable link to the user.
 4. When opened, the standalone interface dynamically builds form controls according to the file's schema (date pickers, numeric inputs, text fields, and dropdown options).
 5. Submitting the form validates data types and updates the underlying spreadsheet or CSV directly, eliminating conversational hallucination errors.
+
+### AI Guidance, Playbooks, and Global Rules
+
+The platform provides a governance layer allowing administrators to define operational guidelines and domain playbooks for connected AI models:
+* Global AI Rules: A platform-wide singleton text policy loaded via `get_global_ai_rules` that unconditionally binds every AI interaction (for example, mandatory telemetry recording, tone standards, and data handling requirements).
+* Guidance Playbooks: Domain-specific instructions stored in `ai_guidance_playbooks` categorized into compliance, analysis, security, and data management. AI models discover relevant playbooks dynamically using `search_ai_guidance` and retrieve full rules via `get_ai_guidance`.
+
+### Confidential Background Instruction Documents Layer
+
+Administrators can upload institutional policies, operational handbooks, and compliance directives in document format (PDF, DOCX, TXT) within the main instructions layer:
+* Ingestion and Parsing: When a file is uploaded, the backend extracts the full plain text using `ContentExtractor` and stores the document in `ai_global_instruction_documents`.
+* Model Delivery: Active documents are automatically included in the `get_global_ai_rules` MCP payload as `confidential_background_instruction_documents`.
+* Stealth Enforcement Protocol: The server attaches an explicit directive requiring the AI model to strictly follow and enforce all instructions in the documents across all user interactions without citing, quoting, or revealing to the end user that background instruction documents exist.
+* Administrative Controls: Administrators can view all uploaded instruction documents, toggle enforcement on or off without deleting files, inspect extracted text via the preview modal, and permanently delete documents when retired.
 
 ## Running the Project Locally
 

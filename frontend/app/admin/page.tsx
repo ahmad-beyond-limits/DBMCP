@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { AdminStats, AdminUser, AdminWorkspace, AIGuidancePlaybook, AdminFeedbackSignal, User } from "@/lib/types";
+import { AdminStats, AdminUser, AdminWorkspace, AIGuidancePlaybook, AdminFeedbackSignal, AIGlobalInstructionDocument, User } from "@/lib/types";
 import {
   ShieldAlert,
   ShieldCheck,
   Users,
   FolderGit2,
   FileText,
+  FileUp,
+  Upload,
   Key,
   Activity,
   Search,
@@ -84,6 +86,12 @@ export default function AdminDashboardPage() {
   const [globalRulesSaving, setGlobalRulesSaving] = useState(false);
   const [globalRulesSaved, setGlobalRulesSaved] = useState(false);
 
+  // Background Instruction Documents (PDF Directives)
+  const [instructionDocs, setInstructionDocs] = useState<AIGlobalInstructionDocument[]>([]);
+  const [uploadingInstructionDoc, setUploadingInstructionDoc] = useState(false);
+  const [previewInstructionDoc, setPreviewInstructionDoc] = useState<AIGlobalInstructionDocument | null>(null);
+  const [deletingInstructionDocId, setDeletingInstructionDocId] = useState<string | null>(null);
+
   // Filter & Search State
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "suspended" | "admin">("all");
@@ -114,13 +122,14 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      const [statsData, usersData, workspacesData, guidanceData, globalRulesData, feedbackData] = await Promise.all([
+      const [statsData, usersData, workspacesData, guidanceData, globalRulesData, feedbackData, instructionDocsData] = await Promise.all([
         api.getAdminStats().catch((err) => { console.error("Failed to load admin stats:", err); return null; }),
         api.getAdminUsers().catch((err) => { console.error("Failed to load admin users:", err); return []; }),
         api.getAdminWorkspaces().catch((err) => { console.error("Failed to load admin workspaces:", err); return []; }),
         api.getAdminAIGuidance().catch((err) => { console.error("Failed to load guidance playbooks:", err); return []; }),
         api.getAdminGlobalAIRules().catch(() => ({ id: 1, rules_text: "" })),
         api.getAdminFeedbackSignals().catch((err) => { console.error("Failed to load feedback signals:", err); return []; }),
+        api.getAdminGlobalInstructionDocs().catch((err) => { console.error("Failed to load instruction docs:", err); return []; }),
       ]);
 
       if (statsData) setStats(statsData);
@@ -128,6 +137,7 @@ export default function AdminDashboardPage() {
       setWorkspaces(workspacesData || []);
       setGuidanceList(guidanceData || []);
       setFeedbackSignals(feedbackData || []);
+      setInstructionDocs(instructionDocsData || []);
       if (globalRulesData && globalRulesData.rules_text !== undefined) {
         setGlobalRulesText(globalRulesData.rules_text || "");
       }
@@ -151,6 +161,52 @@ export default function AdminDashboardPage() {
       setActionMsg({ type: "error", text: err.message || "Failed to save global AI rules" });
     } finally {
       setGlobalRulesSaving(false);
+    }
+  };
+
+  const handleUploadInstructionDoc = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingInstructionDoc(true);
+    try {
+      const doc = await api.uploadAdminGlobalInstructionDoc(file);
+      setInstructionDocs((prev) => [doc, ...prev]);
+      setActionMsg({ type: "success", text: `Instruction document "${file.name}" uploaded and parsed successfully. AI will strictly enforce it.` });
+    } catch (err: any) {
+      setActionMsg({ type: "error", text: err.message || "Failed to upload instruction document." });
+    } finally {
+      setUploadingInstructionDoc(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleToggleInstructionDoc = async (id: string, currentStatus: boolean) => {
+    try {
+      const updated = await api.toggleAdminGlobalInstructionDoc(id, !currentStatus);
+      setInstructionDocs((prev) => prev.map((d) => (d.id === id ? updated : d)));
+      setActionMsg({
+        type: "success",
+        text: `Document "${updated.filename}" is now ${updated.is_active ? "active (AI strictly enforces)" : "inactive (paused)"}.`,
+      });
+    } catch (err: any) {
+      setActionMsg({ type: "error", text: err.message || "Failed to toggle document status." });
+    }
+  };
+
+  const handleDeleteInstructionDoc = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete instruction document "${name}"? The AI will no longer enforce it.`)) {
+      return;
+    }
+    setDeletingInstructionDocId(id);
+    try {
+      await api.deleteAdminGlobalInstructionDoc(id);
+      setInstructionDocs((prev) => prev.filter((d) => d.id !== id));
+      if (previewInstructionDoc?.id === id) setPreviewInstructionDoc(null);
+      setActionMsg({ type: "success", text: `Instruction document "${name}" deleted.` });
+    } catch (err: any) {
+      setActionMsg({ type: "error", text: err.message || "Failed to delete instruction document." });
+    } finally {
+      setDeletingInstructionDocId(null);
     }
   };
 
@@ -1157,6 +1213,169 @@ export default function AdminDashboardPage() {
                   </div>
                 );
               })()}
+
+              {/* Divider */}
+              <div style={{ height: "1px", background: "rgba(0, 0, 0, 0.06)", margin: "0.85rem 0" }} />
+
+              {/* Background Instruction Documents (PDF & Text Directives) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.75rem" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                      <FileText size={16} strokeWidth={1.75} style={{ color: "#C2410C" }} />
+                      <h4 style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)", margin: 0, letterSpacing: "-0.01em" }}>
+                        Confidential Background Instruction Documents (PDF Directives)
+                      </h4>
+                    </div>
+                    <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", margin: 0, lineHeight: 1.5, maxWidth: "680px" }}>
+                      Upload confidential PDF, DOCX, or TXT operational manuals or institutional policies. The AI ingests the extracted text and strictly obeys all directives across every task and interaction <strong>without disclosing or acknowledging the document to the user</strong>.
+                    </p>
+                  </div>
+
+                  <label
+                    className="pill-btn pill-btn-solid"
+                    style={{
+                      cursor: uploadingInstructionDoc ? "wait" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      padding: "0.45rem 1rem",
+                      fontSize: "0.82rem",
+                      background: "var(--btn-solid-bg)",
+                      color: "var(--btn-solid-text)",
+                    }}
+                  >
+                    <FileUp size={14} strokeWidth={2} />
+                    <span>{uploadingInstructionDoc ? "Uploading & Extracting..." : "Upload Instruction PDF"}</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.txt"
+                      disabled={uploadingInstructionDoc}
+                      onChange={handleUploadInstructionDoc}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                </div>
+
+                {/* Uploaded Documents List */}
+                {instructionDocs.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "1.25rem",
+                      borderRadius: "var(--radius-sm)",
+                      background: "rgba(0, 0, 0, 0.02)",
+                      border: "1px dashed rgba(0, 0, 0, 0.12)",
+                      textAlign: "center",
+                      fontSize: "0.8rem",
+                      color: "var(--text-tertiary)",
+                    }}
+                  >
+                    No background instruction documents uploaded yet. Click <strong>Upload Instruction PDF</strong> above to attach confidential policy files the AI must stealthily enforce.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                    {instructionDocs.map((doc) => (
+                      <div
+                        key={doc.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "0.75rem 1rem",
+                          borderRadius: "var(--radius-sm)",
+                          background: doc.is_active ? "rgba(255, 255, 255, 0.95)" : "rgba(240, 240, 240, 0.5)",
+                          border: doc.is_active ? "1px solid rgba(22, 163, 74, 0.25)" : "1px solid rgba(0, 0, 0, 0.08)",
+                          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
+                          gap: "0.75rem",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: "220px", flex: 1 }}>
+                          <div
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "var(--radius-sm)",
+                              background: doc.file_type === "PDF" ? "rgba(220, 38, 38, 0.1)" : "rgba(59, 130, 246, 0.1)",
+                              color: doc.file_type === "PDF" ? "#DC2626" : "#2563EB",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 700,
+                              fontSize: "0.68rem",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {doc.file_type}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-primary)" }}>
+                              {doc.filename}
+                            </div>
+                            <div style={{ fontSize: "0.74rem", color: "var(--text-tertiary)", display: "flex", gap: "0.75rem" }}>
+                              <span>{(doc.file_size / 1024).toFixed(1)} KB</span>
+                              <span>Uploaded {new Date(doc.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          {/* Active Toggle */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleInstructionDoc(doc.id, doc.is_active)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              padding: "0.35rem 0.75rem",
+                              borderRadius: "999px",
+                              fontSize: "0.75rem",
+                              fontWeight: 500,
+                              background: doc.is_active ? "rgba(22, 163, 74, 0.12)" : "rgba(0, 0, 0, 0.06)",
+                              color: doc.is_active ? "#16A34A" : "var(--text-tertiary)",
+                              border: doc.is_active ? "1px solid rgba(22, 163, 74, 0.25)" : "1px solid rgba(0, 0, 0, 0.1)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {doc.is_active ? (
+                              <>
+                                <CheckCircle2 size={13} strokeWidth={2.25} />
+                                <span>Active &amp; Enforced</span>
+                              </>
+                            ) : (
+                              <span>Paused</span>
+                            )}
+                          </button>
+
+                          {/* Preview Text */}
+                          <button
+                            type="button"
+                            onClick={() => setPreviewInstructionDoc(doc)}
+                            className="icon-circle-btn"
+                            title="Preview Extracted Instructions"
+                            style={{ width: "30px", height: "30px" }}
+                          >
+                            <Eye size={14} />
+                          </button>
+
+                          {/* Delete */}
+                          <button
+                            type="button"
+                            disabled={deletingInstructionDocId === doc.id}
+                            onClick={() => handleDeleteInstructionDoc(doc.id, doc.filename)}
+                            className="icon-circle-btn"
+                            title="Delete Instruction Document"
+                            style={{ width: "30px", height: "30px", color: "#DC2626" }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Playbooks Grid */}
@@ -2676,6 +2895,162 @@ export default function AdminDashboardPage() {
                 style={{ background: "#DC2626", color: "#FFFFFF", border: "none" }}
               >
                 {actionLoading ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* Modal: Preview Background Instruction Document                            */}
+      {/* ========================================================================= */}
+      {previewInstructionDoc && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPreviewInstructionDoc(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 10, 0.55)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99999,
+            padding: "1.5rem",
+          }}
+        >
+          <div
+            className="frosted-panel"
+            style={{
+              width: "100%",
+              maxWidth: "760px",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              background: "#FFFFFF",
+              borderRadius: "var(--radius-xl)",
+              boxShadow: "var(--shadow-xl)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: "1.25rem 1.75rem",
+                borderBottom: "1px solid rgba(40, 40, 40, 0.08)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#FAFAFA",
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                  <span
+                    className="slash-tag"
+                    style={{
+                      background: previewInstructionDoc.is_active ? "rgba(16, 185, 129, 0.1)" : "rgba(107, 114, 128, 0.1)",
+                      color: previewInstructionDoc.is_active ? "#10B981" : "#6B7280",
+                    }}
+                  >
+                    {previewInstructionDoc.is_active ? "ACTIVE DIRECTIVE" : "PAUSED DIRECTIVE"}
+                  </span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>
+                    {(previewInstructionDoc.file_size / 1024).toFixed(1)} KB • {previewInstructionDoc.file_type}
+                  </span>
+                </div>
+                <h2 style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                  {previewInstructionDoc.filename}
+                </h2>
+              </div>
+              <button
+                onClick={() => setPreviewInstructionDoc(null)}
+                className="icon-circle-btn"
+                style={{ width: "32px", height: "32px" }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Confidentiality Stealth Notice Banner */}
+            <div
+              style={{
+                padding: "0.75rem 1.75rem",
+                background: "rgba(99, 102, 241, 0.05)",
+                borderBottom: "1px solid rgba(99, 102, 241, 0.15)",
+                fontSize: "0.78rem",
+                color: "#4F46E5",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <ShieldAlert size={15} style={{ flexShrink: 0 }} />
+              <span>
+                <strong>Confidential Stealth Enforcement:</strong> This document is automatically ingested into the AI&apos;s global rule context. The AI strictly obeys every requirement without citing, quoting, or revealing this file to end users.
+              </span>
+            </div>
+
+            {/* Extracted Instructions Viewer */}
+            <div
+              style={{
+                padding: "1.5rem 1.75rem",
+                overflowY: "auto",
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: "1rem",
+              }}
+            >
+              <div>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.4rem" }}>
+                  Extracted Operational Directives &amp; Text Content
+                </label>
+                <div
+                  style={{
+                    background: "#0F172A",
+                    border: "1px solid #1E293B",
+                    borderRadius: "8px",
+                    padding: "1rem 1.25rem",
+                    fontSize: "0.8rem",
+                    fontFamily: "JetBrains Mono, monospace",
+                    color: "#F8FAFC",
+                    lineHeight: 1.6,
+                    maxHeight: "380px",
+                    overflowY: "auto",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {previewInstructionDoc.full_text || previewInstructionDoc.extracted_text_preview || "No readable text could be extracted."}
+                </div>
+              </div>
+
+              <div style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>
+                Uploaded: {new Date(previewInstructionDoc.created_at).toLocaleString()}
+                {previewInstructionDoc.uploaded_by && ` • Uploaded by ${previewInstructionDoc.uploaded_by}`}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: "0.85rem 1.75rem",
+                borderTop: "1px solid rgba(40, 40, 40, 0.06)",
+                display: "flex",
+                justifyContent: "flex-end",
+                background: "#FAFAFA",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setPreviewInstructionDoc(null)}
+                className="pill-btn pill-btn-solid pill-btn-sm"
+              >
+                Close Preview
               </button>
             </div>
           </div>
