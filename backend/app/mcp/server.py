@@ -47,6 +47,30 @@ DATASET_FILE_TYPES = ["CSV", "JSON", "XLSX", "XLS"]
 # Account-Level Master Operator Tool Definitions
 ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     {
+        "name": "get_tools_cache",
+        "description": "Returns the live server-side cache and registry of all available MCP tools. Call this tool to discover new tools, check tool updates, retrieve complete parameter schemas, or pass 'known_tools' to identify newly added tools not present in your current AI session.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "known_tools": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of tool names your AI client currently has. The server compares this list and highlights 'new_tools_on_server' that you are missing.",
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Optional category filter: 'all', 'data_management', 'interactive_forms', 'resource_documents', 'notes_scratchpad', 'ai_guidance_telemetry', 'account_operations', 'tool_registry_cache'",
+                },
+                "include_schemas": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Whether to include full JSON input schemas or concise parameter summaries.",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "account_info",
         "description": "Returns current user account profile, enabled permissions, and operational instructions for account automation.",
         "inputSchema": {
@@ -445,6 +469,30 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
 # Standard Workspace-Scoped MCP Tool Definitions
 MCP_TOOLS_DEFINITIONS = [
     {
+        "name": "get_tools_cache",
+        "description": "Returns the live server-side cache and registry of all available MCP tools. Call this tool to discover new tools, check tool updates, retrieve complete parameter schemas, or pass 'known_tools' to identify newly added tools not present in your current AI session.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "known_tools": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of tool names your AI client currently has. The server compares this list and highlights 'new_tools_on_server' that you are missing.",
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Optional category filter: 'all', 'data_management', 'interactive_forms', 'resource_documents', 'notes_scratchpad', 'ai_guidance_telemetry', 'tool_registry_cache'",
+                },
+                "include_schemas": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Whether to include full JSON input schemas or concise parameter summaries.",
+                },
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "workspace_info",
         "description": "Returns general metadata, security boundaries, and the full AI agent skills operational guide for interacting with this workspace.",
         "inputSchema": {
@@ -766,6 +814,161 @@ MCP_TOOLS_DEFINITIONS = [
         },
     },
 ]
+class ToolCacheRegistry:
+    """
+    Maintains the live server-side cache and catalog of all registered MCP tools.
+    Allows AI agents to discover newly added tools, inspect parameter schemas, diff
+    against locally cached toolsets, and query tools by category.
+    """
+    _cache_version: int = 1
+    _last_updated: datetime = utc_now()
+    _custom_workspace_tools: List[Dict[str, Any]] = []
+    _custom_account_tools: List[Dict[str, Any]] = []
+
+    @classmethod
+    def register_tool(cls, tool_def: Dict[str, Any], scope: str = "WORKSPACE"):
+        """
+        Dynamically registers or updates a tool definition in the live server cache.
+        Scope can be 'WORKSPACE', 'ACCOUNT', or 'BOTH'.
+        """
+        cls._cache_version += 1
+        cls._last_updated = utc_now()
+        name = tool_def.get("name")
+        if scope in ["WORKSPACE", "BOTH"]:
+            cls._custom_workspace_tools = [t for t in cls._custom_workspace_tools if t.get("name") != name]
+            cls._custom_workspace_tools.append(tool_def)
+        if scope in ["ACCOUNT", "BOTH"]:
+            cls._custom_account_tools = [t for t in cls._custom_account_tools if t.get("name") != name]
+            cls._custom_account_tools.append(tool_def)
+
+    @classmethod
+    def get_tool_category(cls, tool_name: str) -> str:
+        if tool_name in ["query_dataset", "edit_dataset", "get_dataset_schema"]:
+            return "data_management"
+        elif tool_name in ["generate_data_entry_form"]:
+            return "interactive_forms"
+        elif tool_name in [
+            "read_resource",
+            "list_resources",
+            "get_resource_metadata",
+            "search",
+            "read_file_content",
+            "list_files",
+            "upload_file",
+            "import_cloud_link",
+            "delete_file",
+        ]:
+            return "resource_documents"
+        elif tool_name in [
+            "create_note",
+            "take_note",
+            "list_notes",
+            "get_note",
+            "read_note",
+            "update_note",
+            "modify_note",
+            "delete_note",
+        ]:
+            return "notes_scratchpad"
+        elif tool_name in [
+            "search_ai_guidance",
+            "get_ai_guidance",
+            "get_global_ai_rules",
+            "record_user_observation_signal",
+        ]:
+            return "ai_guidance_telemetry"
+        elif tool_name in [
+            "account_info",
+            "list_workspaces",
+            "create_workspace",
+            "get_workspace",
+            "list_workspace_mcp_links",
+            "generate_workspace_mcp_link",
+            "revoke_workspace_mcp_link",
+        ]:
+            return "account_operations"
+        elif tool_name in ["get_tools_cache", "tools_cache", "get_tool_cache"]:
+            return "tool_registry_cache"
+        return "general"
+
+    @classmethod
+    def get_all_tools(cls, scope_type: str = "WORKSPACE") -> List[Dict[str, Any]]:
+        if scope_type == "ACCOUNT":
+            base = list(ACCOUNT_MCP_TOOLS_DEFINITIONS)
+            custom = cls._custom_account_tools
+        else:
+            base = list(MCP_TOOLS_DEFINITIONS)
+            custom = cls._custom_workspace_tools
+
+        seen = set()
+        combined = []
+        for t in custom + base:
+            t_name = t.get("name")
+            if t_name and t_name not in seen:
+                seen.add(t_name)
+                combined.append(t)
+        return combined
+
+    @classmethod
+    def build_cache_for_scope(
+        cls,
+        scope_type: str = "WORKSPACE",
+        known_tools: Optional[List[str]] = None,
+        category_filter: Optional[str] = None,
+        include_schemas: bool = True,
+    ) -> Dict[str, Any]:
+        tools_list = cls.get_all_tools(scope_type)
+        all_tool_names = [t["name"] for t in tools_list]
+        known_set = set(known_tools or [])
+
+        tools_catalog = []
+        new_tools = []
+        for t in tools_list:
+            t_name = t["name"]
+            cat = cls.get_tool_category(t_name)
+            if category_filter and category_filter.lower() != "all" and cat != category_filter.lower():
+                continue
+
+            entry: Dict[str, Any] = {
+                "name": t_name,
+                "description": t.get("description", ""),
+                "category": cat,
+                "required_parameters": t.get("inputSchema", {}).get("required", []),
+                "optional_parameters": [
+                    p
+                    for p in t.get("inputSchema", {}).get("properties", {}).keys()
+                    if p not in t.get("inputSchema", {}).get("required", [])
+                ],
+            }
+            if include_schemas:
+                entry["inputSchema"] = t.get("inputSchema", {})
+
+            tools_catalog.append(entry)
+            if known_tools is not None and t_name not in known_set:
+                new_tools.append(t_name)
+
+        result: Dict[str, Any] = {
+            "status": "synchronized",
+            "server_scope": scope_type,
+            "total_tools_on_server": len(tools_list),
+            "returned_tools_count": len(tools_catalog),
+            "all_tool_names": all_tool_names,
+            "cache_version": cls._cache_version,
+            "cache_last_updated": cls._last_updated.isoformat(),
+            "tools": tools_catalog,
+        }
+
+        if known_tools is not None:
+            result["known_tools_count"] = len(known_tools)
+            result["new_tools_count"] = len(new_tools)
+            result["new_tools_on_server"] = new_tools
+            result["diff_summary"] = (
+                f"The server has {len(new_tools)} tool(s) not present in your local known_tools list: {', '.join(new_tools)}"
+                if new_tools
+                else "Your client session is fully synchronized with all tools registered on the server."
+            )
+
+        return result
 
 
 class MCPServer:
@@ -776,9 +979,8 @@ class MCPServer:
 
     @classmethod
     async def list_tools(cls, context: Optional[AuthenticatedMCPContext] = None) -> List[Dict[str, Any]]:
-        if context and context.scope_type == "ACCOUNT":
-            return ACCOUNT_MCP_TOOLS_DEFINITIONS
-        return MCP_TOOLS_DEFINITIONS
+        scope = context.scope_type if context else "WORKSPACE"
+        return ToolCacheRegistry.get_all_tools(scope)
 
     @classmethod
     async def call_tool(
@@ -802,6 +1004,10 @@ class MCPServer:
         # Silent Internal Telemetry & User Observation Signal (Always Pre-Authorized)
         if tool_name == "record_user_observation_signal":
             return await cls._record_user_observation_signal(db, context, args)
+
+        # Server-Side Tool Cache & Tool Discovery (Always Pre-Authorized)
+        if tool_name in ["get_tools_cache", "tools_cache", "get_tool_cache"]:
+            return await cls._get_tools_cache(db, context, args)
 
         ws_id = context.workspace_id
 
@@ -996,6 +1202,50 @@ class MCPServer:
             }
 
     @classmethod
+    async def _get_tools_cache(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        args: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Returns the live server-side tool cache and tool registry.
+        Provides diffing against client-supplied 'known_tools', category filtering,
+        and full parameter schema inspection.
+        """
+        known_tools = args.get("known_tools")
+        category = args.get("category")
+        include_schemas = args.get("include_schemas", True)
+
+        cache_data = ToolCacheRegistry.build_cache_for_scope(
+            scope_type=context.scope_type,
+            known_tools=known_tools,
+            category_filter=category,
+            include_schemas=include_schemas,
+        )
+
+        ws_id = context.workspace_id if context.scope_type == "WORKSPACE" else None
+        await AuditService.log_event(
+            db=db,
+            workspace_id=ws_id,
+            operation="TOOLS_CACHE_FETCHED",
+            actor_type="MCP_CLIENT",
+            credential_id=context.credential_id,
+            decision="ALLOW",
+            reason="Server tool cache and registry returned",
+            request_metadata={"known_tools_count": len(known_tools) if known_tools else 0},
+        )
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(cache_data, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
     async def _workspace_info(
         cls, db: AsyncSession, context: AuthenticatedMCPContext
     ) -> Dict[str, Any]:
@@ -1016,7 +1266,8 @@ class MCPServer:
                         "workspace_id": context.workspace_id,
                         "workspace_name": context.workspace_name,
                         "security_protocol": "ABOX Policy Boundary Gateway v1.0",
-                        "available_tools": [t["name"] for t in MCP_TOOLS_DEFINITIONS],
+                        "available_tools": [t["name"] for t in ToolCacheRegistry.get_all_tools("WORKSPACE")],
+                        "tool_cache_info": "Call 'get_tools_cache' to view updated tool schemas or compare with your known tools.",
                         "ai_skills_guide": ABOX_AI_SKILLS_GUIDE,
                         "verification_rule": "MANDATORY: Always call query_dataset immediately after calling edit_dataset to verify and confirm persisted data in storage before replying to the user.",
                     }, indent=2),
@@ -2002,7 +2253,10 @@ class MCPServer:
                 raise PermissionError(f"Permission Denied: This Account Master MCP key does not have '{perm_key}' ({desc_text}) enabled.")
 
         try:
-            if tool_name == "account_info":
+            if tool_name in ["get_tools_cache", "tools_cache", "get_tool_cache"]:
+                return await cls._get_tools_cache(db, context, args)
+
+            elif tool_name == "account_info":
                 return await cls._account_info(db, context)
 
             elif tool_name == "list_workspaces":

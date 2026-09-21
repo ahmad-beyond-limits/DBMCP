@@ -40,10 +40,14 @@ When a user expresses ANY intent to add, modify, update, or edit data in a tabul
 ## 🛠️ Complete MCP Tool Suite & Capabilities
 
 ### 📂 Workspace Resources & Tabular Datasets
-1. `workspace_info()`
+1. `get_tools_cache(known_tools, category, include_schemas)`
+   - Live Server Tool Cache & Registry: Fetches the active registry of all tools available on the server.
+   - Pass `known_tools` (array of tool names) to compare and automatically highlight newly added or updated server tools not present in your local session.
+
+2. `workspace_info()`
    - Inspect workspace name, active policies, security boundary status, and available tools.
 
-2. `list_resources()`
+3. `list_resources()`
    - Discover all accessible files (CSV, Excel `.xlsx`, PDF, Word `.docx`, JSON, TXT, Images) permitted for your session.
 
 3. `get_resource_metadata(resource_id)`
