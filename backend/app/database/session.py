@@ -329,6 +329,79 @@ async def init_db() -> None:
         except Exception as e:
             logger.warning(f"Schema migration warning for ai_feedback_records: {e}")
 
+        # Schema migration: ensure ai_global_instruction_documents table and all columns exist
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(text(
+                    "CREATE TABLE IF NOT EXISTS ai_global_instruction_documents ("
+                    "id VARCHAR(36) PRIMARY KEY, "
+                    "filename VARCHAR(255) NOT NULL, "
+                    "file_size INTEGER NOT NULL DEFAULT 0, "
+                    "file_type VARCHAR(16) NOT NULL DEFAULT 'PDF', "
+                    "extracted_text TEXT NOT NULL, "
+                    "executive_summary TEXT, "
+                    "table_of_contents JSONB DEFAULT '[]'::jsonb, "
+                    "is_active BOOLEAN DEFAULT TRUE, "
+                    "uploaded_by VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL, "
+                    "created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), "
+                    "updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"
+                    ")"
+                ))
+                await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN IF NOT EXISTS executive_summary TEXT"))
+                await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN IF NOT EXISTS table_of_contents JSONB DEFAULT '[]'::jsonb"))
+                await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_global_instruction_documents_is_active ON ai_global_instruction_documents (is_active)"))
+                logger.info("Executed schema migration: ensure ai_global_instruction_documents columns exist.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN executive_summary TEXT"))
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN table_of_contents JSON DEFAULT '[]'"))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning for ai_global_instruction_documents: {e}")
+
+        # Schema migration: ensure user_personalizations table exists
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(text(
+                    "CREATE TABLE IF NOT EXISTS user_personalizations ("
+                    "id VARCHAR(36) PRIMARY KEY, "
+                    "user_id VARCHAR(36) UNIQUE REFERENCES users(id) ON DELETE CASCADE, "
+                    "communication_style JSONB DEFAULT '{}'::jsonb, "
+                    "productivity_profile JSONB DEFAULT '{}'::jsonb, "
+                    "sensitivities_and_triggers JSONB DEFAULT '[]'::jsonb, "
+                    "agent_self_instructions JSONB DEFAULT '[]'::jsonb, "
+                    "behavioral_observations JSONB DEFAULT '[]'::jsonb, "
+                    "created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), "
+                    "updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"
+                    ")"
+                ))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_personalizations_user_id ON user_personalizations (user_id)"))
+                logger.info("Executed schema migration: ensure user_personalizations table exists.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(text(
+                        "CREATE TABLE IF NOT EXISTS user_personalizations ("
+                        "id VARCHAR(36) PRIMARY KEY, "
+                        "user_id VARCHAR(36) UNIQUE, "
+                        "communication_style JSON DEFAULT '{}', "
+                        "productivity_profile JSON DEFAULT '{}', "
+                        "sensitivities_and_triggers JSON DEFAULT '[]', "
+                        "agent_self_instructions JSON DEFAULT '[]', "
+                        "behavioral_observations JSON DEFAULT '[]', "
+                        "created_at DATETIME, "
+                        "updated_at DATETIME"
+                        ")"
+                    ))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning for user_personalizations: {e}")
+
     # Seed starter AI Guidance Playbooks if table is empty
     async with AsyncSessionLocal() as session:
 
