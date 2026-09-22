@@ -55,13 +55,20 @@ class ApiClient {
     const defaultHeaders = this.getHeaders(isFormData ? null : "application/json");
     const apiBase = getApiBase();
 
-    const response = await fetch(`${apiBase}${endpoint}`, {
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...(options.headers || {}),
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${apiBase}${endpoint}`, {
+        ...options,
+        headers: {
+          ...defaultHeaders,
+          ...(options.headers || {}),
+        },
+      });
+    } catch (networkErr: any) {
+      throw new Error(
+        `Network error: unable to reach the server. If the backend is waking up, please wait a few seconds and try again. (${networkErr.message || "Connection failed"})`
+      );
+    }
 
     if (response.status === 401 && typeof window !== "undefined") {
       // Token might be expired - do NOT redirect for public endpoints (auth or forms)
@@ -73,10 +80,26 @@ class ApiClient {
 
     if (!response.ok) {
       let errorMsg = `Request failed (${response.status})`;
-      try {
-        const errorData = await response.json();
-        errorMsg = errorData.detail || errorData.message || errorMsg;
-      } catch {}
+      if (response.status === 504) {
+        errorMsg = "Server gateway timed out (504). The backend server was waking up or extraction took too long. Please try again now that the server is active.";
+      } else if (response.status === 502) {
+        errorMsg = "Server is temporarily unavailable or restarting (502). Please retry in a few seconds.";
+      } else if (response.status === 413) {
+        errorMsg = "The uploaded file is too large. Please upload a smaller document (under 25MB).";
+      } else {
+        try {
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMsg = errorData.detail || errorData.message || errorMsg;
+          } else {
+            const text = await response.text();
+            if (text && text.length < 250 && !text.includes("<html") && !text.includes("<!DOCTYPE")) {
+              errorMsg = text.trim();
+            }
+          }
+        } catch {}
+      }
       throw new Error(errorMsg);
     }
 

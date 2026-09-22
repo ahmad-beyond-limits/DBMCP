@@ -662,14 +662,38 @@ async def upload_global_instruction_document(
         )
 
     file_type = "PDF" if ext == ".pdf" else ("DOCX" if ext == ".docx" else "TXT")
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+    try:
+        content = await file.read()
+    except Exception as e:
+        logger.error(f"Failed to read uploaded file {filename}: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to read file data: {str(e)}")
 
-    extracted_text, _, _ = await ContentExtractor.extract(content, file_type, filename)
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty (0 bytes).")
+
+    # Limit to 25MB
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File exceeds maximum allowed size of 25MB (received {len(content) / (1024 * 1024):.1f}MB).",
+        )
+
+    logger.info(f"Admin {admin.username} uploading instruction doc '{filename}' ({len(content)} bytes)...")
+    try:
+        extracted_text, _, _ = await ContentExtractor.extract(content, file_type, filename, detect_pii=False)
+    except Exception as e:
+        logger.error(f"Error extracting text from {filename}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to extract text from document '{filename}': {str(e)}",
+        )
+
     extracted_text = (extracted_text or "").strip()
-    if not extracted_text:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not extract readable text from the uploaded document.")
+    if not extracted_text or extracted_text == "[PDF Document content ready for AI query]":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not extract readable text from '{filename}'. The file may be an image-only/scanned PDF without an OCR text layer, or password protected. Please upload a PDF with selectable text, or a DOCX/TXT file.",
+        )
 
     doc = AIGlobalInstructionDocument(
         filename=filename,
@@ -682,6 +706,7 @@ async def upload_global_instruction_document(
     db.add(doc)
     await db.commit()
     await db.refresh(doc)
+    logger.info(f"Successfully saved instruction doc {doc.id} ({filename}) with {len(extracted_text)} chars.")
 
     return AIGlobalInstructionDocResponse(
         id=doc.id,

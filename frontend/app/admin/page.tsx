@@ -89,6 +89,9 @@ export default function AdminDashboardPage() {
   // Background Instruction Documents (PDF Directives)
   const [instructionDocs, setInstructionDocs] = useState<AIGlobalInstructionDocument[]>([]);
   const [uploadingInstructionDoc, setUploadingInstructionDoc] = useState(false);
+  const [instructionDocProgress, setInstructionDocProgress] = useState<string | null>(null);
+  const [instructionDocError, setInstructionDocError] = useState<string | null>(null);
+  const [instructionDocSuccess, setInstructionDocSuccess] = useState<string | null>(null);
   const [previewInstructionDoc, setPreviewInstructionDoc] = useState<AIGlobalInstructionDocument | null>(null);
   const [deletingInstructionDocId, setDeletingInstructionDocId] = useState<string | null>(null);
 
@@ -167,15 +170,27 @@ export default function AdminDashboardPage() {
   const handleUploadInstructionDoc = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setInstructionDocError(null);
+    setInstructionDocSuccess(null);
     setUploadingInstructionDoc(true);
+    setInstructionDocProgress(`Uploading "${file.name}" (${(file.size / 1024).toFixed(1)} KB)...`);
+
     try {
+      setInstructionDocProgress(`Extracting policy directives from "${file.name}"... Parsing document text...`);
       const doc = await api.uploadAdminGlobalInstructionDoc(file);
       setInstructionDocs((prev) => [doc, ...prev]);
-      setActionMsg({ type: "success", text: `Instruction document "${file.name}" uploaded and parsed successfully. AI will strictly enforce it.` });
+      const successText = `Instruction document "${file.name}" uploaded and parsed successfully (${(doc.file_size / 1024).toFixed(1)} KB). AI will strictly enforce it.`;
+      setInstructionDocSuccess(successText);
+      setActionMsg({ type: "success", text: successText });
+      setTimeout(() => setInstructionDocSuccess(null), 8000);
     } catch (err: any) {
-      setActionMsg({ type: "error", text: err.message || "Failed to upload instruction document." });
+      const errorMsg = err.message || "Failed to upload instruction document. Please check the file format and try again.";
+      setInstructionDocError(errorMsg);
+      setActionMsg({ type: "error", text: errorMsg });
     } finally {
       setUploadingInstructionDoc(false);
+      setInstructionDocProgress(null);
       e.target.value = "";
     }
   };
@@ -1243,9 +1258,14 @@ export default function AdminDashboardPage() {
                       fontSize: "0.82rem",
                       background: "var(--btn-solid-bg)",
                       color: "var(--btn-solid-text)",
+                      opacity: uploadingInstructionDoc ? 0.75 : 1,
                     }}
                   >
-                    <FileUp size={14} strokeWidth={2} />
+                    {uploadingInstructionDoc ? (
+                      <RefreshCw size={14} strokeWidth={2} style={{ animation: "spin 1.2s linear infinite" }} />
+                    ) : (
+                      <FileUp size={14} strokeWidth={2} />
+                    )}
                     <span>{uploadingInstructionDoc ? "Uploading & Extracting..." : "Upload Instruction PDF"}</span>
                     <input
                       type="file"
@@ -1256,6 +1276,96 @@ export default function AdminDashboardPage() {
                     />
                   </label>
                 </div>
+
+                {/* Active Uploading / Extracting Status Banner */}
+                {uploadingInstructionDoc && (
+                  <div
+                    style={{
+                      padding: "0.85rem 1rem",
+                      borderRadius: "var(--radius-sm)",
+                      background: "rgba(59, 130, 246, 0.08)",
+                      border: "1px solid rgba(59, 130, 246, 0.25)",
+                      color: "#1D4ED8",
+                      fontSize: "0.83rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.65rem",
+                    }}
+                  >
+                    <RefreshCw size={15} style={{ animation: "spin 1.2s linear infinite", flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{instructionDocProgress || "Uploading & extracting directives..."}</div>
+                      <div style={{ fontSize: "0.75rem", opacity: 0.85, marginTop: "0.15rem" }}>
+                        Parsing document text for stealth AI compliance. If the server was idle, this may take up to 45 seconds.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Inline Upload Error Alert */}
+                {instructionDocError && (
+                  <div
+                    style={{
+                      padding: "0.85rem 1rem",
+                      borderRadius: "var(--radius-sm)",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      border: "1px solid rgba(239, 68, 68, 0.3)",
+                      color: "#B91C1C",
+                      fontSize: "0.83rem",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      gap: "0.75rem",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.55rem" }}>
+                      <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
+                      <div>
+                        <div style={{ fontWeight: 600, marginBottom: "0.2rem" }}>Document Upload / Extraction Notice</div>
+                        <div style={{ lineHeight: 1.45 }}>{instructionDocError}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setInstructionDocError(null)}
+                      style={{ background: "transparent", border: "none", cursor: "pointer", color: "#B91C1C", padding: "2px" }}
+                      title="Dismiss"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Inline Upload Success Alert */}
+                {instructionDocSuccess && (
+                  <div
+                    style={{
+                      padding: "0.75rem 1rem",
+                      borderRadius: "var(--radius-sm)",
+                      background: "rgba(22, 163, 74, 0.08)",
+                      border: "1px solid rgba(22, 163, 74, 0.25)",
+                      color: "#15803D",
+                      fontSize: "0.83rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "0.75rem",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+                      <span>{instructionDocSuccess}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setInstructionDocSuccess(null)}
+                      style={{ background: "transparent", border: "none", cursor: "pointer", color: "#15803D", padding: "2px" }}
+                      title="Dismiss"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                )}
 
                 {/* Uploaded Documents List */}
                 {instructionDocs.length === 0 ? (

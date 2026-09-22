@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class ContentExtractor:
     @classmethod
     async def extract(
-        cls, content: bytes, file_type: str, filename: str = "document"
+        cls, content: bytes, file_type: str, filename: str = "document", detect_pii: bool = True
     ) -> Tuple[str, Optional[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         Extracts plain text and structured data from uploaded files.
@@ -30,23 +30,62 @@ class ContentExtractor:
             plain_text = content.decode("utf-8", errors="replace")
 
         elif ft == "PDF":
-            reader = PdfReader(io.BytesIO(content))
             pages = []
-            for i, page in enumerate(reader.pages):
+            try:
+                reader = PdfReader(io.BytesIO(content))
+                if getattr(reader, "is_encrypted", False):
+                    try:
+                        reader.decrypt("")
+                    except Exception:
+                        logger.warning(f"Encrypted PDF detected for {filename}, decryption without password failed.")
+                
+                # Cap pages to prevent stalls on massive PDF manuals
+                total_pages = len(reader.pages)
+                max_pages = min(total_pages, 200)
+                for i in range(max_pages):
+                    try:
+                        text = reader.pages[i].extract_text()
+                        if text and text.strip():
+                            pages.append(text.strip())
+                    except Exception as pe:
+                        logger.debug(f"Failed extracting page {i} of {filename}: {pe}")
+                        continue
+                if pages:
+                    plain_text = "\n\n".join(pages)
+            except Exception as e:
+                logger.warning(f"Error parsing PDF {filename} with pypdf: {e}")
+
+            # Fallback if no page text extracted (e.g. malformed or binary stream)
+            if not plain_text.strip():
                 try:
-                    text = page.extract_text()
-                    if text and text.strip():
-                        pages.append(text.strip())
+                    import re
+                    raw_str = content.decode("latin1", errors="ignore")
+                    stream_matches = re.findall(r"\(([^()]{4,})\)\s*(?:Tj|TJ|\')?", raw_str)
+                    if stream_matches:
+                        valid_chunks = [m.strip() for m in stream_matches if len(m.strip()) > 3 and not m.startswith("/")]
+                        if valid_chunks:
+                            plain_text = " ".join(valid_chunks[:500])
                 except Exception:
-                    continue
-            plain_text = "\n\n".join(pages) if pages else "[PDF Document content ready for AI query]"
+                    pass
+
+            if not plain_text.strip():
+                plain_text = "[PDF Document content ready for AI query]"
 
         elif ft == "DOCX":
             try:
                 doc = Document(io.BytesIO(content))
                 paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-                plain_text = "\n\n".join(paragraphs)
-            except Exception:
+                # Also include table text
+                table_lines = []
+                for table in doc.tables:
+                    for row in table.rows:
+                        row_vals = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                        if row_vals:
+                            table_lines.append(" | ".join(row_vals))
+                all_text = paragraphs + table_lines
+                plain_text = "\n\n".join(all_text) if all_text else "[DOCX Document content ready for AI query]"
+            except Exception as e:
+                logger.warning(f"Error parsing DOCX {filename}: {e}")
                 plain_text = "[DOCX Document content ready for AI query]"
 
         elif ft == "CSV":
@@ -64,8 +103,13 @@ class ContentExtractor:
         else:
             plain_text = content.decode("utf-8", errors="replace")
 
-        # Detect PII entities across extracted plain text
-        detected = PIIDetector.detect_entities(plain_text)
+        # Detect PII entities across extracted plain text (only if requested)
+        detected = []
+        if detect_pii and plain_text:
+            try:
+                detected = PIIDetector.detect_entities(plain_text)
+            except Exception as e:
+                logger.warning(f"PII detection failed: {e}")
         return plain_text, structured_data, detected
 
     @staticmethod
