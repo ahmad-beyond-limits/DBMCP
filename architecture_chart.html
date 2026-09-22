@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DBMCP / POAIS - Architecture & Working Workflow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- Mermaid.js for rendering diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+
+  <style>
+    :root {
+      --bg-primary: #0B0F17;
+      --bg-secondary: #111827;
+      --bg-card: rgba(17, 24, 39, 0.85);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-active: rgba(99, 102, 241, 0.5);
+      --accent-primary: #6366F1;
+      --accent-secondary: #8B5CF6;
+      --accent-cyan: #06B6D4;
+      --accent-emerald: #10B981;
+      --accent-rose: #F43F5E;
+      --text-main: #F9FAFB;
+      --text-muted: #9CA3AF;
+      --text-dim: #6B7280;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* Subtle background grid & glow */
+    body::before {
+      content: "";
+      position: fixed;
+      top: -20%;
+      left: 20%;
+      width: 60vw;
+      height: 60vw;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, rgba(6, 182, 212, 0.04) 50%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(11, 15, 23, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1rem 2rem;
+    }
+
+    .header-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #4F46E5, #06B6D4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+    }
+
+    .brand-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .brand-title h1 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #FFFFFF, #93C5FD);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-title p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: #34D399;
+    }
+
+    .badge-status::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #34D399;
+      box-shadow: 0 0 8px #34D399;
+    }
+
+    main {
+      flex: 1;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Tab Controls */
+    .tabs-bar {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 2rem;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 0.65rem 1.15rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-btn.active {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: var(--border-active);
+      color: #A5B4FC;
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.2);
+    }
+
+    /* Diagram Card Container */
+    .diagram-panel {
+      display: none;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(12px);
+    }
+
+    .diagram-panel.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .panel-header {
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 1rem;
+    }
+
+    .panel-header h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 0.35rem;
+    }
+
+    .panel-header p {
+      color: var(--text-muted);
+      font-size: 0.88rem;
+    }
+
+    .chart-box {
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1.5rem 0.5rem;
+      background: rgba(11, 15, 23, 0.6);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      min-height: 480px;
+    }
+
+    .chart-box .mermaid {
+      width: 100%;
+      text-align: center;
+    }
+
+    /* Details Grid below diagram */
+    .insights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.25rem;
+      margin-top: 1.75rem;
+    }
+
+    .insight-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 1.15rem;
+    }
+
+    .insight-card h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #93C5FD;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .insight-card p {
+      font-size: 0.84rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .code-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      background: rgba(255, 255, 255, 0.07);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      color: #F3F4F6;
+    }
+
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 1.5rem 2rem;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      background: rgba(11, 15, 23, 0.9);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header>
+    <div class="header-content">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="brand-title">
+          <h1>DBMCP / POAIS Interactive Working Charts</h1>
+          <p>Policy-Enforced AI Data Workspace Architecture & Protocol Mechanics</p>
+        </div>
+      </div>
+      <div class="badge-status">Protocol: MCP 2024-11-05 &bull; Live &amp; Enforced</div>
+    </div>
+  </header>
+
+  <!-- Main View -->
+  <main>
+    <!-- Switcher Tabs -->
+    <div class="tabs-bar" role="tablist">
+      <button class="tab-btn active" onclick="switchTab('tab-architecture')">
+        🏛️ 1. Complete System Architecture
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-mcp-flow')">
+        ⚡ 2. AI Request Lifecycle (MCP)
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-interaction')">
+        🔘 3. Clickable UI vs. Ephemeral Form
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-security')">
+        🛡️ 4. Anti-Leakage &amp; Anonymisation
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-er')">
+        🗄️ 5. Database Schema &amp; Entities
+      </button>
+    </div>
+
+    <!-- PANEL 1: System Architecture -->
+    <section id="tab-architecture" class="diagram-panel active">
+      <div class="panel-header">
+        <h2>Complete 6-Layer System Architecture</h2>
+        <p>Zero-trust enforcement gateway separating untrusted AI clients from underlying storage and databases.</p>
+      </div>
+
+      <div class="chart-box">
+        <div class="mermaid">
+flowchart TB
+    subgraph L1["1. Client &amp; Agent Layer"]
+        AICLIENT["🤖 AI Clients<br/>(Claude Desktop, Cursor, Custom Agents)<br/>JSON-RPC 2.0 via Bearer Token"]
+        WEBCLIENT["💻 Next.js 14 Web UI<br/>(Dashboard, Workspaces, Admin)<br/>REST API via JWT"]
+        FORMCLIENT["📝 Ephemeral Form End-Users<br/>(300s Standalone Browser Session)<br/>HTTPS View &amp; Submit"]
+    end
+
+    subgraph L2["2. API Gateway &amp; Ingestion Layer (FastAPI)"]
+        ENDPOINT_MCP["/mcp (Unified Protocol Gateway)<br/>Single Master Tool: get_tools_cache"]
+        ENDPOINT_REST["/api/v1 (Workspaces, Files, Notes, Admin)"]
+        ENDPOINT_FORMS["/forms (View, Session, Submit, Close)"]
+        AUTH_GUARD["🛡️ Auth &amp; Scope Guard<br/>- HMAC-SHA256 Token Validation<br/>- Workspace Boundary Derivation<br/>- In-Memory Sliding-Window Rate Limiter"]
+    end
+
+    subgraph L3["3. Policy Governance &amp; Compliance Layer"]
+        POLICY_EVAL["⚖️ PolicyEngine (policies/engine.py)<br/>- Operation-Level (ALLOW / DENY)<br/>- Resource-Level Overrides<br/>- Restricted Field Exclusions"]
+        DENY_CHECK{"Rule Evaluation:<br/>Explicit DENY Overrides ALLOW"}
+        GUIDANCE_STORE["📚 AI Guidance &amp; Stealth Playbooks<br/>Platform Rules &amp; Confidential Handbooks"]
+    end
+
+    subgraph L4["4. Processing &amp; Execution Engines"]
+        MCP_DISPATCH["MCP Server Dispatcher"]
+        TAB_ENGINE["📊 Tabular Query Engine<br/>CSV, XLSX, JSON Filter &amp; Math Aggregations"]
+        DOC_ENGINE["📄 Document Text Extractor &amp; Search<br/>PDF, DOCX, TXT Keyword Index"]
+        FORM_ENGINE["⚡ Generative UI Form Engine<br/>300s Ephemeral Token &amp; Formula Sanitizer"]
+        NOTES_ENGINE["🧠 Companion Memory &amp; Notes<br/>Persistent Markdown Scratchpads"]
+    end
+
+    subgraph L5["5. Anonymisation &amp; Redaction Layer"]
+        PII_DETECT["🔍 PII Entity Detector (Regex &amp; Patterns)<br/>Emails, Phones, SSNs, Names, Cards"]
+        TRANSFORM["🔒 Transformation Engine<br/>MASK, REDACT, PSEUDONYMIZE, REMOVE"]
+    end
+
+    subgraph L6["6. Persistence &amp; Storage Layer"]
+        DB[("🗄️ Relational Database<br/>PostgreSQL / SQLite<br/>(Users, Workspaces, Policies, Notes, Forms)")]
+        AUDIT_STORE[("📜 Immutable Audit Trail<br/>(Sanitized Payloads, Timestamps, Decisions)")]
+        BLOB_STORE[("📦 Object Storage<br/>Supabase Storage / Local Disk<br/>(Encrypted Datasets &amp; Uploads)")]
+    end
+
+    AICLIENT -->|JSON-RPC 2.0| ENDPOINT_MCP
+    WEBCLIENT -->|REST HTTP| ENDPOINT_REST
+    FORMCLIENT -->|Interactive Session| ENDPOINT_FORMS
+
+    ENDPOINT_MCP --> AUTH_GUARD
+    ENDPOINT_REST --> AUTH_GUARD
+    ENDPOINT_FORMS --> AUTH_GUARD
+
+    AUTH_GUARD --> POLICY_EVAL
+    POLICY_EVAL --> DENY_CHECK
+
+    DENY_CHECK -->|DENIED| AUDIT_STORE
+    DENY_CHECK -->|ALLOWED| MCP_DISPATCH
+
+    MCP_DISPATCH --> TAB_ENGINE
+    MCP_DISPATCH --> DOC_ENGINE
+    MCP_DISPATCH --> FORM_ENGINE
+    MCP_DISPATCH --> NOTES_ENGINE
+    MCP_DISPATCH --> GUIDANCE_STORE
+
+    TAB_ENGINE <--> BLOB_STORE
+    TAB_ENGINE <--> DB
+    DOC_ENGINE <--> BLOB_STORE
+    FORM_ENGINE <--> BLOB_STORE
+    NOTES_ENGINE <--> DB
+
+    TAB_ENGINE --> PII_DETECT
+    DOC_ENGINE --> PII_DETECT
+    PII_DETECT --> TRANSFORM
+    TRANSFORM --> AUDIT_STORE
+
+    AUDIT_STORE -->|Sanitized Result| AICLIENT
+    AUDIT_STORE -->|API Response| WEBCLIENT
+    FORM_ENGINE -->|Submission &amp; Teardown| FORMCLIENT
+        </div>
+      </div>
+
+      <div class="insights-grid">
+        <div class="insight-card">
+          <h3>🔐 Zero-Trust Workspace Scope</h3>
+          <p>AI models cannot supply client-side <span class="code-pill">workspace_id</span> parameters. The workspace is cryptographically derived solely from the HMAC-SHA256 hashed bearer token.</p>
+        </div>
+        <div class="insight-card">
+          <h3>📦 Single Gateway Tool Packing</h3>
+          <p>AI clients querying <span class="code-pill">tools/list</span> receive solely <span class="code-pill">get_tools_cache</span>, which packs all 18 underlying tools with full JSON schemas and direct execution.</p>
+        </div>
+        <div class="insight-card">
+          <h3>📜 Sanitized Audit Logging</h3>
+          <p>Every read, query, mutation, and policy check is written to <span class="code-pill">audit_logs</span>. Credentials, tokens, and database passwords are automatically stripped by the logging redactor.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL 2: AI Request Lifecycle -->
+    <section id="tab-mcp-flow" class="diagram-panel">
+      <div class="panel-header">
+        <h2>AI Agent MCP Request Execution Lifecycle</h2>
+        <p>Step-by-step trace of how an AI tool invocation traverses the gateway, policy matrix, execution engine, anonymizer, and audit trail.</p>
+      </div>
+
+      <div class="chart-box">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Agent as 🤖 AI Agent (Claude/Cursor)
+    participant Gateway as 🚪 FastAPI Gateway (/mcp)
+    participant Auth as 🛡️ Auth &amp; Scope Guard
+    participant Policy as ⚖️ PolicyEngine
+    participant Engine as ⚙️ Tabular Query Engine
+    participant Anon as 🔒 Anonymisation Engine
+    participant Audit as 📜 Audit Logger
+    participant Storage as 🗄️ Relational DB &amp; Storage
+
+    Agent->>Gateway: POST /mcp (JSON-RPC tools/call: query_dataset)
+    Gateway->>Auth: Validate Bearer token (mcp_live_...)
+    Auth->>Auth: HMAC-SHA256 lookup &amp; check expiry/revocation
+    Auth-->>Gateway: Authenticated context (Workspace ID, Permissions)
+
+    Gateway->>Policy: evaluate(workspace_id, operation, requested_fields)
+    Policy->>Policy: 1. Check credential permissions &amp; allowed file scope
+    Policy->>Policy: 2. Check operation policy (ALLOW / DENY)
+    Policy->>Policy: 3. Check resource-level policy (Specific overrides default)
+    Policy->>Policy: 4. Check restricted columns for indirect leakage
+
+    alt Policy Check Evaluates to DENY
+        Policy-->>Audit: Log DENIED decision &amp; reason
+        Gateway-->>Agent: JSON-RPC Error (-32600): Policy Access Denied
+    else Policy Check Evaluates to ALLOW
+        Gateway->>Engine: execute_query(resource_id, columns, filters)
+        Engine->>Storage: Fetch parsed dataset rows from ExtractedContent
+        Engine->>Engine: Apply filters ($gt, $lt, $eq, $contains, etc.)
+        Engine-->>Anon: Pass filtered rows + workspace anonymisation rules
+        Anon->>Anon: Transform values: MASK / REDACT / PSEUDONYMIZE (Salted HMAC)
+        Anon-->>Gateway: Clean, policy-compliant dataset rows
+        Gateway->>Audit: Record sanitized event to audit_logs
+        Gateway-->>Agent: JSON-RPC 2.0 Success (Policy-Compliant Rows)
+    end
+        </div>
+      </div>
+
+      <div class="insights-grid">
+        <div class="insight-card">
+          <h3>⏱️ Sliding-Window Rate Limiting</h3>
+          <p>Protects the <span class="code-pill">/mcp</span> gateway from abuse using an in-memory sliding window limiter configured to 100 requests per 60 seconds per credential.</p>
+        </div>
+        <div class="insight-card">
+          <h3>🏷️ Specificity Overrides Defaults</h3>
+          <p>A specific policy defined on a file (e.g. <span class="code-pill">students.csv</span>) strictly overrides any workspace-wide default policy.</p>
+        </div>
+        <div class="insight-card">
+          <h3>🚫 Immediate Rejection on Breach</h3>
+          <p>Any query referencing a restricted column in projections, filters, or aggregations is rejected at step 6 before any data is scanned.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL 3: Clickable UI vs Ephemeral Form -->
+    <section id="tab-interaction" class="diagram-panel">
+      <div class="panel-header">
+        <h2>Interaction Protocol: Clickable UI vs. Ephemeral Form</h2>
+        <p>Eliminating conversational fatigue, prose interrogations, and hallucinated table structures through deterministic UI pathways.</p>
+      </div>
+
+      <div class="chart-box">
+        <div class="mermaid">
+flowchart TD
+    START(["User Wants to View, Pick, Edit, or Add Records"]) --> DECISION{"Is it a brand new multi-field record<br/>OR complex nested schema?"}
+
+    %% In-Chat Clickable UI Branch
+    DECISION -->|NO: Single Field, Status, Pick, or Confirm| IN_CHAT["🔘 Clickable UI (Native In-Chat Interface)"]
+    IN_CHAT --> ACTIONS["- Select a record from a filtered list<br/>- Pick a single field to modify (e.g., status, score)<br/>- Tap confirmation: [✅ Yes, Confirm] [❌ Cancel]<br/>- Always provide 'Other / Custom Input' option"]
+    ACTIONS --> MUTATION["Programmatic Execution via edit_dataset() Tool"]
+    MUTATION --> VERIFY["⚡ Verification Protocol:<br/>1. Call query_dataset() to verify disk persistence<br/>2. Confirm verified values back to user in chat"]
+
+    %% Ephemeral Session Form Branch
+    DECISION -->|YES: New Record / Massive Schema| GEN_FORM["🌐 generate_data_entry_form() Tool"]
+    GEN_FORM --> TOKEN_GEN["Generate 32-hex Ephemeral Session Token<br/>(Stored in Fast Memory + FormDataEntrySession)<br/>Strict 300s (5-Minute) Lifespan"]
+    TOKEN_GEN --> LINK["Return Link to Human:<br/>👉 [➕ Open Session Form](http://localhost:8000/forms/view?token=...)"]
+    LINK --> USER_FILL["End-User opens standalone web form in browser"]
+
+    USER_FILL --> SUBMIT_CHOICE{"User Submits or Closes Window?"}
+
+    SUBMIT_CHOICE -->|Window Closed| CLOSE_ENDPOINT["POST /forms/close-window<br/>Instant Session Revocation &amp; Deletion"]
+    SUBMIT_CHOICE -->|5 Minutes Elapsed| EXPIRY["Session Expired<br/>Returns Custom 404 Form Deleted Notice"]
+    SUBMIT_CHOICE -->|Form Submitted| SANITIZE["1. Sanitize Formula Injections (=, +, -, @)<br/>2. Commit Row to DB ExtractedContent JSON<br/>3. Update Raw File in Supabase / Local Disk<br/>4. Permanently Delete Session Record"]
+
+    SANITIZE --> VERIFY
+        </div>
+      </div>
+
+      <div class="insights-grid">
+        <div class="insight-card">
+          <h3>🚫 Strict Chat Input Ban</h3>
+          <p>Under NO circumstances should an agent ask the user to type record details or fields into chat text. All data is gathered via Clickable UI or Session Forms.</p>
+        </div>
+        <div class="insight-card">
+          <h3>🛡️ Formula Injection Defense (CWE-1236)</h3>
+          <p>Any form value starting with <span class="code-pill">=</span>, <span class="code-pill">+</span>, <span class="code-pill">-</span>, or <span class="code-pill">@</span> is safely escaped with a single quote to neutralize spreadsheet macros.</p>
+        </div>
+        <div class="insight-card">
+          <h3>♻️ Strict No-Recycling Rule</h3>
+          <p>Session forms expire after 5 minutes and are single-use. Agents are strictly forbidden from reusing or re-sending old links across conversation turns.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL 4: Security, Anti-Leakage & Anonymisation -->
+    <section id="tab-security" class="diagram-panel">
+      <div class="panel-header">
+        <h2>Anti-Indirect-Leakage &amp; Anonymisation Engine</h2>
+        <p>Preventing mathematical inference of restricted columns and ensuring deterministic salted pseudonymisation.</p>
+      </div>
+
+      <div class="chart-box">
+        <div class="mermaid">
+flowchart LR
+    subgraph INCOMING["Incoming Query Request"]
+        REQ1["SELECT name, salary"]
+        REQ2["WHERE salary &gt; 100000"]
+        REQ3["SELECT AVG(salary)"]
+    end
+
+    subgraph LEAK_GUARD["Anti-Indirect-Leakage Guard (StructuredQueryEngine)"]
+        DENIED_COLS["Denied Column Policy:<br/>salary = DENY"]
+        CHK1{"Projection Check:<br/>Contains salary?"}
+        CHK2{"Filter Check:<br/>Filters on salary?"}
+        CHK3{"Aggregation Check:<br/>Aggregates on salary?"}
+    end
+
+    subgraph BLOCK["Blocked with Audit Event"]
+        DENY_RESP["❌ REJECTED<br/>'Access to restricted column salary is denied<br/>to prevent indirect information leakage'"]
+    end
+
+    subgraph ALLOWED["Allowed Projections: (e.g. name, email, department)"]
+        TRANS_ENGINE["Anonymisation Engine (anonymisation/engine.py)"]
+        
+        MASK_ACTION["MASK: email -&gt; j***@domain.com"]
+        REDACT_ACTION["REDACT: ssn -&gt; [REDACTED: SSN]"]
+        PSEUDO_ACTION["PSEUDONYMIZE: name -&gt; Person_042<br/>(HMAC-SHA256 with Workspace Secret Salt)"]
+        REMOVE_ACTION["REMOVE: drop column from output JSON"]
+    end
+
+    REQ1 --> CHK1
+    REQ2 --> CHK2
+    REQ3 --> CHK3
+
+    CHK1 -->|Matches salary| DENY_RESP
+    CHK2 -->|Matches salary| DENY_RESP
+    CHK3 -->|Matches salary| DENY_RESP
+
+    DENIED_COLS -.-> CHK1
+    DENIED_COLS -.-> CHK2
+    DENIED_COLS -.-> CHK3
+
+    ALLOWED --> TRANS_ENGINE
+    TRANS_ENGINE --> MASK_ACTION
+    TRANS_ENGINE --> REDACT_ACTION
+    TRANS_ENGINE --> PSEUDO_ACTION
+    TRANS_ENGINE --> REMOVE_ACTION
+        </div>
+      </div>
+
+      <div class="insights-grid">
+        <div class="insight-card">
+          <h3>🧪 Mathematical Inference Defense</h3>
+          <p>Blocking a column requires blocking filters (<span class="code-pill">WHERE salary > 50000</span>) and aggregations (<span class="code-pill">AVG(salary)</span>). Otherwise, an AI could infer values via binary search.</p>
+        </div>
+        <div class="insight-card">
+          <h3>🧂 Workspace Salted Pseudonyms</h3>
+          <p>Pseudonyms are deterministic within Workspace A (<span class="code-pill">Person_042</span>), but completely uncorrelated in Workspace B (<span class="code-pill">Person_819</span>) using <span class="code-pill">WORKSPACE_HASH_SECRET</span>.</p>
+        </div>
+        <div class="insight-card">
+          <h3>📑 Stealth Background Documents</h3>
+          <p>Confidential institutional directives (PDF/DOCX) are loaded stealthily into the prompt: the AI must follow them strictly without citing or revealing their existence to users.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL 5: Entity Relationship Diagram -->
+    <section id="tab-er" class="diagram-panel">
+      <div class="panel-header">
+        <h2>Relational Database Schema (SQLAlchemy Models)</h2>
+        <p>17 relational database models mapped across users, workspaces, files, policies, notes, and telemetry.</p>
+      </div>
+
+      <div class="chart-box">
+        <div class="mermaid">
+erDiagram
+    User ||--o{ Workspace : "owns"
+    User ||--o{ WorkspaceMember : "belongs to"
+    User ||--o{ MCPCredential : "owns account key"
+    User ||--o{ Note : "creates"
+    User ||--o{ UserPersonalization : "has profile"
+
+    Workspace ||--o{ WorkspaceMember : "contains"
+    Workspace ||--o{ FileRecord : "stores"
+    Workspace ||--o{ ResourcePolicy : "governs"
+    Workspace ||--o{ OperationPolicy : "restricts"
+    Workspace ||--o{ AnonymisationRule : "anonymises"
+    Workspace ||--o{ MCPCredential : "authenticates"
+    Workspace ||--o{ Note : "contains"
+    Workspace ||--o{ AuditLog : "records"
+    Workspace ||--o{ FormDataEntrySession : "manages"
+
+    FileRecord ||--|| ExtractedContent : "has extracted text/json"
+    Note ||--o{ FileRecord : "references"
+
+    User {
+        string id PK
+        string username UK
+        string password_hash
+        boolean is_superuser
+        boolean is_active
+        datetime created_at
+    }
+
+    Workspace {
+        string id PK
+        string name
+        string description
+        string owner_id FK
+        boolean is_active
+        datetime created_at
+    }
+
+    FileRecord {
+        string id PK
+        string workspace_id FK
+        string original_filename
+        string storage_path
+        string file_type
+        int file_size
+        string status
+    }
+
+    ExtractedContent {
+        string id PK
+        string file_id FK
+        string workspace_id FK
+        text plain_text
+        json structured_data
+        json detected_entities
+    }
+
+    OperationPolicy {
+        string id PK
+        string workspace_id FK
+        string operation
+        string decision
+    }
+
+    ResourcePolicy {
+        string id PK
+        string workspace_id FK
+        string resource_id
+        string operation
+        string decision
+    }
+
+    AnonymisationRule {
+        string id PK
+        string workspace_id FK
+        string entity_type
+        string field_name
+        string transformation
+    }
+
+    MCPCredential {
+        string id PK
+        string scope_type
+        string credential_prefix
+        string secret_hash
+        json permissions
+        datetime expires_at
+        datetime revoked_at
+    }
+
+    AuditLog {
+        string id PK
+        string workspace_id FK
+        string actor_type
+        string operation
+        string decision
+        json request_metadata
+        datetime timestamp
+    }
+
+    FormDataEntrySession {
+        string id PK
+        string workspace_id FK
+        string file_id FK
+        string action
+        json filters
+        boolean is_used
+        datetime expires_at
+    }
+        </div>
+      </div>
+
+      <div class="insights-grid">
+        <div class="insight-card">
+          <h3>🌱 Automatic Workspace Seeding</h3>
+          <p>When a user registers, two workspaces are automatically created: <strong>Notes Workspace</strong> (knowledge store) and <strong>Student Workspace</strong> (seeded with <span class="code-pill">students.csv</span> for instant testing).</p>
+        </div>
+        <div class="insight-card">
+          <h3>⚡ Short Session Identifiers</h3>
+          <p><span class="code-pill">FormDataEntrySession</span> uses clean 32-character hex tokens to prevent line-wrapping and URL corruption in chat interfaces.</p>
+        </div>
+        <div class="insight-card">
+          <h3>🧠 User Personalization &amp; Insights</h3>
+          <p><span class="code-pill">UserPersonalization</span> and <span class="code-pill">AIFeedbackRecord</span> track user friction and cognitive fatigue across sessions to optimize assistance.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    DBMCP / POAIS Enterprise Security Gateway &bull; Fully Policy-Governed AI Integration Architecture
+  </footer>
+
+  <script>
+    // Initialize Mermaid
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#0B0F17',
+        primaryColor: '#6366F1',
+        primaryTextColor: '#F9FAFB',
+        primaryBorderColor: '#818CF8',
+        lineColor: '#06B6D4',
+        secondaryColor: '#1E293B',
+        tertiaryColor: '#0F172A'
+      }
+    });
+
+    // Tab Switching Function
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.diagram-panel').forEach(panel => panel.classList.remove('active'));
+
+      event.currentTarget.classList.add('active');
+      const targetPanel = document.getElementById(tabId);
+      if (targetPanel) {
+        targetPanel.classList.add('active');
+      }
+    }
+  </script>
+</body>
+</html>
