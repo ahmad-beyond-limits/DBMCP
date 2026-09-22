@@ -235,7 +235,7 @@ export default function WorkspaceDetailPage() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [notification, setNotification] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
 
   // Modals & Action States
@@ -336,6 +336,19 @@ export default function WorkspaceDetailPage() {
       loadWorkspaceData();
     }
   }, [workspaceId]);
+
+  // Safety: purge any unconfirmed pre-uploaded file if user closes tab or navigates away without saving
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (uploadedRecord) {
+        api.deleteFileBeacon(workspaceId, uploadedRecord.id);
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [uploadedRecord, workspaceId]);
 
   const getNoteColorClass = (note: any, fallbackIdx: number = 0) => {
     if (note?.tags && Array.isArray(note.tags)) {
@@ -1012,7 +1025,7 @@ export default function WorkspaceDetailPage() {
     notify("success", "Added new row to editable spreadsheet.");
   };
 
-  const notify = (type: "success" | "error", text: string) => {
+  const notify = (type: "success" | "error" | "info", text: string) => {
     setNotification({ type, text });
     setTimeout(() => setNotification(null), 5000);
   };
@@ -1113,7 +1126,13 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const handleSelectFileToUpload = (file: File) => {
+  const handleSelectFileToUpload = async (file: File) => {
+    // If a previous unconfirmed upload exists, purge it from server
+    if (uploadedRecord) {
+      try {
+        await api.deleteFile(workspaceId, uploadedRecord.id);
+      } catch {}
+    }
     setUploadFile(file);
     setUploadStatus("idle");
     setUploadProgress(0);
@@ -1122,12 +1141,42 @@ export default function WorkspaceDetailPage() {
     startFileUpload(file);
   };
 
-  const handleResetUpload = () => {
+  const handleResetUpload = async () => {
+    if (uploadedRecord) {
+      const recordToDelete = uploadedRecord;
+      setUploadedRecord(null);
+      try {
+        await api.deleteFile(workspaceId, recordToDelete.id);
+        notify("info", `File '${recordToDelete.original_filename || uploadFile?.name}' removed and discarded.`);
+      } catch (err) {
+        console.warn("Could not delete discarded file:", err);
+      }
+    }
     setUploadFile(null);
     setUploadedRecord(null);
     setUploadStatus("idle");
     setUploadProgress(0);
     setUploadError(null);
+  };
+
+  const handleCancelModal = async () => {
+    if (uploadedRecord) {
+      const recordToDelete = uploadedRecord;
+      setUploadedRecord(null);
+      try {
+        await api.deleteFile(workspaceId, recordToDelete.id);
+        notify("info", `Upload discarded. '${recordToDelete.original_filename || uploadFile?.name}' was not saved to workspace.`);
+      } catch (err) {
+        console.warn("Could not delete discarded file:", err);
+      }
+    }
+    setUploadFile(null);
+    setUploadedRecord(null);
+    setUploadStatus("idle");
+    setUploadProgress(0);
+    setUploadError(null);
+    setUploadDescription("");
+    setUploadModalOpen(false);
   };
 
   const handleSaveUploadedContent = async () => {
@@ -1144,7 +1193,6 @@ export default function WorkspaceDetailPage() {
       try {
         setUploading(true);
         record = await api.uploadFile(workspaceId, uploadFile, (p) => setUploadProgress(p));
-        setUploadedRecord(record);
       } catch (err: any) {
         setUploadStatus("error");
         setUploadError(err.message || "Failed to upload file");
@@ -1155,6 +1203,7 @@ export default function WorkspaceDetailPage() {
 
     if (record) {
       const saved = record;
+      // Mark as saved and committed to workspace state
       setFiles((prev) => {
         if (prev.some((f) => f.id === saved.id)) return prev;
         return [saved, ...prev];
@@ -1166,14 +1215,15 @@ export default function WorkspaceDetailPage() {
       notify("success", `File '${saved.original_filename || uploadFile?.name}' saved to workspace.`);
     }
 
-    setUploadModalOpen(false);
-    setUploadFile(null);
+    // Reset temporary states without triggering deletion
     setUploadedRecord(null);
+    setUploadFile(null);
     setUploadStatus("idle");
     setUploadProgress(0);
     setUploadError(null);
     setUploadDescription("");
     setUploadStep(1);
+    setUploadModalOpen(false);
   };
 
   const handleViewContent = async (file: FileRecord) => {
@@ -1644,7 +1694,13 @@ export default function WorkspaceDetailPage() {
           gap: "0.5rem",
           maxWidth: "calc(100vw - 4rem)",
         }}>
-          {notification.type === "success" ? <ShieldCheck size={16} strokeWidth={1.5} /> : <AlertTriangle size={16} strokeWidth={1.5} />}
+          {notification.type === "success" ? (
+            <ShieldCheck size={16} strokeWidth={1.5} />
+          ) : notification.type === "info" ? (
+            <FileText size={16} strokeWidth={1.5} />
+          ) : (
+            <AlertTriangle size={16} strokeWidth={1.5} />
+          )}
           <span>{notification.text}</span>
         </div>
       )}
@@ -3646,7 +3702,7 @@ export default function WorkspaceDetailPage() {
       {uploadModalOpen && (
         <div
           onClick={(e) => {
-            if (e.target === e.currentTarget) setUploadModalOpen(false);
+            if (e.target === e.currentTarget) handleCancelModal();
           }}
           style={{
             position: "fixed",
@@ -3674,7 +3730,7 @@ export default function WorkspaceDetailPage() {
             overflowY: "auto",
           }}>
             <button
-              onClick={() => setUploadModalOpen(false)}
+              onClick={handleCancelModal}
               className="icon-circle-btn"
               style={{
                 position: "absolute",
@@ -4114,10 +4170,7 @@ export default function WorkspaceDetailPage() {
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
                   <button
                     type="button"
-                    onClick={() => {
-                      handleResetUpload();
-                      setUploadModalOpen(false);
-                    }}
+                    onClick={handleCancelModal}
                     className="pill-btn pill-btn-glass"
                   >
                     Cancel

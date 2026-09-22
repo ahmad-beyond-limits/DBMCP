@@ -321,6 +321,18 @@ class ApiClient {
     });
   }
 
+  deleteFileBeacon(workspaceId: string, fileId: string): void {
+    try {
+      const apiBase = getApiBase();
+      const token = typeof window !== "undefined" ? localStorage.getItem("dbmcp_access_token") : null;
+      fetch(`${apiBase}/workspaces/${workspaceId}/files/${fileId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        keepalive: true,
+      }).catch(() => {});
+    } catch {}
+  }
+
   // Policies
   async getPolicies(workspaceId: string) {
     return this.request<{
