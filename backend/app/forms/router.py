@@ -211,7 +211,7 @@ STANDALONE_404_HTML = r"""<!DOCTYPE html>
     <div class="card-404">
       <div class="code-badge">404 NOT FOUND</div>
       <h1 class="h1-title">Form Session Expired or Closed</h1>
-      <p class="main-msg">This form might be deleted after a minute, or you closed the window.</p>
+      <p class="main-msg">This form might be deleted after 5 minutes, or you closed the window.</p>
       
       <div class="persisted-note">
         <span style="font-size: 1.1rem; line-height: 1;">✓</span>
@@ -647,7 +647,7 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
       <div style="display: flex; align-items: center; gap: 0.65rem;">
         <div class="session-indicator" id="topSessionIndicator">
           <span class="live-dot" id="liveDot"></span>
-          <span id="sessionTimerText">Active (60s)</span>
+          <span id="sessionTimerText">Active (5m)</span>
         </div>
         <button type="button" class="btn-close-top" id="topCloseBtn" onclick="handleCloseWindow()">✕ Close Window</button>
       </div>
@@ -669,7 +669,7 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
       <div style="display: inline-flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 800; padding: 0.35rem 0.9rem; border-radius: 9999px; background: #FEF2F2; border: 1px solid #FCA5A5; color: #DC2626; margin-bottom: 1.25rem;">404 NOT FOUND</div>
       <h2 style="font-size: 1.45rem; font-weight: 800; margin-bottom: 0.75rem; color: var(--text-primary);" id="errorTitle">Form Session Expired or Closed</h2>
       <p style="font-size: 1.05rem; font-weight: 600; color: #B91C1C; background: #FEF2F2; border: 1px solid #FEE2E2; border-radius: 12px; padding: 0.9rem 1.15rem; margin-bottom: 1.25rem;" id="errorDesc">
-        This form might be deleted after a minute, or you closed the window.
+        This form might be deleted after 5 minutes, or you closed the window.
       </p>
       <div style="display: flex; align-items: flex-start; gap: 0.6rem; text-align: left; font-size: 0.82rem; color: #065F46; background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 1.5rem; line-height: 1.45;">
         <span style="font-size: 1.1rem; line-height: 1;">✓</span>
@@ -691,7 +691,7 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
         <div class="badge-row">
           <span class="slash-tag">POAIS FORM</span>
           <span class="badge badge-amber" id="actionBadge">UPDATE RECORD</span>
-          <span class="badge badge-neutral">⏱️ 1-Minute Live Form</span>
+          <span class="badge badge-neutral">⏱️ 5-Minute Live Form</span>
         </div>
         <h1 class="title" id="formTitle">Update Record</h1>
         <p class="desc" id="formDesc">Fill out the fields below. Submitting will update the dataset file in workspace storage directly.</p>
@@ -751,7 +751,7 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
     let sessionToken = rawParam.trim().replace(/^['"`<([\])]+|['"`<([\])>]+$/g, '');
     let sessionData = null;
     let isSubmitted = false;
-    let remainingSeconds = 60;
+    let remainingSeconds = 300;
     let timerInterval = null;
     let isClosed = false;
 
@@ -776,7 +776,7 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
         }
         sessionData = await res.json();
       } catch (networkErr) {
-        showError("Connection Error", "This form might be deleted after a minute, or you closed the window.");
+        showError("Connection Error", "This form might be deleted after 5 minutes, or you closed the window.");
         return;
       }
 
@@ -788,8 +788,17 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
       }
     }
 
+    function formatTime(secs) {
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      if (m > 0) {
+        return `${m}m ${s < 10 ? '0' : ''}${s}s`;
+      }
+      return `${s}s`;
+    }
+
     function startTimer(durationSeconds) {
-      remainingSeconds = durationSeconds !== undefined ? durationSeconds : 60;
+      remainingSeconds = durationSeconds !== undefined ? durationSeconds : 300;
       updateTimerDisplay();
       if (timerInterval) clearInterval(timerInterval);
       timerInterval = setInterval(() => {
@@ -805,10 +814,10 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
     function updateTimerDisplay() {
       const timerEl = document.getElementById('sessionTimerText');
       if (timerEl) {
-        if (remainingSeconds <= 15) {
-          timerEl.innerHTML = `<span style="color: #DC2626; font-weight: 700;">Expires in ${remainingSeconds}s</span>`;
+        if (remainingSeconds <= 30) {
+          timerEl.innerHTML = `<span style="color: #DC2626; font-weight: 700;">Expires in ${formatTime(remainingSeconds)}</span>`;
         } else {
-          timerEl.textContent = `Closes in ${remainingSeconds}s`;
+          timerEl.textContent = `Closes in ${formatTime(remainingSeconds)}`;
         }
       }
     }
@@ -832,7 +841,7 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
 
       showError(
         "Form Session Expired or Closed",
-        "This form might be deleted after a minute, or you closed the window."
+        "This form might be deleted after 5 minutes, or you closed the window."
       );
 
       try {
@@ -864,7 +873,7 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
       document.getElementById('successState').style.display = 'none';
       document.getElementById('errorState').style.display = 'block';
       document.getElementById('errorTitle').textContent = title || "Form Session Expired or Closed";
-      document.getElementById('errorDesc').textContent = desc || "This form might be deleted after a minute, or you closed the window.";
+      document.getElementById('errorDesc').textContent = desc || "This form might be deleted after 5 minutes, or you closed the window.";
       const topIndicator = document.getElementById('topSessionIndicator');
       if (topIndicator) {
         topIndicator.innerHTML = '<span style="color:#DC2626;">●</span> Closed';
@@ -883,9 +892,9 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
       if (sessionData.expires_at) {
         const expTime = new Date(sessionData.expires_at).getTime();
         const diff = Math.floor((expTime - Date.now()) / 1000);
-        remainingSeconds = Math.max(0, Math.min(60, diff));
+        remainingSeconds = Math.max(0, Math.min(300, diff));
       } else {
-        remainingSeconds = 60;
+        remainingSeconds = 300;
       }
       startTimer(remainingSeconds);
 
@@ -1098,7 +1107,7 @@ async def view_form_standalone(
     if not effective_token:
         err_json = json.dumps({
             "title": "Form Session Expired or Closed",
-            "detail": "This form might be deleted after a minute, or you closed the window."
+            "detail": "This form might be deleted after 5 minutes, or you closed the window."
         })
         html = STANDALONE_FORM_HTML.replace(
             "<!-- SERVER_PRELOAD_SLOT -->",
@@ -1117,7 +1126,7 @@ async def view_form_standalone(
     except HTTPException as http_err:
         err_json = json.dumps({
             "title": "Form Session Expired or Closed",
-            "detail": http_err.detail or "This form might be deleted after a minute, or you closed the window."
+            "detail": http_err.detail or "This form might be deleted after 5 minutes, or you closed the window."
         })
         html = STANDALONE_FORM_HTML.replace(
             "<!-- SERVER_PRELOAD_SLOT -->",
@@ -1127,7 +1136,7 @@ async def view_form_standalone(
     except Exception as e:
         err_json = json.dumps({
             "title": "Form Session Expired or Closed",
-            "detail": "This form might be deleted after a minute, or you closed the window."
+            "detail": "This form might be deleted after 5 minutes, or you closed the window."
         })
         html = STANDALONE_FORM_HTML.replace(
             "<!-- SERVER_PRELOAD_SLOT -->",

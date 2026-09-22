@@ -26,9 +26,9 @@ import hashlib
 import time
 
 SESSION_TYPE = "form_session"
-# Forms expire automatically after 1 minute (60 seconds)
-SESSION_EXPIRE_SECONDS = 60
-SESSION_EXPIRED_MESSAGE = "This form might be deleted after a minute, or you closed the window."
+# Forms expire automatically after 5 minutes (300 seconds)
+SESSION_EXPIRE_SECONDS = 300
+SESSION_EXPIRED_MESSAGE = "This form might be deleted after 5 minutes, or you closed the window."
 DANGEROUS_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
@@ -106,7 +106,7 @@ def create_form_session_token(
     Creates a clean, short 32-character session token stored in fast memory cache
     and cryptographically backed for bulletproof URL durability.
     Generates URLs ~68 characters long that NEVER wrap or fail base64 padding.
-    Sessions expire automatically after 1 minute (60 seconds).
+    Sessions expire automatically after 5 minutes (300 seconds).
     """
     now = datetime.now(timezone.utc)
     expire = now + timedelta(seconds=expire_seconds)
@@ -149,7 +149,7 @@ async def persist_form_session_record(
 ) -> None:
     """
     Persists a form session record to the database for persistence across server restarts.
-    Forms expire automatically after 1 minute (60 seconds).
+    Forms expire automatically after 5 minutes (300 seconds).
     """
     try:
         now = datetime.now(timezone.utc)

@@ -654,7 +654,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "PRIMARY MANDATORY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Call this tool IMMEDIATELY when the user says 'I want to add data', 'add student', or 'update record'. ❌ NEVER SAY 'I need the data first' OR ASK FOR COLUMN VALUES IN CHAT! You DO NOT need the user's data to call this tool. The tool generates an interactive web form where the user enters the data themselves. If resource_id is omitted, it automatically picks the workspace dataset.",
+        "description": "PRIMARY MANDATORY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Generates a fresh, secure 5-minute single-use interactive web form session where the user enters or edits data. Call this tool FRESH every time the user wants to add or update records. ⚠️ CRITICAL RULES: 1. Form sessions are ephemeral (5 minutes) and single-use. Once submitted, closed, or expired after 5 minutes, the form is permanently deleted from everywhere. 2. NEVER reuse, recycle, or re-send an old form link from earlier in the chat. Always call this tool to generate a brand new form session! 3. ❌ NEVER ask the user to type column values in chat or say 'I need the data first'!",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1387,24 +1387,10 @@ class MCPServer:
                     "file_size": f.file_size,
                 }
                 if f.file_type in DATASET_FILE_TYPES:
-                    try:
-                        from app.forms.service import create_form_session_token
-                        s_token = create_form_session_token(
-                            workspace_id=context.workspace_id,
-                            file_id=f.id,
-                            action="insert",
-                            target_identifier=f.original_filename,
-                            user_id=getattr(context, "user_id", None),
-                        )
-                        res_item["interactive_form_url"] = f"https://dbmcp.onrender.com/forms/view?session={s_token}"
-                        res_item["add_record_button"] = f"[➕ Open Interactive Data Entry Form]({res_item['interactive_form_url']})"
-                        res_item["mandatory_instruction"] = (
-                            f"If user wants to add or modify records in {f.original_filename}, "
-                            f"DO NOT say 'I need the student data first' and DO NOT ask for fields in chat. "
-                            f"Immediately present this button to the user: {res_item['add_record_button']}"
-                        )
-                    except Exception:
-                        pass
+                    res_item["data_entry_guidance"] = (
+                        f"To add or modify records in {f.original_filename}, call tool 'generate_data_entry_form' "
+                        f"to create a fresh 5-minute interactive form session. Never reuse or recycle old form links."
+                    )
                 permitted_resources.append(res_item)
 
         await AuditService.log_event(
@@ -1695,38 +1681,18 @@ class MCPServer:
         structured = extracted.structured_data if extracted else {}
 
         safe_schema = StructuredQueryEngine.get_safe_schema(structured or {}, decision.denied_fields)
-        form_btn_markdown = ""
-        try:
-            from app.forms.service import create_form_session_token
-            s_token = create_form_session_token(
-                workspace_id=context.workspace_id,
-                file_id=file_rec.id,
-                action="insert",
-                target_identifier=file_rec.original_filename,
-                user_id=getattr(context, "user_id", None),
-            )
-            form_url = f"https://dbmcp.onrender.com/forms/view?session={s_token}"
-            safe_schema["interactive_form_url"] = form_url
-            safe_schema["action_prompt"] = (
-                f"To allow the user to input new records or modify this dataset, present this interactive form button in chat: [➕ Open Data Entry / Edit Form]({form_url})"
-            )
-            form_btn_markdown = (
-                f"\n\n👉 **[➕ Open Interactive Data Entry Form]({form_url})**\n\n"
-                f"⚠️ **CRITICAL MANDATORY INSTRUCTION FOR AI AGENT**:\n"
-                f"If the user wants to add, insert, or modify records in {file_rec.original_filename}:\n"
-                f"1. ❌ NEVER SAY 'I need the student data first' or 'Provide the values you want added'!\n"
-                f"2. ❌ NEVER ask the user to type out or send column values in chat.\n"
-                f"3. ❌ NEVER output a LaTeX table (\\begin{{tabular}}) or questionnaire in chat.\n"
-                f"4. ✅ The interactive form collects all details directly with dropdowns and validation. Present the button: 👉 [➕ Open Interactive Data Entry Form]({form_url})"
-            )
-        except Exception:
-            pass
+        safe_schema["data_entry_guidance"] = (
+            f"To allow the user to input new records or modify {file_rec.original_filename}, "
+            f"call tool 'generate_data_entry_form' to generate a fresh 5-minute single-use interactive form session. "
+            f"Never reuse or recycle old form links from earlier in the chat. "
+            f"Never ask the user to type out or send column values in chat."
+        )
 
         return {
             "content": [
                 {
                     "type": "text",
-                    "text": json.dumps(safe_schema, indent=2) + form_btn_markdown,
+                    "text": json.dumps(safe_schema, indent=2),
                 }
             ]
         }
@@ -1842,28 +1808,7 @@ class MCPServer:
             decision="ALLOW",
             reason=f"Tabular query returned {len(rows)} rows",
         )
-        form_url = None
-        try:
-            from app.forms.service import create_form_session_token
-            s_token = create_form_session_token(
-                workspace_id=context.workspace_id,
-                file_id=file_rec.id,
-                action="update",
-                filters=filters or {},
-                target_identifier=file_rec.original_filename,
-                user_id=getattr(context, "user_id", None),
-            )
-            form_url = f"https://dbmcp.onrender.com/forms/view?session={s_token}"
-        except Exception:
-            pass
-
         result_payload = {"rows": rows, "count": len(rows)}
-        if form_url:
-            result_payload["interactive_form_url"] = form_url
-            result_payload["action_prompt"] = (
-                f"To allow the user to modify, update, or add records to this dataset, present this interactive form button in chat: [➕ Open Data Entry / Edit Form]({form_url})"
-            )
-
         return {"content": [{"type": "text", "text": json.dumps(result_payload, indent=2)}]}
 
     @classmethod
@@ -2216,16 +2161,18 @@ class MCPServer:
 
         response_text = (
             f"### 📋 {title_str}\n\n"
-            f"An interactive data entry form is ready for **{file_rec.original_filename}**.\n\n"
+            f"A fresh interactive data entry form is ready for **{file_rec.original_filename}** (Active for 5 minutes).\n\n"
             f"👉 **[➕ Open Interactive Data Entry Form]({form_url})**\n\n"
             f"- **Dataset**: `{file_rec.original_filename}`\n"
             f"- **Target**: `{target_identifier or file_rec.original_filename}`\n"
             f"- **Mode**: `{action.upper()}`\n"
+            f"- **Session Lifetime**: `5 minutes` (Ephemeral, single-use session)\n"
             f"- **Fields**: {fields_str}\n\n"
             f"*(Direct Secure Link: `{form_url}`)*\n\n"
-            f"**CRITICAL AI INSTRUCTION**: Present the `[➕ Open Interactive Data Entry Form]({form_url})` button link directly to the user in chat now. "
-            f"❌ NEVER draw or format a LaTeX table (\\begin{{tabular}}), ASCII questionnaire, or markdown template in chat. "
-            f"Direct the user to click the interactive link above."
+            f"**CRITICAL MANDATORY AI RULES**:\n"
+            f"1. Present the `[➕ Open Interactive Data Entry Form]({form_url})` button link directly to the user in chat now.\n"
+            f"2. ❌ NEVER ask the user to type out record values in chat or output a LaTeX table (\\begin{{tabular}}).\n"
+            f"3. ⚠️ IMPORTANT: This form session is valid for 5 minutes and is permanently deleted once submitted or closed. If the user asks to add or edit data again later, you MUST call 'generate_data_entry_form' afresh to create a brand new form. NEVER reuse or re-send this link in future turns!"
         )
 
         return {

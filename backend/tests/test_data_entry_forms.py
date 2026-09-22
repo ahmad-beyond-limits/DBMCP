@@ -311,7 +311,7 @@ async def test_form_close_window_revokes_and_deletes_session_while_preserving_da
     """
     Verifies that when a user closes the window:
     1. Form is revoked and deleted from the database.
-    2. Accessing the form returns 404 with 'This form might be deleted after a minute, or you closed the window.'
+    2. Accessing the form returns 404 with 'This form might be deleted after 5 minutes, or you closed the window.'
     3. Any data previously submitted by the user is safely preserved in the dataset!
     """
     # 1. Setup workspace and dataset
@@ -370,7 +370,7 @@ async def test_form_close_window_revokes_and_deletes_session_while_preserving_da
     # 5. Subsequent access to GET /forms/session returns 404 with exact message
     get_res = await client.get(f"/forms/session?token={session_token}")
     assert get_res.status_code == 404
-    assert get_res.json()["detail"] == "This form might be deleted after a minute, or you closed the window."
+    assert get_res.json()["detail"] == "This form might be deleted after 5 minutes, or you closed the window."
 
     # 6. Verify data remains safely preserved in dataset
     query_req = {
@@ -392,9 +392,9 @@ async def test_form_close_window_revokes_and_deletes_session_while_preserving_da
 
 
 @pytest.mark.asyncio
-async def test_form_expired_after_one_minute_returns_404(client: AsyncClient):
+async def test_form_expired_after_five_minutes_returns_404(client: AsyncClient):
     """
-    Verifies that an expired form session (>60s) returns 404 with the exact message.
+    Verifies that an expired form session (>300s) returns 404 with the exact message.
     """
     from app.forms.service import create_form_session_token, persist_form_session_record
     from app.database.session import AsyncSessionLocal
@@ -410,12 +410,12 @@ async def test_form_expired_after_one_minute_returns_404(client: AsyncClient):
     # Calling /forms/session returns 404
     res = await client.get(f"/forms/session?token={token}")
     assert res.status_code == 404
-    assert res.json()["detail"] == "This form might be deleted after a minute, or you closed the window."
+    assert res.json()["detail"] == "This form might be deleted after 5 minutes, or you closed the window."
 
     # Calling /forms/404 returns 404 HTML
     page_404 = await client.get("/forms/404")
     assert page_404.status_code == 404
-    assert "This form might be deleted after a minute, or you closed the window." in page_404.text
+    assert "This form might be deleted after 5 minutes, or you closed the window." in page_404.text
 
 
 

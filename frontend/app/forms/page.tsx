@@ -35,11 +35,11 @@ function FormContent() {
   const [submitResult, setSubmitResult] = useState<FormSubmitResponse | null>(null);
   const [dirtyFields, setDirtyFields] = useState<Set<string>>(new Set());
   const [isClosed, setIsClosed] = useState(false);
-  const [countdown, setCountdown] = useState<number>(60);
+  const [countdown, setCountdown] = useState<number>(300);
 
   useEffect(() => {
     if (!sessionToken) {
-      setError("No session token provided. This form might be deleted after a minute, or you closed the window.");
+      setError("No session token provided. This form might be deleted after 5 minutes, or you closed the window.");
       setLoading(false);
       return;
     }
@@ -67,7 +67,7 @@ function FormContent() {
         setFormValues(initialVals);
       } catch (err: any) {
         console.error("Failed to load form session:", err);
-        setError(err.message || "This form might be deleted after a minute, or you closed the window.");
+        setError(err.message || "This form might be deleted after 5 minutes, or you closed the window.");
       } finally {
         setLoading(false);
       }
@@ -76,15 +76,15 @@ function FormContent() {
     loadForm();
   }, [sessionToken]);
 
-  // 1-minute live countdown timer
+  // 5-minute live countdown timer
   useEffect(() => {
     if (!sessionData || isClosed) return;
 
-    let initialRemaining = 60;
+    let initialRemaining = 300;
     if (sessionData.expires_at) {
       const expTime = new Date(sessionData.expires_at).getTime();
       const diff = Math.floor((expTime - Date.now()) / 1000);
-      initialRemaining = Math.max(0, Math.min(60, diff));
+      initialRemaining = Math.max(0, Math.min(300, diff));
     }
     setCountdown(initialRemaining);
 
@@ -128,6 +128,15 @@ function FormContent() {
       window.removeEventListener("beforeunload", onUnload);
     };
   }, [sessionToken, isClosed]);
+
+  const formatCountdown = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    if (m > 0) {
+      return `${m}m ${s < 10 ? "0" : ""}${s}s`;
+    }
+    return `${s}s`;
+  };
 
   const handleInputChange = (fieldName: string, value: any) => {
     setFormValues((prev) => ({ ...prev, [fieldName]: value }));
@@ -190,7 +199,7 @@ function FormContent() {
         </div>
         <h2 className="text-2xl font-extrabold text-white mb-2">Form Session Expired or Closed</h2>
         <div className="p-3.5 mb-4 rounded-2xl bg-rose-950/40 border border-rose-800/40 text-rose-300 font-semibold text-sm leading-relaxed">
-          This form might be deleted after a minute, or you closed the window.
+          This form might be deleted after 5 minutes, or you closed the window.
         </div>
         <div className="p-3.5 mb-6 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs text-left flex items-start gap-2.5">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -303,7 +312,7 @@ function FormContent() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-xs text-amber-300 bg-amber-950/50 px-3 py-1 rounded-full border border-amber-500/30 font-mono">
                 <Clock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                <span>Closes in {countdown}s</span>
+                <span>Closes in {formatCountdown(countdown)}</span>
               </div>
               <button
                 type="button"
