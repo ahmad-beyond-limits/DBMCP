@@ -87,13 +87,20 @@ export default function DashboardPage() {
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newWorkspaceName.trim()) return;
+    const trimmedName = newWorkspaceName.trim();
+    if (!trimmedName) return;
+
+    // Check for duplicate workspace in user's active workspaces
+    if (workspaces.some((ws) => ws.name.toLowerCase() === trimmedName.toLowerCase())) {
+      setError(`A workspace named "${trimmedName}" already exists. Duplicate workspace names are not allowed.`);
+      return;
+    }
 
     setCreating(true);
     setError(null);
     try {
       const created = await api.createWorkspace(
-        newWorkspaceName.trim(),
+        trimmedName,
         newWorkspaceDesc.trim() || undefined
       );
       setWorkspaces((prev) => [created, ...prev]);

@@ -71,9 +71,18 @@ def test_tool_cache_dynamic_registration():
     assert "custom_analytics_scanner" in cache["new_tools_on_server"]
 
 
+def _create_mock_db():
+    mock_db = AsyncMock()
+    mock_res = MagicMock()
+    mock_res.scalar_one_or_none.return_value = None
+    mock_res.scalars.return_value.all.return_value = []
+    mock_db.execute.return_value = mock_res
+    return mock_db
+
+
 @pytest.mark.asyncio
 async def test_mcp_server_call_get_tools_cache():
-    mock_db = AsyncMock()
+    mock_db = _create_mock_db()
     context = AuthenticatedMCPContext(
         scope_type="WORKSPACE",
         credential_id="test_cred_1",
@@ -97,3 +106,105 @@ async def test_mcp_server_call_get_tools_cache():
     assert payload["server_scope"] == "WORKSPACE"
     assert "new_tools_on_server" in payload
     assert "get_tools_cache" in payload["all_tool_names"]
+    assert "instructions" in payload
+    assert len(payload["tools"]) > 10
+
+
+@pytest.mark.asyncio
+async def test_list_tools_returns_strictly_only_get_tools_cache():
+    ws_context = AuthenticatedMCPContext(
+        scope_type="WORKSPACE",
+        credential_id="ws_cred_1",
+        credential_prefix="ws_pref",
+        workspace_id="ws_123",
+        workspace_name="Test Workspace",
+        permissions={},
+    )
+    acc_context = AuthenticatedMCPContext(
+        scope_type="ACCOUNT",
+        credential_id="acc_cred_1",
+        credential_prefix="acc_pref",
+        user_id="user_123",
+        username="operator",
+        permissions={},
+    )
+
+    # 1. Workspace scope
+    ws_tools = await MCPServer.list_tools(ws_context)
+    assert len(ws_tools) == 1
+    assert ws_tools[0]["name"] == "get_tools_cache"
+    assert "execute_tool" in ws_tools[0]["inputSchema"]["properties"]
+
+    # 2. Account scope
+    acc_tools = await MCPServer.list_tools(acc_context)
+    assert len(acc_tools) == 1
+    assert acc_tools[0]["name"] == "get_tools_cache"
+    assert "execute_tool" in acc_tools[0]["inputSchema"]["properties"]
+
+    # 3. None / Default scope
+    default_tools = await MCPServer.list_tools(None)
+    assert len(default_tools) == 1
+    assert default_tools[0]["name"] == "get_tools_cache"
+
+
+@pytest.mark.asyncio
+async def test_get_tools_cache_executes_packed_tool_via_gateway():
+    mock_db = _create_mock_db()
+    context = AuthenticatedMCPContext(
+        scope_type="WORKSPACE",
+        credential_id="test_cred_1",
+        credential_prefix="test_prefix",
+        workspace_id="ws_123",
+        workspace_name="Test Workspace",
+        permissions={},
+    )
+
+    # Execute workspace_info via execute_tool dict
+    res1 = await MCPServer.call_tool(
+        db=mock_db,
+        context=context,
+        tool_name="get_tools_cache",
+        arguments={"execute_tool": {"name": "workspace_info", "arguments": {}}},
+    )
+    assert not res1.get("isError")
+    assert "content" in res1
+    parsed1 = json.loads(res1["content"][0]["text"])
+    assert parsed1["workspace_id"] == "ws_123"
+
+    # Execute workspace_info via tool_name shortcut
+    res2 = await MCPServer.call_tool(
+        db=mock_db,
+        context=context,
+        tool_name="get_tools_cache",
+        arguments={"tool_name": "workspace_info", "tool_arguments": {}},
+    )
+    assert not res2.get("isError")
+    assert "content" in res2
+    parsed2 = json.loads(res2["content"][0]["text"])
+    assert parsed2["workspace_id"] == "ws_123"
+
+
+@pytest.mark.asyncio
+async def test_packed_tool_direct_call_compatibility():
+    mock_db = _create_mock_db()
+    context = AuthenticatedMCPContext(
+        scope_type="WORKSPACE",
+        credential_id="test_cred_1",
+        credential_prefix="test_prefix",
+        workspace_id="ws_123",
+        workspace_name="Test Workspace",
+        permissions={},
+    )
+
+    # Calling packed tool directly by name via MCPServer.call_tool
+    res = await MCPServer.call_tool(
+        db=mock_db,
+        context=context,
+        tool_name="workspace_info",
+        arguments={},
+    )
+    assert not res.get("isError")
+    assert "content" in res
+    parsed = json.loads(res["content"][0]["text"])
+    assert parsed["workspace_id"] == "ws_123"
+

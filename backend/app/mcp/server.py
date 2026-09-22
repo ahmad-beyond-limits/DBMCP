@@ -8,7 +8,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 import openpyxl
-from sqlalchemy import desc, or_, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.anonymisation.engine import AnonymisationEngine
@@ -48,10 +48,33 @@ DATASET_FILE_TYPES = ["CSV", "JSON", "XLSX", "XLS"]
 ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     {
         "name": "get_tools_cache",
-        "description": "Returns the live server-side cache and registry of all available MCP tools. Call this tool to discover new tools, check tool updates, retrieve complete parameter schemas, or pass 'known_tools' to identify newly added tools not present in your current AI session.",
+        "description": "Master tool cache gateway packing all server capabilities. The server exposes only this tool to AI clients in tools/list. Call this tool to unpack the complete catalog of all account and workspace management tools (with full parameter schemas, categories, and instructions). You can also execute any packed tool directly by passing 'execute_tool': {'name': '<tool_name>', 'arguments': {...}} or 'tool_name' and 'tool_arguments'.",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "execute_tool": {
+                    "type": "object",
+                    "description": "Directly execute any packed tool through this tool cache gateway. Provide 'name' (tool name) and 'arguments' (parameters object).",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "The name of the packed tool to execute (e.g. 'list_workspaces', 'create_workspace', 'query_dataset', 'account_info').",
+                        },
+                        "arguments": {
+                            "type": "object",
+                            "description": "Arguments dictionary to pass to the target tool.",
+                        },
+                    },
+                    "required": ["name"],
+                },
+                "tool_name": {
+                    "type": "string",
+                    "description": "Alternative shortcut parameter: name of the tool to execute directly through this cache gateway.",
+                },
+                "tool_arguments": {
+                    "type": "object",
+                    "description": "Alternative shortcut parameter: arguments dictionary for tool_name.",
+                },
                 "known_tools": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -470,10 +493,33 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
 MCP_TOOLS_DEFINITIONS = [
     {
         "name": "get_tools_cache",
-        "description": "Returns the live server-side cache and registry of all available MCP tools. Call this tool to discover new tools, check tool updates, retrieve complete parameter schemas, or pass 'known_tools' to identify newly added tools not present in your current AI session.",
+        "description": "Master tool cache gateway packing all server capabilities. The server exposes only this tool to AI clients in tools/list. Call this tool to unpack the complete catalog of all workspace tools (query_dataset, edit_dataset, generate_data_entry_form, notes, guidance, resources) with full schemas and parameters. You can also execute any packed tool directly by passing 'execute_tool': {'name': '<tool_name>', 'arguments': {...}} or 'tool_name' and 'tool_arguments'.",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "execute_tool": {
+                    "type": "object",
+                    "description": "Directly execute any packed tool through this tool cache gateway. Provide 'name' (tool name) and 'arguments' (parameters object).",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "The name of the packed tool to execute (e.g. 'workspace_info', 'query_dataset', 'edit_dataset', 'generate_data_entry_form', 'read_resource').",
+                        },
+                        "arguments": {
+                            "type": "object",
+                            "description": "Arguments dictionary to pass to the target tool.",
+                        },
+                    },
+                    "required": ["name"],
+                },
+                "tool_name": {
+                    "type": "string",
+                    "description": "Alternative shortcut parameter: name of the tool to execute directly through this cache gateway.",
+                },
+                "tool_arguments": {
+                    "type": "object",
+                    "description": "Alternative shortcut parameter: arguments dictionary for tool_name.",
+                },
                 "known_tools": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -949,6 +995,12 @@ class ToolCacheRegistry:
             "all_tool_names": all_tool_names,
             "cache_version": cls._cache_version,
             "cache_last_updated": cls._last_updated.isoformat(),
+            "instructions": (
+                "All server tools are packed inside this tool cache gateway. "
+                "Inspect full parameter schemas in 'tools' and execute any packed tool either by: "
+                "1) Calling 'get_tools_cache' with 'execute_tool': {'name': '<tool_name>', 'arguments': {...}}, or "
+                "2) Calling the packed tool directly by name via tools/call."
+            ),
             "tools": tools_catalog,
         }
 
@@ -973,8 +1025,16 @@ class MCPServer:
 
     @classmethod
     async def list_tools(cls, context: Optional[AuthenticatedMCPContext] = None) -> List[Dict[str, Any]]:
+        """
+        Returns strictly only the master tool cache gateway tool to AI clients.
+        All server tools and schemas are packed inside this single tool cache.
+        """
         scope = context.scope_type if context else "WORKSPACE"
-        return ToolCacheRegistry.get_all_tools(scope)
+        all_tools = ToolCacheRegistry.get_all_tools(scope)
+        cache_tool = next((t for t in all_tools if t.get("name") == "get_tools_cache"), None)
+        if cache_tool:
+            return [cache_tool]
+        return all_tools[:1]
 
     @classmethod
     async def call_tool(
@@ -1203,10 +1263,29 @@ class MCPServer:
         args: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Returns the live server-side tool cache and tool registry.
-        Provides diffing against client-supplied 'known_tools', category filtering,
-        and full parameter schema inspection.
+        Master tool cache gateway:
+        1. Packs and returns the live server-side tool cache and tool registry (parameter schemas,
+           categories, instructions, and diffing against client-supplied 'known_tools').
+        2. Directly executes any packed tool if 'execute_tool' or 'tool_name' is provided.
         """
+        # Check if caller wants to execute a packed tool directly through this cache gateway
+        exec_payload = args.get("execute_tool")
+        target_tool = None
+        target_args: Dict[str, Any] = {}
+
+        if isinstance(exec_payload, dict):
+            target_tool = exec_payload.get("name") or exec_payload.get("tool_name")
+            target_args = exec_payload.get("arguments") or exec_payload.get("args") or {}
+        elif args.get("tool_name"):
+            target_tool = args.get("tool_name")
+            target_args = args.get("tool_arguments") or args.get("arguments") or {}
+
+        if target_tool and target_tool not in ["get_tools_cache", "tools_cache", "get_tool_cache"]:
+            if context.scope_type == "ACCOUNT":
+                return await cls._call_account_tool(db, context, target_tool, target_args)
+            else:
+                return await cls.call_tool(db, context, target_tool, target_args)
+
         known_tools = args.get("known_tools")
         category = args.get("category")
         include_schemas = args.get("include_schemas", True)
@@ -2603,8 +2682,32 @@ class MCPServer:
         if not name or not str(name).strip():
             raise ValueError("Workspace 'name' is required.")
 
+        target_name = str(name).strip()
+
+        # Check for duplicate workspace for this user (case-insensitive)
+        dup_stmt = (
+            select(Workspace)
+            .outerjoin(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+            .where(
+                or_(Workspace.owner_id == context.user_id, WorkspaceMember.user_id == context.user_id),
+                func.lower(Workspace.name) == target_name.lower(),
+                Workspace.is_active == True,
+            )
+        )
+        existing = (await db.execute(dup_stmt)).scalars().first()
+        if existing:
+            return {
+                "isError": True,
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Workspace Creation Error: A workspace named '{target_name}' already exists in your account. Duplicate workspace names are not permitted.",
+                    }
+                ],
+            }
+
         ws = Workspace(
-            name=str(name).strip(),
+            name=target_name,
             description=str(description).strip() if description else None,
             owner_id=context.user_id,
             created_at=utc_now(),

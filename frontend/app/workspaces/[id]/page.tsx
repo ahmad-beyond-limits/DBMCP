@@ -29,7 +29,9 @@ import {
   RefreshCw,
   Copy,
   Check,
+  CheckCircle2,
   X,
+  XCircle,
   ArrowRight,
   ArrowLeft,
   ShieldCheck,
@@ -265,6 +267,10 @@ export default function WorkspaceDetailPage() {
   const [uploadDescription, setUploadDescription] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadStep, setUploadStep] = useState<1 | 2 | 3>(1);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadedRecord, setUploadedRecord] = useState<FileRecord | null>(null);
 
   // Cloud Link Importer State (Google Drive, Dropbox, Web URLs)
   const [cloudUrl, setCloudUrl] = useState("");
@@ -1082,28 +1088,92 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  // File Upload Flow
-  const handleExecuteUpload = async () => {
-    if (!uploadFile) return;
-
+  // File Upload Flow with Real-time Gradient Progress & Multi-state Handling
+  const startFileUpload = async (file: File) => {
+    setUploadStatus("uploading");
+    setUploadProgress(15);
+    setUploadError(null);
     setUploading(true);
+
     try {
-      const uploaded = await api.uploadFile(workspaceId, uploadFile);
-      notify("success", `File '${uploadFile.name}' processed successfully.`);
-      setFiles((prev) => [uploaded, ...prev]);
-      setSelectedFileIds((prev) => [...prev, uploaded.id]);
-      if (isDataFile(uploaded)) {
-        setActiveTransformFileId(uploaded.id);
-      }
-      setUploadModalOpen(false);
-      setUploadFile(null);
-      setUploadDescription("");
-      setUploadStep(1);
+      const uploaded = await api.uploadFile(workspaceId, file, (percent) => {
+        setUploadProgress(percent);
+      });
+      setUploadProgress(100);
+      setUploadStatus("success");
+      setUploadedRecord(uploaded);
+      notify("success", `File '${file.name}' verified and uploaded.`);
     } catch (err: any) {
-      notify("error", err.message || "Upload failed");
+      setUploadStatus("error");
+      const msg = err.message || "Upload failed. Please verify file format and size.";
+      setUploadError(msg);
+      notify("error", msg);
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleSelectFileToUpload = (file: File) => {
+    setUploadFile(file);
+    setUploadStatus("idle");
+    setUploadProgress(0);
+    setUploadError(null);
+    setUploadedRecord(null);
+    startFileUpload(file);
+  };
+
+  const handleResetUpload = () => {
+    setUploadFile(null);
+    setUploadedRecord(null);
+    setUploadStatus("idle");
+    setUploadProgress(0);
+    setUploadError(null);
+  };
+
+  const handleSaveUploadedContent = async () => {
+    if (uploadStatus === "uploading") {
+      return;
+    }
+    if (uploadStatus === "error") {
+      notify("error", "Please resolve or remove the failed file before saving.");
+      return;
+    }
+
+    let record = uploadedRecord;
+    if (!record && uploadFile) {
+      try {
+        setUploading(true);
+        record = await api.uploadFile(workspaceId, uploadFile, (p) => setUploadProgress(p));
+        setUploadedRecord(record);
+      } catch (err: any) {
+        setUploadStatus("error");
+        setUploadError(err.message || "Failed to upload file");
+        setUploading(false);
+        return;
+      }
+    }
+
+    if (record) {
+      const saved = record;
+      setFiles((prev) => {
+        if (prev.some((f) => f.id === saved.id)) return prev;
+        return [saved, ...prev];
+      });
+      setSelectedFileIds((prev) => [...prev, saved.id]);
+      if (isDataFile(saved)) {
+        setActiveTransformFileId(saved.id);
+      }
+      notify("success", `File '${saved.original_filename || uploadFile?.name}' saved to workspace.`);
+    }
+
+    setUploadModalOpen(false);
+    setUploadFile(null);
+    setUploadedRecord(null);
+    setUploadStatus("idle");
+    setUploadProgress(0);
+    setUploadError(null);
+    setUploadDescription("");
+    setUploadStep(1);
   };
 
   const handleViewContent = async (file: FileRecord) => {
@@ -3705,19 +3775,32 @@ export default function WorkspaceDetailPage() {
                   </div>
 
                   {!uploadFile ? (
-                    <label style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "1.75rem 1rem",
-                      border: "1px dashed rgba(40, 40, 40, 0.14)",
-                      borderRadius: "var(--radius-md)",
-                      background: "var(--bg-page)",
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                      textAlign: "center",
-                    }}>
+                    <label
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          handleSelectFileToUpload(e.dataTransfer.files[0]);
+                        }
+                      }}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "1.75rem 1rem",
+                        border: "1px dashed rgba(40, 40, 40, 0.14)",
+                        borderRadius: "var(--radius-md)",
+                        background: "var(--bg-page)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        textAlign: "center",
+                      }}
+                    >
                       <Upload size={20} strokeWidth={1.5} color="var(--text-primary)" style={{ marginBottom: "0.45rem" }} />
                       <span style={{ fontWeight: 450, fontSize: "0.88rem", color: "var(--text-primary)" }}>
                         Click to browse or drag file here
@@ -3730,7 +3813,7 @@ export default function WorkspaceDetailPage() {
                         accept=".pdf,.docx,.txt,.csv,.json,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.gif,.svg"
                         onChange={(e) => {
                           if (e.target.files && e.target.files[0]) {
-                            setUploadFile(e.target.files[0]);
+                            handleSelectFileToUpload(e.target.files[0]);
                           }
                         }}
                         style={{ display: "none" }}
@@ -3738,27 +3821,272 @@ export default function WorkspaceDetailPage() {
                     </label>
                   ) : (
                     <div style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "0.75rem 1rem",
-                      background: "var(--bg-page)",
+                      padding: "0.85rem 1rem",
+                      background: uploadStatus === "error"
+                        ? "rgba(239, 68, 68, 0.04)"
+                        : uploadStatus === "success"
+                        ? "rgba(34, 197, 94, 0.04)"
+                        : "var(--bg-page)",
                       borderRadius: "var(--radius-md)",
-                      border: "1px solid rgba(40, 40, 40, 0.05)",
+                      border: uploadStatus === "error"
+                        ? "1px solid rgba(239, 68, 68, 0.3)"
+                        : uploadStatus === "success"
+                        ? "1px solid rgba(34, 197, 94, 0.3)"
+                        : "1px solid rgba(40, 40, 40, 0.08)",
+                      transition: "all 0.2s ease",
                     }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                        <FileText size={16} strokeWidth={1.5} color="var(--text-primary)" />
-                        <div>
-                          <div style={{ fontWeight: 450, fontSize: "0.85rem", color: "var(--text-primary)" }}>{uploadFile.name}</div>
-                          <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>{(uploadFile.size / 1024).toFixed(1)} KB</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
+                          <div style={{
+                            width: "36px",
+                            height: "36px",
+                            borderRadius: "var(--radius-sm)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: uploadStatus === "error"
+                              ? "rgba(239, 68, 68, 0.12)"
+                              : uploadStatus === "success"
+                              ? "rgba(34, 197, 94, 0.12)"
+                              : "rgba(99, 102, 241, 0.08)",
+                            flexShrink: 0,
+                          }}>
+                            {uploadStatus === "error" ? (
+                              <XCircle size={18} color="#EF4444" strokeWidth={2} />
+                            ) : uploadStatus === "success" ? (
+                              <CheckCircle2 size={18} color="#16A34A" strokeWidth={2.2} />
+                            ) : uploadStatus === "uploading" ? (
+                              <Loader2 size={18} color="#6366F1" strokeWidth={2} className="animate-spin" />
+                            ) : (
+                              <FileText size={18} strokeWidth={1.5} color="var(--text-primary)" />
+                            )}
+                          </div>
+
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "nowrap" }}>
+                              <span style={{
+                                fontWeight: 500,
+                                fontSize: "0.86rem",
+                                color: uploadStatus === "error" ? "#EF4444" : "var(--text-primary)",
+                                textDecoration: uploadStatus === "error" ? "line-through" : "none",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                maxWidth: "230px",
+                              }}>
+                                {uploadFile.name}
+                              </span>
+                              {uploadStatus === "error" && (
+                                <span style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.2rem",
+                                  padding: "0.1rem 0.4rem",
+                                  borderRadius: "4px",
+                                  background: "rgba(239, 68, 68, 0.15)",
+                                  color: "#DC2626",
+                                  fontSize: "0.68rem",
+                                  fontWeight: 600,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.03em",
+                                  flexShrink: 0,
+                                }}>
+                                  <X size={10} strokeWidth={2.5} /> Cut
+                                </span>
+                              )}
+                              {uploadStatus === "success" && (
+                                <span style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.2rem",
+                                  padding: "0.1rem 0.45rem",
+                                  borderRadius: "4px",
+                                  background: "rgba(34, 197, 94, 0.15)",
+                                  color: "#15803D",
+                                  fontSize: "0.68rem",
+                                  fontWeight: 600,
+                                  letterSpacing: "0.03em",
+                                  flexShrink: 0,
+                                }}>
+                                  <Check size={10} strokeWidth={2.5} /> Ready
+                                </span>
+                              )}
+                            </div>
+
+                            <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)", marginTop: "0.15rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                              <span>{(uploadFile.size / 1024).toFixed(1)} KB</span>
+                              <span>•</span>
+                              {uploadStatus === "uploading" && (
+                                <span style={{ color: "#6366F1", fontWeight: 500 }}>
+                                  Uploading {uploadProgress}%...
+                                </span>
+                              )}
+                              {uploadStatus === "success" && (
+                                <span style={{ color: "#16A34A", fontWeight: 500 }}>
+                                  Uploaded successfully
+                                </span>
+                              )}
+                              {uploadStatus === "error" && (
+                                <span style={{ color: "#EF4444", fontWeight: 500 }}>
+                                  Upload error
+                                </span>
+                              )}
+                              {uploadStatus === "idle" && (
+                                <span>Ready to upload</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+                          {uploadStatus === "uploading" && (
+                            <span style={{
+                              fontSize: "0.74rem",
+                              fontWeight: 600,
+                              color: "#6366F1",
+                              background: "rgba(99, 102, 241, 0.08)",
+                              padding: "0.2rem 0.5rem",
+                              borderRadius: "var(--radius-pill)",
+                            }}>
+                              {uploadProgress}%
+                            </span>
+                          )}
+                          {uploadStatus === "success" && (
+                            <span style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "24px",
+                              height: "24px",
+                              borderRadius: "50%",
+                              background: "rgba(34, 197, 94, 0.15)",
+                              color: "#16A34A",
+                            }} title="File verified & uploaded">
+                              <Check size={14} strokeWidth={2.5} />
+                            </span>
+                          )}
+                          {uploadStatus === "error" && (
+                            <span style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "24px",
+                              height: "24px",
+                              borderRadius: "50%",
+                              background: "rgba(239, 68, 68, 0.15)",
+                              color: "#EF4444",
+                            }} title="File upload failed (cut)">
+                              <X size={14} strokeWidth={2.5} />
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleResetUpload}
+                            disabled={uploadStatus === "uploading"}
+                            aria-label="Remove file"
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "var(--text-tertiary)",
+                              cursor: uploadStatus === "uploading" ? "not-allowed" : "pointer",
+                              padding: "0.25rem",
+                              borderRadius: "var(--radius-sm)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              opacity: uploadStatus === "uploading" ? 0.4 : 1,
+                            }}
+                            title="Remove file"
+                          >
+                            <X size={14} strokeWidth={1.5} />
+                          </button>
                         </div>
                       </div>
-                      <button
-                        onClick={() => setUploadFile(null)}
-                        style={{ background: "transparent", border: "none", color: "var(--text-tertiary)", cursor: "pointer" }}
-                      >
-                        <X size={14} strokeWidth={1.5} />
-                      </button>
+
+                      {/* Real-time Gradient Progress Bar during Upload */}
+                      {uploadStatus === "uploading" && (
+                        <div
+                          role="progressbar"
+                          aria-valuenow={uploadProgress}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`Uploading ${uploadFile.name}: ${uploadProgress}%`}
+                          style={{
+                            width: "100%",
+                            height: "6px",
+                            borderRadius: "9999px",
+                            background: "rgba(40, 40, 40, 0.08)",
+                            overflow: "hidden",
+                            marginTop: "0.75rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${uploadProgress}%`,
+                              height: "100%",
+                              borderRadius: "9999px",
+                              background: "linear-gradient(90deg, #3B82F6 0%, #8B5CF6 50%, #EC4899 100%)",
+                              transition: "width 0.2s ease-out",
+                              boxShadow: "0 0 10px rgba(139, 92, 246, 0.5)",
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Green Confirmation Bar on Success */}
+                      {uploadStatus === "success" && (
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "4px",
+                            borderRadius: "9999px",
+                            background: "linear-gradient(90deg, #22C55E 0%, #16A34A 100%)",
+                            marginTop: "0.65rem",
+                            boxShadow: "0 0 8px rgba(34, 197, 94, 0.4)",
+                          }}
+                        />
+                      )}
+
+                      {/* Error Message & Cut Sign Alert Banner */}
+                      {uploadStatus === "error" && (
+                        <div
+                          role="alert"
+                          aria-live="assertive"
+                          style={{
+                            marginTop: "0.75rem",
+                            padding: "0.65rem 0.85rem",
+                            borderRadius: "var(--radius-sm)",
+                            background: "rgba(239, 68, 68, 0.08)",
+                            border: "1px solid rgba(239, 68, 68, 0.25)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "0.5rem",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.78rem", color: "#B91C1C" }}>
+                            <XCircle size={15} color="#EF4444" strokeWidth={2} style={{ flexShrink: 0 }} />
+                            <span>{uploadError || "Upload rejected. File could not be processed."}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => startFileUpload(uploadFile)}
+                            style={{
+                              background: "#EF4444",
+                              color: "#FFFFFF",
+                              border: "none",
+                              padding: "0.25rem 0.65rem",
+                              borderRadius: "var(--radius-pill)",
+                              fontSize: "0.72rem",
+                              fontWeight: 500,
+                              cursor: "pointer",
+                              flexShrink: 0,
+                            }}
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -3786,19 +4114,47 @@ export default function WorkspaceDetailPage() {
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
                   <button
                     type="button"
-                    onClick={() => setUploadModalOpen(false)}
+                    onClick={() => {
+                      handleResetUpload();
+                      setUploadModalOpen(false);
+                    }}
                     className="pill-btn pill-btn-glass"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
-                    disabled={!uploadFile || uploading}
-                    onClick={handleExecuteUpload}
+                    disabled={!uploadFile || uploadStatus === "uploading" || uploadStatus === "error"}
+                    onClick={handleSaveUploadedContent}
                     className="pill-btn pill-btn-solid"
+                    style={{
+                      background: uploadStatus === "success" ? "#16A34A" : undefined,
+                      borderColor: uploadStatus === "success" ? "#16A34A" : undefined,
+                      boxShadow: uploadStatus === "success" ? "0 2px 10px rgba(22, 163, 74, 0.25)" : undefined,
+                      transition: "all 0.2s ease",
+                    }}
                   >
-                    {uploading ? "Processing..." : "Upload & Save"}
-                    <ArrowRight size={13} strokeWidth={1.5} />
+                    {uploadStatus === "uploading" ? (
+                      <>
+                        <Loader2 size={13} strokeWidth={2} className="animate-spin" />
+                        <span>Uploading ({uploadProgress}%)...</span>
+                      </>
+                    ) : uploadStatus === "success" ? (
+                      <>
+                        <Check size={14} strokeWidth={2.5} />
+                        <span>Save to Workspace</span>
+                      </>
+                    ) : uploadStatus === "error" ? (
+                      <>
+                        <X size={14} strokeWidth={2} />
+                        <span>Upload Failed</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Upload &amp; Save</span>
+                        <ArrowRight size={13} strokeWidth={1.5} />
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

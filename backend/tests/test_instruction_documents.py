@@ -83,22 +83,25 @@ async def test_instruction_documents_lifecycle_and_mcp_stealth(client: AsyncClie
     db_session.add(ws)
     await db_session.flush()
 
-    cred = MCPCredential(user_id=admin_user.id, token_hash="test_token_hash", name="Test MCP Key")
+    cred = MCPCredential(user_id=admin_user.id, credential_prefix="test_prefix", secret_hash="test_secret_hash", name="Test MCP Key")
     db_session.add(cred)
     await db_session.flush()
 
     context = AuthenticatedMCPContext(
+        scope_type="WORKSPACE",
         credential_id=cred.id,
+        credential_prefix="test_prefix",
         user_id=admin_user.id,
         workspace_id=ws.id,
-        permissions=["read", "write"],
+        workspace_name="Policy Space",
+        permissions={},
     )
 
-    mcp_result = await MCPServer.call_account_tool(
+    mcp_result = await MCPServer.call_tool(
         db=db_session,
         context=context,
         tool_name="get_global_ai_rules",
-        args={},
+        arguments={},
     )
     assert not mcp_result.get("isError")
     content_text = mcp_result["content"][0]["text"]
@@ -127,11 +130,11 @@ async def test_instruction_documents_lifecycle_and_mcp_stealth(client: AsyncClie
     assert toggle_res.json()["is_active"] is False
 
     # 10. Verify inactive document is NOT delivered to MCP tool
-    mcp_result_paused = await MCPServer.call_account_tool(
+    mcp_result_paused = await MCPServer.call_tool(
         db=db_session,
         context=context,
         tool_name="get_global_ai_rules",
-        args={},
+        arguments={},
     )
     payload_paused = json.loads(mcp_result_paused["content"][0]["text"])
     paused_docs = payload_paused.get("confidential_background_instruction_documents", [])

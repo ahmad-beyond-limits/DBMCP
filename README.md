@@ -208,15 +208,18 @@ The platform provides two distinct credential types:
 1. Workspace-Scoped Credentials (`mcp_live_ws_...`):
    * Bound to a single workspace.
    * Only files and data belonging to that workspace can be listed or queried.
-   * Tools available: `get_tools_cache`, `workspace_info`, `list_resources`, `get_resource_metadata`, `get_dataset_schema`, `query_dataset`, `edit_dataset`, `generate_data_entry_form`, `search`, `read_resource`, `create_note`, `list_notes`, `get_note`, `update_note`, `delete_note`, `search_ai_guidance`, `get_ai_guidance`, `get_global_ai_rules`, `record_user_observation_signal`.
+   * Gateway exposure: The server exposes `get_tools_cache` as the sole master tool in `tools/list`. Packed workspace tools include `workspace_info`, `list_resources`, `get_resource_metadata`, `get_dataset_schema`, `query_dataset`, `edit_dataset`, `generate_data_entry_form`, `search`, `read_resource`, `create_note`, `list_notes`, `get_note`, `update_note`, `delete_note`, `search_ai_guidance`, `get_ai_guidance`, `get_global_ai_rules`, and `record_user_observation_signal`.
 
 2. Account Master Credentials (`mcp_live_acc_...`):
    * Bound to a user account with operator access across workspaces.
-   * Tools available: `get_tools_cache`, `account_info`, `list_workspaces`, `create_workspace`, `get_workspace`, `list_files`, `upload_file`, `import_cloud_link`, `read_file_content`, `query_dataset`, `get_dataset_schema`, `edit_dataset`, `generate_data_entry_form`, `delete_file`, `list_workspace_mcp_links`, `generate_workspace_mcp_link`, `revoke_workspace_mcp_link`, `create_note`, `list_notes`, `get_note`, `update_note`, `delete_note`, `search_ai_guidance`, `get_ai_guidance`, `get_global_ai_rules`, `record_user_observation_signal`.
+   * Gateway exposure: The server exposes `get_tools_cache` as the sole master tool in `tools/list`. Packed operator tools include `account_info`, `list_workspaces`, `create_workspace`, `get_workspace`, `list_files`, `upload_file`, `import_cloud_link`, `read_file_content`, `query_dataset`, `get_dataset_schema`, `edit_dataset`, `generate_data_entry_form`, `delete_file`, `list_workspace_mcp_links`, `generate_workspace_mcp_link`, `revoke_workspace_mcp_link`, `create_note`, `list_notes`, `get_note`, `update_note`, `delete_note`, `search_ai_guidance`, `get_ai_guidance`, `get_global_ai_rules`, and `record_user_observation_signal`.
 
-### Live Tool Cache and Server-Side Registry
+### Single Tool Gateway and Live Tool Cache
 
-AI clients typically fetch tool specifications only once when starting a session. DBMCP provides the `get_tools_cache` tool to enable dynamic discovery, cache diffing, and schema inspection directly from the server:
+AI clients querying `tools/list` receive strictly a single tool: `get_tools_cache`. This unified tool packs all server capabilities, providing full tool schemas, parameter breakdowns, and direct execution:
+* Tool Packing: All underlying tools and their complete JSON schemas are packed inside `get_tools_cache`. Calling `get_tools_cache()` returns the full unpacked catalog and instructions to the AI client.
+* Direct Execution: The AI model can execute any packed tool directly by passing `execute_tool: {"name": "<tool_name>", "arguments": {...}}` or `tool_name` through `get_tools_cache`.
+* Direct Call Compatibility: Clients that unpack tools into local context can also invoke packed tools directly by name via standard MCP `tools/call`.
 * Server-Side Cache: Maintained dynamically in memory with cache versioning and update timestamps.
 * Diffing Against Local Sessions: The AI model can provide `known_tools: ["workspace_info", ...]`. The server returns `new_tools_on_server` identifying newly added or changed tools that the AI client does not have.
 * Schema and Parameter Breakdown: Returns detailed JSON input schemas, categories (`data_management`, `interactive_forms`, `resource_documents`, `notes_scratchpad`, `ai_guidance_telemetry`), and lists of required and optional parameters.

@@ -1,6 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -79,8 +79,32 @@ async def create_workspace(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new workspace and make the authenticated user OWNER."""
+    target_name = data.name.strip()
+    if not target_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Workspace name cannot be empty.",
+        )
+
+    # Check for duplicate workspace for this user (case-insensitive)
+    dup_stmt = (
+        select(Workspace)
+        .outerjoin(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(
+            or_(Workspace.owner_id == user.id, WorkspaceMember.user_id == user.id),
+            func.lower(Workspace.name) == target_name.lower(),
+            Workspace.is_active == True,
+        )
+    )
+    existing = (await db.execute(dup_stmt)).scalars().first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A workspace with the name '{target_name}' already exists in your account. Duplicate workspace names are not allowed.",
+        )
+
     new_ws = Workspace(
-        name=data.name.strip(),
+        name=target_name,
         description=data.description.strip() if data.description else None,
         owner_id=user.id,
     )
@@ -150,7 +174,30 @@ async def update_workspace(
     ws, role = await WorkspaceService.verify_access(db, workspace_id, user.id, require_owner=True)
 
     if data.name is not None:
-        ws.name = data.name.strip()
+        new_name = data.name.strip()
+        if not new_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Workspace name cannot be empty.",
+            )
+        if new_name.lower() != ws.name.lower():
+            dup_stmt = (
+                select(Workspace)
+                .outerjoin(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+                .where(
+                    or_(Workspace.owner_id == user.id, WorkspaceMember.user_id == user.id),
+                    func.lower(Workspace.name) == new_name.lower(),
+                    Workspace.id != ws.id,
+                    Workspace.is_active == True,
+                )
+            )
+            existing = (await db.execute(dup_stmt)).scalars().first()
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"A workspace with the name '{new_name}' already exists in your account. Duplicate workspace names are not allowed.",
+                )
+        ws.name = new_name
     if data.description is not None:
         ws.description = data.description.strip() if data.description else None
     if data.is_active is not None:

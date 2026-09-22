@@ -23,7 +23,7 @@ from app.mcp.schemas import (
     MCPCredentialListItem,
     MCPCredentialUpdateRequest,
 )
-from app.mcp.server import MCPServer
+from app.mcp.server import MCPServer, ToolCacheRegistry
 from app.mcp.skills import ABOX_AI_SKILLS_GUIDE
 from app.workspaces.service import WorkspaceService
 
@@ -665,7 +665,8 @@ async def handle_mcp_rpc(
         return JSONRPCResponse(id=rpc_req.id, result=call_res)
 
     # 7. Direct tool method invocation fallback
-    known_tool_names = [t["name"] for t in await MCPServer.list_tools()]
+    scope = context.scope_type if context else "WORKSPACE"
+    known_tool_names = [t["name"] for t in ToolCacheRegistry.get_all_tools(scope)]
     if method in known_tool_names:
         if not context:
             return JSONRPCResponse(

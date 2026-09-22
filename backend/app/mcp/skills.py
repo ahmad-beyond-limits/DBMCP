@@ -45,8 +45,10 @@ When a user expresses ANY intent to add, modify, update, or edit data in a tabul
 ## 🛠️ Complete MCP Tool Suite & Capabilities
 
 ### 📂 Workspace Resources & Tabular Datasets
-1. `get_tools_cache(known_tools, category, include_schemas)`
-   - Live Server Tool Cache & Registry: Fetches the active registry of all tools available on the server.
+1. `get_tools_cache(execute_tool, tool_name, tool_arguments, known_tools, category, include_schemas)`
+   - Master Tool Cache Gateway: The single unified tool exposed by the server in `tools/list` that packs all server capabilities.
+   - Call without arguments to unpack the complete live catalog of all server tools with parameter schemas, descriptions, categories, and instructions.
+   - Pass `execute_tool: {"name": "<tool_name>", "arguments": {...}}` or `tool_name` to execute any packed tool directly through this gateway.
    - Pass `known_tools` (array of tool names) to compare and automatically highlight newly added or updated server tools not present in your local session.
 
 2. `workspace_info()`

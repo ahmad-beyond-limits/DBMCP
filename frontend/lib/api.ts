@@ -207,12 +207,68 @@ class ApiClient {
     return this.request<FileRecord[]>(`/workspaces/${workspaceId}/files`);
   }
 
-  async uploadFile(workspaceId: string, file: File): Promise<FileRecord> {
+  async uploadFile(
+    workspaceId: string,
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<FileRecord> {
+    const apiBase = getApiBase();
+    const token = typeof window !== "undefined" ? localStorage.getItem("dbmcp_access_token") : null;
     const formData = new FormData();
     formData.append("file", file);
-    return this.request<FileRecord>(`/workspaces/${workspaceId}/files`, {
-      method: "POST",
-      body: formData,
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${apiBase}/workspaces/${workspaceId}/files`);
+
+      if (token) {
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      }
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            onProgress(Math.min(percent, 95));
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status === 401 && typeof window !== "undefined") {
+          localStorage.removeItem("dbmcp_access_token");
+          window.location.href = "/login";
+          reject(new Error("Session expired. Please log in again."));
+          return;
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (onProgress) onProgress(100);
+            resolve(data);
+          } catch (e) {
+            reject(new Error("Invalid server response format."));
+          }
+        } else {
+          let errorMsg = `Upload failed (${xhr.status})`;
+          try {
+            const errObj = JSON.parse(xhr.responseText);
+            errorMsg = errObj.detail || errObj.message || errorMsg;
+          } catch {}
+          reject(new Error(errorMsg));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error("Network connection error during file upload. Please check your network."));
+      };
+
+      xhr.onabort = () => {
+        reject(new Error("Upload cancelled by user."));
+      };
+
+      xhr.send(formData);
     });
   }
 
