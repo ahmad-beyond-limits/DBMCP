@@ -13,6 +13,227 @@ from app.forms.service import FormService, clean_token_string
 router = APIRouter(prefix="/forms", tags=["Forms"])
 
 
+STANDALONE_404_HTML = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>404 - Form Not Found or Expired | POAIS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-page: #F1F1F2;
+      --bg-surface: #FFFFFF;
+      --bg-input: #F7F7F8;
+      --border: rgba(40, 40, 40, 0.08);
+      --text-primary: #2E3032;
+      --text-secondary: #686B6E;
+      --text-tertiary: #989B9D;
+      --accent-dark: #2E3032;
+      --accent-hover: #18191A;
+      --radius-lg: 24px;
+      --radius-md: 14px;
+      --radius-pill: 9999px;
+      --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.02), 0 12px 32px rgba(0, 0, 0, 0.04);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+    .topbar {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(40, 40, 40, 0.06);
+      padding: 0.85rem 1.25rem;
+    }
+    .topbar-inner {
+      max-width: 680px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand { display: flex; align-items: center; gap: 0.6rem; }
+    .slash-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: var(--radius-pill);
+      background: rgba(46, 48, 50, 0.07);
+      border: 1px solid rgba(46, 48, 50, 0.14);
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #2E3032;
+    }
+    .badge-revoked {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.7rem;
+      border-radius: var(--radius-pill);
+      background: #FEF2F2;
+      border: 1px solid #FECACA;
+      font-size: 0.73rem;
+      font-weight: 700;
+      color: #DC2626;
+    }
+    .main-wrapper {
+      flex: 1;
+      width: 100%;
+      max-width: 620px;
+      margin: 0 auto;
+      padding: 3rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card-404 {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2.75rem 2rem;
+      text-align: center;
+      box-shadow: var(--shadow-card);
+      width: 100%;
+    }
+    .code-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: 800;
+      padding: 0.35rem 0.9rem;
+      border-radius: var(--radius-pill);
+      background: #FEF2F2;
+      border: 1px solid #FCA5A5;
+      color: #DC2626;
+      margin-bottom: 1.25rem;
+      letter-spacing: 0.05em;
+    }
+    .h1-title {
+      font-size: 1.55rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 0.85rem;
+      letter-spacing: -0.02em;
+    }
+    .main-msg {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #B91C1C;
+      line-height: 1.45;
+      margin-bottom: 1.25rem;
+      background: #FEF2F2;
+      border: 1px solid #FEE2E2;
+      border-radius: var(--radius-md);
+      padding: 0.9rem 1.15rem;
+    }
+    .persisted-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      text-align: left;
+      font-size: 0.82rem;
+      color: #065F46;
+      background: #ECFDF5;
+      border: 1px solid #A7F3D0;
+      border-radius: var(--radius-md);
+      padding: 0.85rem 1rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.45;
+    }
+    .instructions-box {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.15rem;
+      text-align: left;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      margin-bottom: 1.5rem;
+    }
+    .instructions-box strong { color: var(--text-primary); }
+    .instructions-box code {
+      display: block;
+      margin-top: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-primary);
+      font-size: 0.8rem;
+    }
+    .btn-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius-md);
+      background: var(--accent-dark);
+      color: #FFFFFF;
+      font-weight: 600;
+      font-size: 0.88rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+    .btn-close:hover { background: var(--accent-hover); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="slash-tag">POAIS</span>
+        <span style="color: var(--text-tertiary); font-weight: 300;">/</span>
+        <span style="font-size: 0.86rem; font-weight: 600; color: var(--text-primary);">Interactive Data Entry</span>
+      </div>
+      <div class="badge-revoked">
+        <span>●</span> Closed / Revoked
+      </div>
+    </div>
+  </header>
+
+  <div class="main-wrapper">
+    <div class="card-404">
+      <div class="code-badge">404 NOT FOUND</div>
+      <h1 class="h1-title">Form Session Expired or Closed</h1>
+      <p class="main-msg">This form might be deleted after a minute, or you closed the window.</p>
+      
+      <div class="persisted-note">
+        <span style="font-size: 1.1rem; line-height: 1;">✓</span>
+        <div>
+          <strong>Data Remains Safe:</strong> If you submitted any records before closing, your data was successfully committed and saved to the database dataset.
+        </div>
+      </div>
+
+      <div class="instructions-box">
+        <strong>Need to add or update more records?</strong>
+        <p style="margin-top: 0.25rem;">Return to your chat assistant (ChatGPT, Claude, Gemini, or Cursor) and request a fresh interactive form:</p>
+        <code>"Generate a form to enter/update data"</code>
+      </div>
+
+      <button type="button" class="btn-close" onclick="window.close()">Close Window</button>
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+
 STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -286,6 +507,34 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
     .btn-reset:hover {
       color: var(--text-primary);
     }
+    .btn-close-secondary {
+      background: rgba(46, 48, 50, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-close-secondary:hover {
+      background: #FEF2F2;
+      border-color: #FECACA;
+      color: #DC2626;
+    }
+    .btn-close-top {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.32rem 0.85rem;
+      border-radius: var(--radius-pill);
+      background: rgba(220, 38, 38, 0.06);
+      border: 1px solid rgba(220, 38, 38, 0.2);
+      color: #DC2626;
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-close-top:hover {
+      background: #DC2626;
+      color: #FFFFFF;
+    }
     .btn-primary {
       background: var(--accent-dark);
       color: #FFFFFF;
@@ -395,9 +644,12 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
         <span class="brand-divider">/</span>
         <span class="brand-title">Interactive Data Entry</span>
       </div>
-      <div class="session-indicator" id="topSessionIndicator">
-        <span class="live-dot"></span>
-        <span class="session-text">Active (Expires on Close)</span>
+      <div style="display: flex; align-items: center; gap: 0.65rem;">
+        <div class="session-indicator" id="topSessionIndicator">
+          <span class="live-dot" id="liveDot"></span>
+          <span id="sessionTimerText">Active (60s)</span>
+        </div>
+        <button type="button" class="btn-close-top" id="topCloseBtn" onclick="handleCloseWindow()">✕ Close Window</button>
       </div>
     </div>
   </header>
@@ -412,16 +664,25 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
       <p style="font-size: 0.85rem; color: var(--text-secondary);">Decrypting session signature and preparing dataset fields...</p>
     </div>
 
-    <!-- Expired / Error State -->
+    <!-- Expired / Error State (404 Page) -->
     <div class="status-card" id="errorState" style="display: none;">
-      <div class="status-icon status-error">⚠️</div>
-      <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; color: #991B1B;" id="errorTitle">Session Expired</h2>
-      <p style="font-size: 0.86rem; color: var(--text-secondary); margin-bottom: 1.5rem; max-width: 440px; margin-left: auto; margin-right: auto;" id="errorDesc"></p>
-      <div style="background: var(--bg-input); border: 1px solid var(--border); padding: 1rem 1.25rem; border-radius: 14px; font-size: 0.82rem; text-align: left; color: var(--text-primary); max-width: 480px; margin: 0 auto;">
-        <p style="font-weight: 600; margin-bottom: 0.4rem; color: var(--text-primary);">How to continue:</p>
-        <p style="color: var(--text-secondary); margin-bottom: 0.4rem;">Return to your chat with ChatGPT, Claude, or Gemini and ask:</p>
-        <code style="display: block; padding: 0.5rem 0.75rem; background: #FFFFFF; border: 1px solid var(--border); border-radius: 8px; color: #2E3032; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">"Open a form to update student S002"</code>
+      <div style="display: inline-flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 800; padding: 0.35rem 0.9rem; border-radius: 9999px; background: #FEF2F2; border: 1px solid #FCA5A5; color: #DC2626; margin-bottom: 1.25rem;">404 NOT FOUND</div>
+      <h2 style="font-size: 1.45rem; font-weight: 800; margin-bottom: 0.75rem; color: var(--text-primary);" id="errorTitle">Form Session Expired or Closed</h2>
+      <p style="font-size: 1.05rem; font-weight: 600; color: #B91C1C; background: #FEF2F2; border: 1px solid #FEE2E2; border-radius: 12px; padding: 0.9rem 1.15rem; margin-bottom: 1.25rem;" id="errorDesc">
+        This form might be deleted after a minute, or you closed the window.
+      </p>
+      <div style="display: flex; align-items: flex-start; gap: 0.6rem; text-align: left; font-size: 0.82rem; color: #065F46; background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 1.5rem; line-height: 1.45;">
+        <span style="font-size: 1.1rem; line-height: 1;">✓</span>
+        <div>
+          <strong>Data Remains Safe:</strong> If you submitted any records before closing, your data was safely persisted and committed to the dataset in the database.
+        </div>
       </div>
+      <div style="background: var(--bg-input); border: 1px solid var(--border); padding: 1.15rem; border-radius: 14px; font-size: 0.82rem; text-align: left; color: var(--text-secondary); margin-bottom: 1.5rem;">
+        <strong style="color: var(--text-primary);">Need to add or update more records?</strong>
+        <p style="margin-top: 0.25rem;">Return to your chat assistant (ChatGPT, Claude, Gemini, or Cursor) and request a fresh interactive form:</p>
+        <code style="display: block; margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: #FFFFFF; border: 1px solid var(--border); border-radius: 8px; font-family: 'JetBrains Mono', monospace; color: var(--text-primary); font-size: 0.8rem;">"Generate a form to enter/update data"</code>
+      </div>
+      <button type="button" class="btn btn-primary" onclick="window.close()">Close Window</button>
     </div>
 
     <!-- Main Form Content -->
@@ -430,7 +691,7 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
         <div class="badge-row">
           <span class="slash-tag">POAIS FORM</span>
           <span class="badge badge-amber" id="actionBadge">UPDATE RECORD</span>
-          <span class="badge badge-neutral">🔒 Session Active In Window</span>
+          <span class="badge badge-neutral">⏱️ 1-Minute Live Form</span>
         </div>
         <h1 class="title" id="formTitle">Update Record</h1>
         <p class="desc" id="formDesc">Fill out the fields below. Submitting will update the dataset file in workspace storage directly.</p>
@@ -445,9 +706,12 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
         <div class="fields-grid" id="fieldsGrid"></div>
         <div class="actions-row">
           <button type="button" class="btn btn-reset" id="resetBtn">Reset Values</button>
-          <button type="submit" class="btn btn-primary" id="submitBtn">
-            <span id="submitText">Submit Record</span>
-          </button>
+          <div style="display: flex; gap: 0.6rem; align-items: center;">
+            <button type="button" class="btn btn-close-secondary" onclick="handleCloseWindow()">Close Window</button>
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+              <span id="submitText">Submit Record</span>
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -463,7 +727,7 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
       <div class="committed-grid" id="committedGrid"></div>
       <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
         <button type="button" class="btn btn-reset" style="background: var(--bg-input); border: 1px solid var(--border);" id="addAnotherBtn">+ Add Another Record</button>
-        <button type="button" class="btn btn-primary" onclick="window.close()">Close Window</button>
+        <button type="button" class="btn btn-primary" onclick="handleCloseWindow()">Close Window</button>
       </div>
     </div>
   </div>
@@ -535,7 +799,7 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
         }
         sessionData = await res.json();
       } catch (networkErr) {
-        showError("Connection Error", "Unable to connect to the backend server. Please check your connection and reload.");
+        showError("Connection Error", "This form might be deleted after a minute, or you closed the window.");
         return;
       }
 
@@ -547,25 +811,110 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
       }
     }
 
+    let remainingSeconds = 60;
+    let timerInterval = null;
+    let isClosed = false;
+
+    function startTimer(durationSeconds) {
+      remainingSeconds = durationSeconds !== undefined ? durationSeconds : 60;
+      updateTimerDisplay();
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        remainingSeconds--;
+        updateTimerDisplay();
+        if (remainingSeconds <= 0) {
+          clearInterval(timerInterval);
+          handleCloseWindow(true);
+        }
+      }, 1000);
+    }
+
+    function updateTimerDisplay() {
+      const timerEl = document.getElementById('sessionTimerText');
+      if (timerEl) {
+        if (remainingSeconds <= 15) {
+          timerEl.innerHTML = `<span style="color: #DC2626; font-weight: 700;">Expires in ${remainingSeconds}s</span>`;
+        } else {
+          timerEl.textContent = `Closes in ${remainingSeconds}s`;
+        }
+      }
+    }
+
+    async function handleCloseWindow(autoExpire = false) {
+      if (isClosed) return;
+      isClosed = true;
+      if (timerInterval) clearInterval(timerInterval);
+
+      const tokenToRevoke = sessionToken || (sessionData && sessionData.session_token);
+      if (tokenToRevoke) {
+        try {
+          fetch('/forms/close', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_token: tokenToRevoke }),
+            keepalive: true,
+          }).catch(() => {});
+        } catch (e) {}
+      }
+
+      showError(
+        "Form Session Expired or Closed",
+        "This form might be deleted after a minute, or you closed the window."
+      );
+
+      try {
+        window.close();
+      } catch (e) {}
+    }
+
+    window.addEventListener('pagehide', () => {
+      const tokenToRevoke = sessionToken || (sessionData && sessionData.session_token);
+      if (tokenToRevoke && !isClosed) {
+        try {
+          navigator.sendBeacon('/forms/close', JSON.stringify({ session_token: tokenToRevoke }));
+        } catch (e) {}
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      const tokenToRevoke = sessionToken || (sessionData && sessionData.session_token);
+      if (tokenToRevoke && !isClosed) {
+        try {
+          navigator.sendBeacon('/forms/close', JSON.stringify({ session_token: tokenToRevoke }));
+        } catch (e) {}
+      }
+    });
+
     function showError(title, desc) {
       document.getElementById('loadingState').style.display = 'none';
       document.getElementById('formContent').style.display = 'none';
       document.getElementById('successState').style.display = 'none';
       document.getElementById('errorState').style.display = 'block';
-      document.getElementById('errorTitle').textContent = title || "Unable to Load Form";
-      document.getElementById('errorDesc').textContent = desc || "Please request a new form from your AI assistant.";
+      document.getElementById('errorTitle').textContent = title || "Form Session Expired or Closed";
+      document.getElementById('errorDesc').textContent = desc || "This form might be deleted after a minute, or you closed the window.";
       const topIndicator = document.getElementById('topSessionIndicator');
       if (topIndicator) {
-        topIndicator.innerHTML = '<span style="color:#DC2626;">●</span> Session Inactive';
+        topIndicator.innerHTML = '<span style="color:#DC2626;">●</span> Closed';
         topIndicator.style.background = '#FEF2F2';
         topIndicator.style.borderColor = '#FECACA';
         topIndicator.style.color = '#DC2626';
       }
+      const topCloseBtn = document.getElementById('topCloseBtn');
+      if (topCloseBtn) topCloseBtn.style.display = 'none';
     }
 
     function renderForm() {
       document.getElementById('loadingState').style.display = 'none';
       document.getElementById('formContent').style.display = 'block';
+
+      if (sessionData.expires_at) {
+        const expTime = new Date(sessionData.expires_at).getTime();
+        const diff = Math.floor((expTime - Date.now()) / 1000);
+        remainingSeconds = Math.max(0, Math.min(60, diff));
+      } else {
+        remainingSeconds = 60;
+      }
+      startTimer(remainingSeconds);
 
       document.getElementById('formTitle').textContent = sessionData.title;
       document.getElementById('formDesc').textContent = sessionData.description || "Enter or update record attributes below.";
@@ -748,8 +1097,8 @@ async def view_form_standalone(
     effective_token = clean_token_string(session or token)
     if not effective_token:
         err_json = json.dumps({
-            "title": "No Session Token Provided",
-            "detail": "Please request a new data entry form link from your AI assistant."
+            "title": "Form Session Expired or Closed",
+            "detail": "This form might be deleted after a minute, or you closed the window."
         })
         html = STANDALONE_FORM_HTML.replace(
             "<!-- SERVER_PRELOAD_SLOT -->",
@@ -767,8 +1116,8 @@ async def view_form_standalone(
         return HTMLResponse(content=html, status_code=200)
     except HTTPException as http_err:
         err_json = json.dumps({
-            "title": "Session Verification Failed",
-            "detail": http_err.detail
+            "title": "Form Session Expired or Closed",
+            "detail": http_err.detail or "This form might be deleted after a minute, or you closed the window."
         })
         html = STANDALONE_FORM_HTML.replace(
             "<!-- SERVER_PRELOAD_SLOT -->",
@@ -777,8 +1126,8 @@ async def view_form_standalone(
         return HTMLResponse(content=html, status_code=200)
     except Exception as e:
         err_json = json.dumps({
-            "title": "Unable to Load Session",
-            "detail": str(e)
+            "title": "Form Session Expired or Closed",
+            "detail": "This form might be deleted after a minute, or you closed the window."
         })
         html = STANDALONE_FORM_HTML.replace(
             "<!-- SERVER_PRELOAD_SLOT -->",
@@ -827,3 +1176,49 @@ async def submit_form_data(
         submitted_values=req.values,
         client_ip=client_ip,
     )
+
+
+@router.post("/close")
+@router.post("/revoke")
+@router.get("/close")
+async def close_form_session(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    token: Optional[str] = Query(None),
+    session: Optional[str] = Query(None),
+):
+    """
+    Revokes and permanently deletes the interactive form session from the database.
+    Strictly preserves all dataset data previously submitted by the user.
+    """
+    body_token = None
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                body_token = body.get("session_token") or body.get("token")
+        except Exception:
+            pass
+
+    effective_token = clean_token_string(body_token or token or session)
+    if effective_token:
+        await FormService.revoke_and_delete_form_session(db=db, token=effective_token)
+
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept:
+        return HTMLResponse(content=STANDALONE_404_HTML, status_code=404)
+
+    return {
+        "status": "success",
+        "message": "Form session revoked and deleted from database.",
+        "note": "Any submitted dataset entries remain safely committed in the database.",
+    }
+
+
+@router.get("/404", response_class=HTMLResponse)
+async def view_form_404():
+    """
+    Dedicated 404 page for expired, deleted, or closed interactive form sessions.
+    """
+    return HTMLResponse(content=STANDALONE_404_HTML, status_code=404)
+

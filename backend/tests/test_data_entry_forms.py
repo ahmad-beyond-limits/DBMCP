@@ -306,4 +306,117 @@ async def test_standalone_view_preloads_session(client: AsyncClient):
     assert "Invalid payload padding" not in res.text
 
 
+@pytest.mark.asyncio
+async def test_form_close_window_revokes_and_deletes_session_while_preserving_data(client: AsyncClient):
+    """
+    Verifies that when a user closes the window:
+    1. Form is revoked and deleted from the database.
+    2. Accessing the form returns 404 with 'This form might be deleted after a minute, or you closed the window.'
+    3. Any data previously submitted by the user is safely preserved in the dataset!
+    """
+    # 1. Setup workspace and dataset
+    reg = await client.post("/auth/register", json={"username": "closer_user", "password": "password123"})
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    ws_id = (await client.post("/workspaces", json={"name": "Close WS"}, headers=headers)).json()["id"]
+
+    csv_data = b"id,name,score\n1,InitialStudent,80\n"
+    file_res = await client.post(
+        f"/workspaces/{ws_id}/files",
+        files={"file": ("grades.csv", csv_data, "text/csv")},
+        headers=headers,
+    )
+    file_id = file_res.json()["id"]
+
+    # 2. Create MCP credentials & generate form
+    token_res = await client.post(
+        f"/workspaces/{ws_id}/mcp-credentials",
+        json={"name": "Close Test Token"},
+        headers=headers,
+    )
+    mcp_headers = {"Authorization": f"Bearer {token_res.json()['raw_token']}"}
+
+    mcp_req = {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+            "name": "generate_data_entry_form",
+            "arguments": {
+                "resource_id": file_id,
+                "action": "insert",
+            },
+        },
+    }
+    mcp_res = await client.post("/mcp", json=mcp_req, headers=mcp_headers)
+    session_token = mcp_res.json()["result"]["metadata"]["session_token"]
+
+    # 3. Submit data before closing
+    submit_req = {
+        "session_token": session_token,
+        "values": {
+            "id": "2",
+            "name": "SubmittedBeforeClose",
+            "score": "98",
+        },
+    }
+    sub_res = await client.post("/forms/submit", json=submit_req)
+    assert sub_res.status_code == 200
+
+    # 4. User clicks 'Close Window' -> POST /forms/close
+    close_res = await client.post("/forms/close", json={"session_token": session_token})
+    assert close_res.status_code == 200
+    assert close_res.json()["status"] == "success"
+
+    # 5. Subsequent access to GET /forms/session returns 404 with exact message
+    get_res = await client.get(f"/forms/session?token={session_token}")
+    assert get_res.status_code == 404
+    assert get_res.json()["detail"] == "This form might be deleted after a minute, or you closed the window."
+
+    # 6. Verify data remains safely preserved in dataset
+    query_req = {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "tools/call",
+        "params": {
+            "name": "query_dataset",
+            "arguments": {
+                "resource_id": file_id,
+                "filters": {"id": 2},
+            },
+        },
+    }
+    q_res = await client.post("/mcp", json=query_req, headers=mcp_headers)
+    q_data = json.loads(q_res.json()["result"]["content"][0]["text"])
+    assert q_data["count"] == 1
+    assert q_data["rows"][0]["name"] == "SubmittedBeforeClose"
+
+
+@pytest.mark.asyncio
+async def test_form_expired_after_one_minute_returns_404(client: AsyncClient):
+    """
+    Verifies that an expired form session (>60s) returns 404 with the exact message.
+    """
+    from app.forms.service import create_form_session_token, persist_form_session_record
+    from app.database.session import AsyncSessionLocal
+
+    # Setup token with 0 seconds expiry to test instant expiration
+    token = create_form_session_token(
+        workspace_id="test-ws",
+        file_id="test-file",
+        action="insert",
+        expire_seconds=-1,
+    )
+
+    # Calling /forms/session returns 404
+    res = await client.get(f"/forms/session?token={token}")
+    assert res.status_code == 404
+    assert res.json()["detail"] == "This form might be deleted after a minute, or you closed the window."
+
+    # Calling /forms/404 returns 404 HTML
+    page_404 = await client.get("/forms/404")
+    assert page_404.status_code == 404
+    assert "This form might be deleted after a minute, or you closed the window." in page_404.text
+
+
+
 

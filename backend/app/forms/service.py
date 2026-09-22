@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import jwt
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -26,12 +26,9 @@ import hashlib
 import time
 
 SESSION_TYPE = "form_session"
-# Generous window (7 days) so the session never expires while the form is actively open
-SESSION_EXPIRE_HOURS = 168
-DANGEROUS_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
-
-# Generous window (7 days) so the session never expires prematurely while the form is actively open
-SESSION_EXPIRE_HOURS = 168
+# Forms expire automatically after 1 minute (60 seconds)
+SESSION_EXPIRE_SECONDS = 60
+SESSION_EXPIRED_MESSAGE = "This form might be deleted after a minute, or you closed the window."
 DANGEROUS_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
@@ -65,10 +62,6 @@ import uuid
 
 from app.database.models import ExtractedContent, FileRecord, Workspace, FormDataEntrySession
 
-SESSION_TYPE = "form_session"
-# Generous window (7 days) so the session never expires prematurely while the form is actively open
-SESSION_EXPIRE_HOURS = 168
-DANGEROUS_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 # Fast in-memory session cache for instant zero-latency session resolution
 _FORM_SESSION_MEMORY_CACHE: Dict[str, Dict[str, Any]] = {}
@@ -107,14 +100,16 @@ def create_form_session_token(
     filters: Optional[Dict[str, Any]] = None,
     target_identifier: Optional[str] = None,
     user_id: Optional[str] = None,
+    expire_seconds: int = SESSION_EXPIRE_SECONDS,
 ) -> str:
     """
     Creates a clean, short 32-character session token stored in fast memory cache
     and cryptographically backed for bulletproof URL durability.
     Generates URLs ~68 characters long that NEVER wrap or fail base64 padding.
+    Sessions expire automatically after 1 minute (60 seconds).
     """
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(hours=SESSION_EXPIRE_HOURS)
+    expire = now + timedelta(seconds=expire_seconds)
     short_token = uuid.uuid4().hex  # Exactly 32 hex chars, 100% URL-safe
 
     payload = {
@@ -150,14 +145,15 @@ async def persist_form_session_record(
     filters: Optional[Dict[str, Any]] = None,
     target_identifier: Optional[str] = None,
     user_id: Optional[str] = None,
-    expire_hours: int = SESSION_EXPIRE_HOURS,
+    expire_seconds: int = SESSION_EXPIRE_SECONDS,
 ) -> None:
     """
     Persists a form session record to the database for persistence across server restarts.
+    Forms expire automatically after 1 minute (60 seconds).
     """
     try:
         now = datetime.now(timezone.utc)
-        expire = now + timedelta(hours=expire_hours)
+        expire = now + timedelta(seconds=expire_seconds)
         sess = FormDataEntrySession(
             id=session_id,
             workspace_id=str(workspace_id),
@@ -186,8 +182,8 @@ def verify_form_session_token(token: str) -> Dict[str, Any]:
     cleaned = clean_token_string(token)
     if not cleaned:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Session token is missing or empty.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=SESSION_EXPIRED_MESSAGE,
         )
 
     # 1. Fast in-memory session lookup
@@ -196,9 +192,10 @@ def verify_form_session_token(token: str) -> Dict[str, Any]:
         exp_ts = session_info.get("exp")
         now_ts = int(datetime.now(timezone.utc).timestamp())
         if exp_ts and now_ts > exp_ts:
+            _FORM_SESSION_MEMORY_CACHE.pop(cleaned, None)
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Form session has expired. Please ask the assistant to generate a new form.",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=SESSION_EXPIRED_MESSAGE,
             )
         return dict(session_info)
 
@@ -251,8 +248,8 @@ def verify_form_session_token(token: str) -> Dict[str, Any]:
                 return payload
             except jwt.ExpiredSignatureError:
                 raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Form session has expired. Please ask the assistant to generate a new form.",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=SESSION_EXPIRED_MESSAGE,
                 )
             except jwt.InvalidSignatureError as sig_err:
                 last_err = sig_err
@@ -268,8 +265,8 @@ def verify_form_session_token(token: str) -> Dict[str, Any]:
 
     # 3. If token is not recognized
     raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or tampered form session token (unrecognized or expired). Please ask the assistant to generate a new form.",
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=SESSION_EXPIRED_MESSAGE,
     )
 
 
@@ -283,19 +280,28 @@ async def resolve_form_session(token: str, db: Optional[AsyncSession] = None) ->
     cleaned = clean_token_string(token)
     if not cleaned:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Session token is missing or empty.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=SESSION_EXPIRED_MESSAGE,
         )
+
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    now = datetime.now(timezone.utc)
 
     # Check memory cache first
     if cleaned in _FORM_SESSION_MEMORY_CACHE:
         session_info = _FORM_SESSION_MEMORY_CACHE[cleaned]
         exp_ts = session_info.get("exp")
-        now_ts = int(datetime.now(timezone.utc).timestamp())
         if exp_ts and now_ts > exp_ts:
+            _FORM_SESSION_MEMORY_CACHE.pop(cleaned, None)
+            if db is not None:
+                try:
+                    await db.execute(delete(FormDataEntrySession).where(FormDataEntrySession.id == cleaned))
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Form session has expired. Please ask the assistant to generate a new form.",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=SESSION_EXPIRED_MESSAGE,
             )
         return dict(session_info)
 
@@ -305,14 +311,17 @@ async def resolve_form_session(token: str, db: Optional[AsyncSession] = None) ->
             stmt = select(FormDataEntrySession).where(FormDataEntrySession.id == cleaned)
             sess_rec = (await db.execute(stmt)).scalar_one_or_none()
             if sess_rec:
-                now = datetime.now(timezone.utc)
                 exp = sess_rec.expires_at
                 if exp.tzinfo is None:
                     exp = exp.replace(tzinfo=timezone.utc)
                 if now > exp:
+                    # Form is expired: purge from DB and memory
+                    await db.delete(sess_rec)
+                    await db.commit()
+                    _FORM_SESSION_MEMORY_CACHE.pop(cleaned, None)
                     raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Form session has expired. Please ask the assistant to generate a new form.",
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=SESSION_EXPIRED_MESSAGE,
                     )
                 payload = {
                     "type": SESSION_TYPE,
@@ -328,6 +337,13 @@ async def resolve_form_session(token: str, db: Optional[AsyncSession] = None) ->
                 }
                 _FORM_SESSION_MEMORY_CACHE[cleaned] = payload
                 return payload
+            else:
+                # Not found in database and not a JWT: raise 404
+                if "." not in cleaned:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=SESSION_EXPIRED_MESSAGE,
+                    )
         except HTTPException:
             raise
         except Exception as db_err:
@@ -749,3 +765,42 @@ class FormService:
             affected_records=modified_count,
             record=final_record,
         )
+
+    @classmethod
+    async def revoke_and_delete_form_session(cls, db: AsyncSession, token: str) -> bool:
+        """
+        Revokes and permanently deletes an interactive form session from the database table
+        and in-memory cache when user closes the window or upon session expiration.
+        Strictly preserves all committed dataset data.
+        """
+        cleaned = clean_token_string(token)
+        if not cleaned:
+            return False
+
+        # 1. Clear from in-memory cache
+        _FORM_SESSION_MEMORY_CACHE.pop(cleaned, None)
+        for k in list(_FORM_SESSION_MEMORY_CACHE.keys()):
+            val = _FORM_SESSION_MEMORY_CACHE.get(k)
+            if isinstance(val, dict) and (val.get("session_id") == cleaned or k == cleaned):
+                _FORM_SESSION_MEMORY_CACHE.pop(k, None)
+
+        # 2. Delete from database table FormDataEntrySession
+        deleted = False
+        try:
+            stmt = select(FormDataEntrySession).where(FormDataEntrySession.id == cleaned)
+            sess_rec = (await db.execute(stmt)).scalar_one_or_none()
+            if sess_rec:
+                await db.delete(sess_rec)
+                deleted = True
+
+            # Opportunistic cleanup: remove any expired sessions older than now
+            now = datetime.now(timezone.utc)
+            cleanup_stmt = delete(FormDataEntrySession).where(FormDataEntrySession.expires_at < now)
+            await db.execute(cleanup_stmt)
+            await db.commit()
+        except Exception as err:
+            logger.warning(f"Failed to delete form session '{cleaned}' from database: {err}")
+            await db.rollback()
+
+        return deleted
+

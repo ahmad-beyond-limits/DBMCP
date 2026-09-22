@@ -708,6 +708,25 @@ class ApiClient {
       body: JSON.stringify({ session_token: token, values }),
     });
   }
+
+  async closeFormSession(token: string): Promise<any> {
+    return this.request<any>(`/forms/close`, {
+      method: "POST",
+      body: JSON.stringify({ session_token: token }),
+    });
+  }
+
+  closeFormSessionBeacon(token: string): void {
+    try {
+      const apiBase = getApiBase();
+      fetch(`${apiBase}/forms/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_token: token }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {}
+  }
 }
 
 export const api = new ApiClient();
