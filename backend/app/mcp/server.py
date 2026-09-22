@@ -236,7 +236,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Generates a fresh 5-minute interactive web form session for multi-field data entry or complex updates. ⚠️ DECISION RULE: Form is NOT the default option to modify or delete data! Use this tool ONLY when adding a brand new record with many fields or when the requirement is complicated across multiple interdependent columns. For single-field updates, quick edits, or deletions, DO NOT create a form; use clickable options or direct edit instead. Ephemeral 5-minute single-use session: never reuse old links.",
+        "description": "Simple utility tool in the cache that opens a temporary 5-minute web form for multi-column record creation. Why use this form: Use it only when the user needs to enter an entire new multi-field record (e.g., creating a full profile with 5+ fields like Name, Email, Major, GPA) where typing into chat is inconvenient. For everything else (answering questions, analyzing data, single field updates, confirming actions, selecting options), use elicitation and chat controls instead.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -710,7 +710,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Generates a fresh 5-minute interactive web form session for multi-field data entry or complex updates. ⚠️ DECISION RULE: Form is NOT the default option to modify or delete data! Use this tool ONLY when adding a brand new record with many fields or when the requirement is complicated across multiple interdependent columns. For single-field updates, quick edits, or deletions, DO NOT create a form; use clickable options or direct edit instead. Ephemeral 5-minute single-use session: never reuse old links.",
+        "description": "Simple utility tool in the cache that opens a temporary 5-minute web form for multi-column record creation. CORE MANDATE: Always use Clickable UI until there is something significantly complex that CANNOT be done with Clickable UI (e.g., adding an entire brand new database record from scratch with 8+ interdependent fields). For everything else (answering questions, data analysis, single/few field updates, status changes, selections, deletions, and confirmations), ALWAYS use Clickable UI.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1109,6 +1109,18 @@ class ToolCacheRegistry:
             "cache_version": cls._cache_version,
             "cache_last_updated": cls._last_updated.isoformat(),
             "skills": {
+                "elicitation": {
+                    "name": "elicitation",
+                    "description": (
+                        "Primary interaction framework: deliberate, structured gathering of missing information before or during a task. "
+                        "Governs whether to ask at all, and how to structure requests as concise interactive choices "
+                        "(clickable options, widgets, short guided flows) instead of paragraphs of clarifying questions."
+                    ),
+                    "core_rule": (
+                        "Focus on elicitation for clarifying ambiguous tasks, user preferences, and decision points. "
+                        "Trigger any time you're about to write two or more clarifying questions in prose."
+                    ),
+                },
                 "clickable_options_ui": {
                     "name": "clickable-options-ui",
                     "description": (
@@ -1116,29 +1128,10 @@ class ToolCacheRegistry:
                         "(buttons, radio groups, checkboxes, selects, or widgets) inside the chat interface with an 'Other / Custom' input."
                     ),
                     "when_to_use": (
-                        "Use for single-attribute updates, discrete choices (e.g. changing student status, updating a single grade), "
-                        "selecting a record to edit/delete from a list, confirming actions, or picking from a small set of options. "
-                        "Always include an 'Other / Custom Input' option or text field so the user can provide custom instructions if they reject the options."
-                    ),
-                    "core_rule": (
-                        "DO NOT by default create a form! Form is NOT the default option to modify something or add/delete. "
-                        "If the user wants to change a single value or pick an action, use clickable options."
+                        "Use for single-attribute updates, discrete choices, selecting from options, and confirming actions. "
+                        "Always include an 'Other / Custom Input' option."
                     ),
                 },
-                "data_entry_form": {
-                    "name": "data-entry-form",
-                    "description": "Generates a fresh 5-minute single-use interactive web form session for multi-field data entry or complex updates.",
-                    "when_to_use": (
-                        "Use ONLY when adding a brand new record with many fields simultaneously (e.g. adding a full student profile with Name, ID, Email, Major, GPA), "
-                        "or when the data requirement is complicated and requires structured multi-field validation."
-                    ),
-                    "lifecycle": "Ephemeral 5-minute session. Single use. Never reuse or recycle old form links."
-                },
-                "decision_rule": (
-                    "Single thing or discrete choice -> Clickable Options UI. "
-                    "Many things or complicated multi-field record -> Interactive Form. "
-                    "Never default to creating a form for single-field modifications or deletes."
-                ),
                 "companion_memory_harness": {
                     "name": "user-companion-memory",
                     "description": (
@@ -1154,12 +1147,13 @@ class ToolCacheRegistry:
             },
             "instructions": (
                 "All server tools are packed inside this tool cache gateway. "
-                "Inspect full parameter schemas in 'tools' and execute any packed tool either by: "
-                "1) Calling 'get_tools_cache' with 'execute_tool': {'name': '<tool_name>', 'arguments': {...}}, or "
-                "2) Calling the packed tool directly by name via tools/call. "
-                "CRITICAL DECISION RULE: Form is NOT the default option to modify, add, or delete data! "
-                "For single-field changes, discrete choices, or deletions, use clickable options in chat with an 'Other / Custom' input. "
-                "Only create an interactive form when entering many fields at once or when the requirement is complicated."
+                "PRIMARY OPERATIONAL SKILL: ELICITATION & CLICKABLE UI. "
+                "CORE MANDATE: Always use Clickable UI (clickable options, buttons, radio groups, chips, widgets, write-in inputs) "
+                "for all interactions, questions, clarifications, single or few field edits, status updates, and confirmations, "
+                "until there is something so significantly complex that it CANNOT be done with Clickable UI. "
+                "Tool 'generate_data_entry_form' is simply a minor helper utility in the tool cache, used strictly as an exceptional fallback "
+                "when a brand new record has 8+ fields that cannot practically fit into Clickable UI. "
+                "Never default to creating a form when Clickable UI can accomplish the task."
             ),
             "tools": tools_catalog,
         }
@@ -1631,14 +1625,7 @@ class MCPServer:
             "content": [
                 {
                     "type": "text",
-                    "text": json.dumps({
-                        "resources": permitted_resources,
-                        "MANDATORY_DATA_ENTRY_DIRECTIVE": (
-                            "If the user wants to add, insert, or update data (e.g. 'I want to add new student data'), "
-                            "DO NOT say 'I need the student data first' and DO NOT ask for column values in chat! "
-                            "Immediately present the interactive form button: 👉 [➕ Open Interactive Data Entry Form](<interactive_form_url>)"
-                        ),
-                    }, indent=2),
+                    "text": json.dumps({"resources": permitted_resources}, indent=2),
                 }
             ]
         }

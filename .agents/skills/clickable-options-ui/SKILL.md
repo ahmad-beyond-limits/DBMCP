@@ -25,21 +25,22 @@ Never present the options as ordinary prose, bullet points, numbered lists, or M
 
 Instead, use an interactive UI component with real `<button>`, radio, checkbox, select, or equivalent functional controls.
 
-## ⚖️ When to Use Clickable Options vs. Interactive Form
+## ⚖️ Core Rule: Always Clickable UI by Default
 
-**Form is NOT the default option to modify, add, or delete data.** Always apply this clear distinction:
+**ALWAYS use the Clickable UI by default** for all interactions, questions, elicitations, choices, filters, updates, and selections, **until there is something so significantly complex that it CANNOT be done with Clickable UI.**
 
-### 1. When to Use Clickable Options UI:
-- **Single-attribute / Single-field updates**: When the user wants to change a single value for a record (e.g., change a student's status to Active/Inactive, update a grade to A, change a department, toggle a boolean).
-- **Doing one thing**: Selecting a single action to perform on a record (e.g., `[Update Status]`, `[Edit Score]`, `[Delete Record]`, `[View Profile]`).
-- **Choosing from a list or discrete set**: Selecting a student/record from search results, picking a filter, or choosing between 2–6 known values.
-- **Confirming deletions or mutations**: Displaying action buttons (`[✅ Yes, Delete]`, `[❌ Cancel]`) rather than opening a form.
+### 1. Always Use Clickable UI:
+- **Default for Everything**: All questions, confirmations, single or few field edits, status changes, selections, filters, and branching actions.
+- **Single or few-attribute updates**: E.g. updating a student's status, changing a grade, setting a major, updating an email.
+- **Action selections**: E.g., `[Update Status]`, `[Edit Score]`, `[Delete Record]`, `[View Profile]`.
+- **Discrete choices**: Choosing between options, selecting from search results, picking categories.
+- **Confirmations**: Displaying interactive action buttons (`[✅ Yes, Confirm]`, `[❌ Cancel]`).
 - **Always provide a custom input place**: Whenever offering clickable options, include an *"Other / Custom"* option or text input where the user can state what they want if none of the provided choices fit.
 
 ### 2. When to Use Interactive Form (`generate_data_entry_form`):
-- **Many fields at once**: When creating or inserting a brand new record with many fields/columns (e.g., adding a full student record with Name, ID, Email, Major, GPA, Phone, Address, Enrollment Date).
-- **Complicated multi-column updates**: When the user explicitly wants to edit multiple interdependent columns simultaneously requiring structured validation.
-- **DO NOT create a form by default**: If the user wants to update one field or take a single action, do NOT pop up a full-page form session. Use Clickable Options instead.
+- **ONLY when something is significantly complex that CANNOT be done with Clickable UI**:
+  - For example, inserting a brand new multi-column database record from scratch with 8+ diverse fields (e.g., Name, Student ID, Email, Phone, Address, Major, Enrollment Date, Guardian Info, Notes) where rendering separate clickable chat controls is physically impractical or impossible.
+  - For anything else, **ALWAYS USE CLICKABLE UI**. Never open a form when Clickable UI can accomplish the task.
 
 ## Fallback & Custom Input (When None of the Options Apply)
 
