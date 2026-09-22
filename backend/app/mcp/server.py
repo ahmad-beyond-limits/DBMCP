@@ -1285,6 +1285,19 @@ class ToolCacheRegistry:
                         "Trigger any time you're about to write two or more clarifying questions in prose."
                     ),
                 },
+                "interactive_form_ui": {
+                    "name": "interactive-form-ui",
+                    "description": (
+                        "Directly interactive Form UI. When a user asks to add, create, modify, change, update, improve, "
+                        "or build something that involves entering information, choosing options, submitting data, editing values, "
+                        "or performing a multi-field interaction, interpret the request as a request for a directly interactive form UI. "
+                        "The user describes WHAT they want to accomplish; the AI decides HOW that interaction is represented."
+                    ),
+                    "core_rule": (
+                        "Never merely describe controls in prose or write HTML files. Create usable interactive form UI directly. "
+                        "Infer controls from meaning (text, date, number, dropdown, checkbox). User should never have to say 'make a form' or 'make it clickable'."
+                    ),
+                },
                 "clickable_options_ui": {
                     "name": "clickable-options-ui",
                     "description": (
@@ -1323,8 +1336,8 @@ class ToolCacheRegistry:
             "instructions": (
                 "All server tools are packed inside this tool cache gateway. "
                 "CRITICAL INTERACTION PROTOCOL: "
-                "1. STRICT PROHIBITION ON ASKING FOR DETAILS IN PLAIN CHAT TEXT: Never ask the user to type record details or field values into chat text. "
-                "2. CLICKABLE UI DIRECTLY IN CONVERSATION (NOT IN HTML FILES): Never generate or write .html files. Render clickable UI directly in chat using buttons [ Option ], dropdowns [Select ▼], text inputs [________________________], and action buttons [ Submit ] [ Cancel ]. "
+                "1. INTERACTIVE FORM UI MANDATE: When a user asks to add, create, modify, change, update, improve, or build something that involves entering information, choosing options, submitting data, editing values, or performing a multi-field interaction, ALWAYS create or modify an interactive Form UI directly. The user describes WHAT they want to accomplish; you decide HOW to represent it interactively. Do not ask for UI implementation details and do not describe controls in prose. "
+                "2. NO RAW PROSE DATA REQUESTS & NO HTML FILES: Never ask the user to type record values in raw chat text, and never write .html files. Render the interactive UI directly in the conversation. "
                 "3. NEW RECORD FIELD RULES: When adding a new record (e.g. adding a student), the entity name MUST ALWAYS be an open text input '[________________________]' so the user can type the new name — NEVER make it a dropdown of existing records. Use dropdowns for categories, departments, and statuses."
             ),
             "tools": tools_catalog,
