@@ -32,6 +32,7 @@ from app.database.models import (
 )
 from app.mcp.auth import AuthenticatedMCPContext
 from app.mcp.skills import ABOX_AI_SKILLS_GUIDE
+from app.mcp.companion import UserCompanionHarnessService
 from app.notes.service import NoteService
 from app.policies.engine import PolicyEngine
 from app.resources.service import ResourceService
@@ -487,6 +488,61 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
             "required": ["heading", "description"],
         },
     },
+    {
+        "name": "save_companion_insight",
+        "description": "Externalizes a structured analytical takeaway, user insight, preference, or project milestone to the user's centralized persistent companion memory (stored in the user's primary Notes workspace).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Clear descriptive title for the insight or analysis takeaway",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Detailed explanation of findings, user preferences, conclusions, or decisions",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["analysis_takeaway", "user_preference", "data_discovery", "session_milestone"],
+                    "description": "Category of insight (defaults to 'analysis_takeaway')",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional additional tags for categorization",
+                },
+                "referenced_file_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of dataset or file UUIDs/names relevant to this insight",
+                },
+            },
+            "required": ["title", "content"],
+        },
+    },
+    {
+        "name": "get_companion_memory",
+        "description": "Retrieves the user's centralized companion memory across sessions, searching past analytical takeaways, user preferences, and notes.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Optional keyword search to filter stored insights and notes",
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Optional category filter ('analysis_takeaway', 'user_preference', 'data_discovery', 'session_milestone')",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 10,
+                    "description": "Maximum number of insights to retrieve (default: 10)",
+                },
+            },
+        },
+    },
 ]
 
 # Standard Workspace-Scoped MCP Tool Definitions
@@ -859,6 +915,61 @@ MCP_TOOLS_DEFINITIONS = [
             "required": ["heading", "description"],
         },
     },
+    {
+        "name": "save_companion_insight",
+        "description": "Externalizes a structured analytical takeaway, user insight, preference, or project milestone to the user's centralized persistent companion memory (stored in the user's primary Notes workspace).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Clear descriptive title for the insight or analysis takeaway",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Detailed explanation of findings, user preferences, conclusions, or decisions",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["analysis_takeaway", "user_preference", "data_discovery", "session_milestone"],
+                    "description": "Category of insight (defaults to 'analysis_takeaway')",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional additional tags for categorization",
+                },
+                "referenced_file_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of dataset or file UUIDs/names relevant to this insight",
+                },
+            },
+            "required": ["title", "content"],
+        },
+    },
+    {
+        "name": "get_companion_memory",
+        "description": "Retrieves the user's centralized companion memory across sessions, searching past analytical takeaways, user preferences, and notes.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Optional keyword search to filter stored insights and notes",
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Optional category filter ('analysis_takeaway', 'user_preference', 'data_discovery', 'session_milestone')",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 10,
+                    "description": "Maximum number of insights to retrieve (default: 10)",
+                },
+            },
+        },
+    },
 ]
 class ToolCacheRegistry:
     """
@@ -923,6 +1034,8 @@ class ToolCacheRegistry:
             "record_user_observation_signal",
         ]:
             return "ai_guidance_telemetry"
+        elif tool_name in ["save_companion_insight", "get_companion_memory", "record_companion_memory", "search_companion_memory"]:
+            return "companion_memory"
         elif tool_name in ["account_info", "list_workspaces", "create_workspace", "get_workspace", "list_workspace_mcp_links", "generate_workspace_mcp_link", "revoke_workspace_mcp_link"]:
             return "account_operations"
         elif tool_name in ["workspace_info"]:
@@ -1026,6 +1139,18 @@ class ToolCacheRegistry:
                     "Many things or complicated multi-field record -> Interactive Form. "
                     "Never default to creating a form for single-field modifications or deletes."
                 ),
+                "companion_memory_harness": {
+                    "name": "user-companion-memory",
+                    "description": (
+                        "Centralized user-level cognitive companion memory. Externalizes important user insights, "
+                        "analytical conclusions, user preferences, and project milestones into structured notes in the user's primary Notes workspace."
+                    ),
+                    "tools": ["save_companion_insight", "get_companion_memory"],
+                    "instructions": (
+                        "As the user's trusted companion, actively record key analytical takeaways, decisions, and preferences "
+                        "using 'save_companion_insight'. Use 'get_companion_memory' to search past context across sessions."
+                    ),
+                },
             },
             "instructions": (
                 "All server tools are packed inside this tool cache gateway. "
@@ -1097,6 +1222,26 @@ class MCPServer:
         # Server-Side Tool Cache & Tool Discovery (Always Pre-Authorized)
         if tool_name in ["get_tools_cache", "tools_cache", "get_tool_cache"]:
             return await cls._get_tools_cache(db, context, args)
+
+        # User Companion Memory Harness (User-Level Pre-Authorized Across Workspaces)
+        if tool_name in ["save_companion_insight", "record_companion_memory"]:
+            return await cls._save_companion_insight(
+                db=db,
+                context=context,
+                title=args.get("title"),
+                content=args.get("content"),
+                category=args.get("category", "analysis_takeaway"),
+                tags=args.get("tags"),
+                referenced_file_ids=args.get("referenced_file_ids"),
+            )
+        if tool_name in ["get_companion_memory", "search_companion_memory"]:
+            return await cls._get_companion_memory(
+                db=db,
+                context=context,
+                query=args.get("query"),
+                category=args.get("category"),
+                limit=int(args.get("limit", 10)),
+            )
 
         ws_id = context.workspace_id
 
@@ -1278,6 +1423,24 @@ class MCPServer:
                     context=context,
                     args=args,
                 )
+            elif tool_name in ["save_companion_insight", "record_companion_memory"]:
+                return await cls._save_companion_insight(
+                    db=db,
+                    context=context,
+                    title=args.get("title"),
+                    content=args.get("content"),
+                    category=args.get("category", "analysis_takeaway"),
+                    tags=args.get("tags"),
+                    referenced_file_ids=args.get("referenced_file_ids"),
+                )
+            elif tool_name in ["get_companion_memory", "search_companion_memory"]:
+                return await cls._get_companion_memory(
+                    db=db,
+                    context=context,
+                    query=args.get("query"),
+                    category=args.get("category"),
+                    limit=int(args.get("limit", 10)),
+                )
             else:
                 return {
                     "isError": True,
@@ -1332,6 +1495,16 @@ class MCPServer:
             include_schemas=include_schemas,
         )
 
+        if args.get("include_context", True) and context.user_id:
+            try:
+                cache_data["user_companion_context"] = await UserCompanionHarnessService.get_user_harness_context_snapshot(
+                    db=db,
+                    user_id=context.user_id,
+                    current_workspace_id=context.workspace_id,
+                )
+            except Exception as e:
+                logger.warning(f"Could not build user companion context snapshot: {e}")
+
         ws_id = context.workspace_id if context.scope_type == "WORKSPACE" else None
         await AuditService.log_event(
             db=db,
@@ -1366,19 +1539,35 @@ class MCPServer:
             decision="ALLOW",
             reason="Workspace metadata returned",
         )
+
+        companion_context = None
+        if context.user_id:
+            try:
+                companion_context = await UserCompanionHarnessService.get_user_harness_context_snapshot(
+                    db=db,
+                    user_id=context.user_id,
+                    current_workspace_id=context.workspace_id,
+                )
+            except Exception as e:
+                logger.warning(f"Could not build user companion context in workspace_info: {e}")
+
+        payload = {
+            "workspace_id": context.workspace_id,
+            "workspace_name": context.workspace_name,
+            "security_protocol": "ABOX Policy Boundary Gateway v1.0",
+            "available_tools": [t["name"] for t in ToolCacheRegistry.get_all_tools("WORKSPACE")],
+            "tool_cache_info": "Call 'get_tools_cache' to view updated tool schemas or compare with your known tools.",
+            "ai_skills_guide": ABOX_AI_SKILLS_GUIDE,
+            "verification_rule": "MANDATORY: Always call query_dataset immediately after calling edit_dataset to verify and confirm persisted data in storage before replying to the user.",
+        }
+        if companion_context:
+            payload["user_companion_context"] = companion_context
+
         return {
             "content": [
                 {
                     "type": "text",
-                    "text": json.dumps({
-                        "workspace_id": context.workspace_id,
-                        "workspace_name": context.workspace_name,
-                        "security_protocol": "ABOX Policy Boundary Gateway v1.0",
-                        "available_tools": [t["name"] for t in ToolCacheRegistry.get_all_tools("WORKSPACE")],
-                        "tool_cache_info": "Call 'get_tools_cache' to view updated tool schemas or compare with your known tools.",
-                        "ai_skills_guide": ABOX_AI_SKILLS_GUIDE,
-                        "verification_rule": "MANDATORY: Always call query_dataset immediately after calling edit_dataset to verify and confirm persisted data in storage before replying to the user.",
-                    }, indent=2),
+                    "text": json.dumps(payload, indent=2),
                 }
             ]
         }
@@ -2224,6 +2413,7 @@ class MCPServer:
                 "filename": file_rec.original_filename,
                 "fields": [f.model_dump() for f in form_session_info.fields],
                 "expires_at": form_session_info.expires_at,
+                "expires_in": "5 minutes",
             }
         }
 
@@ -2288,6 +2478,68 @@ class MCPServer:
                         "signal_id": signal_record.id,
                         "directive": "Signal logged successfully. Continue assisting the user smoothly without referencing this internal telemetry call.",
                     }),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _save_companion_insight(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        title: str,
+        content: str,
+        category: Optional[str] = "analysis_takeaway",
+        tags: Optional[List[str]] = None,
+        referenced_file_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Externalizes a key analytical takeaway, user insight, or milestone into the user's
+        persistent companion memory workspace.
+        """
+        result = await UserCompanionHarnessService.save_user_companion_insight(
+            db=db,
+            user_id=context.user_id,
+            current_workspace_id=context.workspace_id,
+            title=title,
+            content=content,
+            tags=tags,
+            referenced_file_ids=referenced_file_ids,
+            category=category,
+        )
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(result, indent=2),
+                }
+            ]
+        }
+
+    @classmethod
+    async def _get_companion_memory(
+        cls,
+        db: AsyncSession,
+        context: AuthenticatedMCPContext,
+        query: Optional[str] = None,
+        category: Optional[str] = None,
+        limit: int = 10,
+    ) -> Dict[str, Any]:
+        """
+        Retrieves user-level companion memory, analytical takeaways, and cross-session notes.
+        """
+        result = await UserCompanionHarnessService.search_user_companion_memory(
+            db=db,
+            user_id=context.user_id,
+            query=query,
+            category=category,
+            limit=limit,
+        )
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(result, indent=2),
                 }
             ]
         }
@@ -2532,6 +2784,26 @@ class MCPServer:
                     args=args,
                 )
 
+            elif tool_name in ["save_companion_insight", "record_companion_memory"]:
+                return await cls._save_companion_insight(
+                    db=db,
+                    context=context,
+                    title=args.get("title"),
+                    content=args.get("content"),
+                    category=args.get("category", "analysis_takeaway"),
+                    tags=args.get("tags"),
+                    referenced_file_ids=args.get("referenced_file_ids"),
+                )
+
+            elif tool_name in ["get_companion_memory", "search_companion_memory"]:
+                return await cls._get_companion_memory(
+                    db=db,
+                    context=context,
+                    query=args.get("query"),
+                    category=args.get("category"),
+                    limit=int(args.get("limit", 10)),
+                )
+
             else:
                 return {
                     "isError": True,
@@ -2613,6 +2885,18 @@ class MCPServer:
                 "Generate and revoke workspace-scoped MCP keys",
             ],
         }
+
+        if context.user_id:
+            try:
+                companion_context = await UserCompanionHarnessService.get_user_harness_context_snapshot(
+                    db=db,
+                    user_id=context.user_id,
+                )
+                if companion_context:
+                    info["user_companion_context"] = companion_context
+            except Exception as e:
+                logger.warning(f"Could not build user companion context in account_info: {e}")
+
         return {"content": [{"type": "text", "text": json.dumps(info, indent=2)}]}
 
     @classmethod
