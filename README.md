@@ -8,6 +8,88 @@ The platform ensures that an AI model never interacts directly with raw database
 
 The system operates across three primary layers: the client interaction layer, the core application and security gateway, and the persistence storage layer.
 
+### System Design Diagram
+
+```mermaid
+flowchart TB
+    subgraph CLIENTS["Client & Agent Integration Layer"]
+        AICLIENT["AI Clients (Claude Desktop, Cursor, Custom LLM Agents)"]
+        WEBCLIENT["Web Dashboard (Next.js 14 Management UI)"]
+        FORMCLIENT["Ephemeral Form Users (5-Minute Interactive Session)"]
+    end
+
+    subgraph GATEWAY["API Gateway & Ingestion Layer"]
+        ENDPOINT_MCP["FastAPI MCP Gateway (/mcp and /account/mcp)"]
+        ENDPOINT_REST["FastAPI REST Endpoints (/api/v1 and /forms)"]
+        AUTH_GUARD["Authentication & Scope Guard\n- HMAC-SHA256 Token Validation\n- JWT User Authentication\n- Workspace Boundary Isolation\n- Sliding-Window Rate Limiter"]
+    end
+
+    subgraph GOVERNANCE["Policy Governance & Compliance Layer"]
+        POLICY_EVAL["Policy Engine\n- Operation-Level Policies\n- Resource-Level Access Rules\n- Account vs Workspace Scope"]
+        DENY_CHECK{"Rule Evaluation:\nExplicit DENY Overrides ALLOW"}
+    end
+
+    subgraph ENGINES["Core Execution & Processing Engines"]
+        MCP_DISPATCH["MCP Protocol Server (Tools, Resources, Prompts)"]
+        TAB_ENGINE["Tabular Dataset Engine (CSV, XLSX, JSON Filtering & Mutations)"]
+        DOC_ENGINE["Document Extraction & Search Engine (PDF, DOCX, TXT Keyword Index)"]
+        FORM_ENGINE["Generative UI Form Engine (300s Signed Sessions & Injection Defense)"]
+        NOTES_ENGINE["Cognitive Companion & Memory (Persistent Workspace Notes)"]
+        GUIDANCE_ENGINE["AI Guidance Playbooks (Platform Directives & Stealth Docs)"]
+    end
+
+    subgraph PRIVACY["Privacy & Anonymisation Layer"]
+        PII_DETECT["PII Entity Detection (Regex Patterns & Dictionaries)"]
+        TRANSFORM["Transformation Engine (MASK, REDACT, PSEUDONYMIZE, REMOVE)"]
+        LEAK_GUARD["Indirect Leakage Guard (Block Aggregations on Denied Columns)"]
+    end
+
+    subgraph STORAGE["Storage & Persistence Layer"]
+        DB[("Relational Database: PostgreSQL / SQLite\n(Users, Workspaces, Policies, Notes, Playbooks)")]
+        AUDIT_STORE[("Immutable Audit Trail\n(Actors, Tool Invocations, Decision Logs, Sanitized Payloads)")]
+        BLOB_STORE[("Object & File Storage: Supabase Storage / Local Disk\n(Raw Datasets, Binaries, Document Files)")]
+    end
+
+    AICLIENT -->|"Bearer Token (JSON-RPC 2.0)"| ENDPOINT_MCP
+    WEBCLIENT -->|"JWT Authentication (REST HTTP)"| ENDPOINT_REST
+    FORMCLIENT -->|"Ephemeral HMAC Token (HTTPS)"| ENDPOINT_REST
+
+    ENDPOINT_MCP --> AUTH_GUARD
+    ENDPOINT_REST --> AUTH_GUARD
+
+    AUTH_GUARD --> POLICY_EVAL
+    POLICY_EVAL --> DENY_CHECK
+
+    DENY_CHECK -->|"DENIED (Blocked)"| AUDIT_STORE
+    DENY_CHECK -->|"ALLOWED"| MCP_DISPATCH
+
+    MCP_DISPATCH --> TAB_ENGINE
+    MCP_DISPATCH --> DOC_ENGINE
+    MCP_DISPATCH --> FORM_ENGINE
+    MCP_DISPATCH --> NOTES_ENGINE
+    MCP_DISPATCH --> GUIDANCE_ENGINE
+
+    TAB_ENGINE <--> STORAGE
+    DOC_ENGINE <--> BLOB_STORE
+    NOTES_ENGINE <--> DB
+    GUIDANCE_ENGINE <--> DB
+    FORM_ENGINE <--> STORAGE
+
+    TAB_ENGINE --> PII_DETECT
+    DOC_ENGINE --> PII_DETECT
+    NOTES_ENGINE --> PII_DETECT
+
+    PII_DETECT --> TRANSFORM
+    TRANSFORM --> LEAK_GUARD
+
+    LEAK_GUARD --> AUDIT_STORE
+    AUDIT_STORE -->|"Policy-Compliant JSON-RPC Result"| AICLIENT
+    AUDIT_STORE -->|"API Response Payload"| WEBCLIENT
+    FORM_ENGINE -->|"Success & Session Teardown"| FORMCLIENT
+```
+
+### Component Flow Architecture
+
 ```
 +-------------------------------------------------------------------+
 | AI Clients & Integrations (Claude Desktop, Cursor, Custom Agents) |
