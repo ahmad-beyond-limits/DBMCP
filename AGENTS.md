@@ -9,31 +9,32 @@
 
 ---
 
-### 🔘 2. CLICKABLE UI & CONVERSATIONAL FORMS (Your OWN Native UI Functionality — NOT a Tool)
-**CRITICAL CLARIFICATION**: Clickable UI and in-chat interactive forms are **NOT an MCP tool** or backend API call. They are your **OWN native chat interface functionality and rendering capability** (interactive buttons, radio chips, interactive selection modals, checkboxes, date pickers, dropdowns, widgets, and write-in inputs rendered directly in the chat UI).
+### 🔘 2. CLICKABLE FORM & CLICKABLE UI (Your OWN Native UI Functionality — NOT a Tool)
+**CRITICAL CLARIFICATION**: Clickable Forms and Clickable UI are **NOT an MCP tool** or backend API call. They are your **OWN native chat interface functionality and rendering capability** (interactive buttons, radio chips, interactive selection modals, checkboxes, date pickers, dropdowns, widgets, submit buttons, and write-in inputs rendered directly in the chat UI).
 
-**ALWAYS use Clickable UI & Conversational Forms by default** for:
-- Asking clarifying questions or gathering preferences (Elicitation)
-- Questionnaires, surveys, registrations, configuration screens, or structured input in conversation
-- Presenting options, categories, ranges, filters, or next steps
-- Updating a single attribute/field of an existing record (e.g. status, score, department, grade)
-- Selecting an action to take (e.g. `[Update Status]`, `[Edit Score]`, `[Delete Record]`, `[View Profile]`)
-- Confirming a deletion or mutation (`[✅ Yes, Confirm]`, `[❌ Cancel]`)
+👉 **ALWAYS say and do: Get data in clickable form by creating it directly in the conversation.**  
+👉 **What does a Clickable Form do?**
+- **Adds records**: Interactively collects values to create new records directly in conversation.
+- **Modifies records**: Presents pre-filled interactive controls so the user can easily update fields, scores, or statuses.
+- **Removes records**: Presents interactive confirmation buttons (`[✅ Yes, Confirm]`, `[❌ Cancel]`) to safely remove records.
+- **Elicitation & Choices**: Gathers preferences, runs surveys, questionnaires, registrations, filters, and configuration screens.
+- **Always provide an "Other / Custom Input" option**: So the user can type custom instructions if none of the provided options fit.
 
-👉 **Render actual interactive, clickable controls (buttons, radio chips, interactive selection modals, widgets) directly in the UI.**  
-👉 **ALWAYS provide an "Other / Custom Input" write-in option** so the user can type custom instructions if none of the provided choices fit.  
-❌ **NEVER interrogate the user in prose paragraphs or list static text options as "clickable".**
+❌ **NEVER interrogate the user in prose paragraphs or list static text options as "clickable".**  
+❌ **NEVER ask the user to type record details or field values into chat in plain text.**
 
 ---
 
-### 📝 3. INTERACTIVE FORM (For Adding New Records or Multi-Field Data Entry)
-Whenever the user wants to add, create, or insert a record, or enter data across multiple fields:
-- **DO NOT ask the user to type the details into chat in text!**
-- **IMMEDIATELY call `generate_data_entry_form(resource_id=..., action="insert")`** to give the user a dedicated web screen with structured input fields, data type validation, and a Submit button.
-- Present the generated link cleanly:  
-  `👉 **[➕ Open Interactive Data Entry Form](<url>)**`
-- Remind the user that the session is temporary and active for 5 minutes.
-- **Strict No-Recycling Lifecycle**: Form sessions expire after 5 minutes and are single-use. Once submitted, closed, or expired, a form is permanently deleted from everywhere. **NEVER reuse, recycle, or re-send an old form link.** Always call `generate_data_entry_form` freshly for each new data entry request.
+### 🌐 3. SESSION FORM TOOL (External Tool: `generate_data_entry_form`)
+**CRITICAL SEPARATION**: The Session Form is a separate external MCP tool (`generate_data_entry_form`) that generates a temporary 5-minute standalone web form. **Do NOT mix it up with Clickable Form!**
+
+- **When to use Session Form**: Use this tool **ONLY when the requirement is complex** (e.g. dozens of interdependent fields, complex multi-step wizards, deep nested schemas, or file attachments) or when an in-chat clickable form cannot be used, or if the user explicitly asks for a standalone full-page form link.
+- **For normal data collection, adding, modifying, or removing records**: **DO NOT call the session form tool** — use **Clickable Form directly in chat**.
+- When Session Form is genuinely needed for complex requirements:
+  - Call `generate_data_entry_form(resource_id=..., action="insert"|"update")`.
+  - Present the link cleanly: `👉 **[➕ Open Interactive Session Form](<url>)**`.
+  - Remind the user that the session is temporary and active for 5 minutes.
+  - **Strict No-Recycling Lifecycle**: Session forms expire after 5 minutes and are single-use. Once submitted, closed, or expired, a session form is permanently deleted from everywhere. **NEVER reuse, recycle, or re-send an old session form link.** Always call `generate_data_entry_form` freshly if needed.
 
 ---
 
