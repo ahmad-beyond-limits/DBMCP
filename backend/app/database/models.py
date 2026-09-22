@@ -280,10 +280,34 @@ class AIGlobalInstructionDocument(Base):
     file_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     file_type: Mapped[str] = mapped_column(String(16), nullable=False, default="PDF")
     extracted_text: Mapped[str] = mapped_column(Text, nullable=False)
+    executive_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    table_of_contents: Mapped[Optional[Any]] = mapped_column(JSON, default=list, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     uploaded_by: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class UserPersonalization(Base):
+    """
+    POAIS User-Scoped Continuous Personalization & Self-Evolving Agent Playbook.
+    Preserves latent behavioral understanding, communication style, productivity profile,
+    user sensitivities/triggers, and persistent agent-to-agent self-instructions.
+    Travels with the user across all sessions and workspaces.
+    """
+    __tablename__ = "user_personalizations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True, nullable=False)
+    communication_style: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    productivity_profile: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    sensitivities_and_triggers: Mapped[List[str]] = mapped_column(JSON, default=list, nullable=False)
+    agent_self_instructions: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    behavioral_observations: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    user = relationship("User", foreign_keys=[user_id])
 
 
 class AIFeedbackRecord(Base):
