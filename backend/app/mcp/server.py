@@ -236,7 +236,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Generates a dedicated temporary 5-minute standalone web Data Entry Form. ALWAYS call this tool whenever the user wants to add, create, or register a new record (e.g. adding a new student, inserting a new customer, creating a new item) or edit multiple fields at once. NEVER attempt to render an HTML form inside chat text with = [Form] or ask the user to type fields in chat. Each session is single-use and expires after 5 minutes.",
+        "description": "Generates a dedicated temporary 5-minute standalone browser web Data Entry Form. Use ONLY when the user explicitly requests an external web form link or browser page. For normal data entry, creating, or editing records in chat, render the interactive form UI directly in conversation.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -726,7 +726,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "get_dataset_schema",
-        "description": "Returns the schema, columns, and data types for a structured dataset. NOTE: If the user wants to add a new record, call 'generate_data_entry_form' to provide a dedicated web entry form. If the user wants to choose an action, filter, or select a record, present clickable options in chat with an 'Other / Custom Input' option.",
+        "description": "Returns the schema, columns, and data types for a structured dataset. When the user wants to add, edit, or interact with records, use the interactive-form-ui skill to create or update the interactive form directly.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -759,7 +759,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Direct programmatic dataset mutation (update, insert, delete). Use for modifying or deleting records after gathering values via Clickable UI in chat, or after receiving instructions. For adding new records or multi-field data entry, call 'generate_data_entry_form'. Never ask the user to type raw record values in chat.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). Call this tool to persist records after the user submits the in-chat interactive form or provides values. Never ask the user to type raw record values in chat.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -790,7 +790,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Generates a dedicated temporary 5-minute standalone web Data Entry Form. ALWAYS call this tool whenever the user wants to add, create, or register a new record (e.g. adding a new student, inserting a new customer, creating a new item) or edit multiple fields at once. NEVER attempt to render an HTML form inside chat text with = [Form] or ask the user to type fields in chat. Each session is single-use and expires after 5 minutes.",
+        "description": "Generates a dedicated temporary 5-minute standalone browser web Data Entry Form. Use ONLY when the user explicitly requests an external web form link or browser page. For normal data entry, creating, or editing records in chat, render the interactive form UI directly in conversation.",
         "inputSchema": {
             "type": "object",
             "properties": {
