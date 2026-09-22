@@ -207,7 +207,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "get_dataset_schema",
-        "description": "Retrieves table column names and schema. ⚠️ NOTE: When the user wants to add or update records, DO NOT use this tool to ask the user for column values in chat and NEVER say 'I need the data first'. Call 'generate_data_entry_form' directly instead!",
+        "description": "Retrieves table column names and schema. ⚠️ NOTE: If the user wants to make a single-field change or pick from choices, present clickable options in chat with an 'Other / Custom' input. If the user wants to enter a new multi-field record or complex update, generate an interactive form.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -219,7 +219,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Direct programmatic dataset mutation (update, insert, delete). ❌ DO NOT use this tool or interrogate the user in chat when the user wants to enter or modify data. NEVER say 'I need the student data first' or ask for column values. You MUST call 'generate_data_entry_form' instead so the user receives the interactive UI form.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). Use for single-attribute updates, simple record modifications, or executing confirmed changes/deletions. When presenting choices for a single-field update (e.g. status, grade), present clickable options in chat first rather than creating a full form.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -235,7 +235,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "PRIMARY MANDATORY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Call this tool IMMEDIATELY when the user says 'I want to add data', 'add student', or 'update record'. ❌ NEVER SAY 'I need the data first' OR ASK FOR COLUMN VALUES IN CHAT! You DO NOT need the user's data to call this tool. The tool generates an interactive web form where the user enters the data themselves. If file_id is omitted, it automatically picks the workspace dataset.",
+        "description": "Generates a fresh 5-minute interactive web form session for multi-field data entry or complex updates. ⚠️ DECISION RULE: Form is NOT the default option to modify or delete data! Use this tool ONLY when adding a brand new record with many fields or when the requirement is complicated across multiple interdependent columns. For single-field updates, quick edits, or deletions, DO NOT create a form; use clickable options or direct edit instead. Ephemeral 5-minute single-use session: never reuse old links.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -590,7 +590,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "get_dataset_schema",
-        "description": "Returns the schema, columns, and data types for a structured dataset. ⚠️ NOTE: If the user wants to add or update records, DO NOT use this tool to ask the user for column values in chat and NEVER say 'I need the student data first'. Call 'generate_data_entry_form' directly instead!",
+        "description": "Returns the schema, columns, and data types for a structured dataset. ⚠️ NOTE: If the user wants to make a single-field change or pick an action, present clickable options in chat with an 'Other / Custom' input. If the user wants to enter a new multi-field record or complex update, generate an interactive form.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -623,7 +623,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Direct programmatic dataset mutation (update, insert, delete). ❌ DO NOT use this tool or interrogate the user in chat when the user wants to enter or modify data. NEVER say 'I need the student data first' or ask for column values. You MUST call 'generate_data_entry_form' instead so the user receives an interactive UI form with dropdowns and validation.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). Use for single-attribute updates, simple record modifications, or executing confirmed changes/deletions. When presenting choices for a single-field update (e.g. status, grade), present clickable options in chat first rather than creating a full form.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -654,7 +654,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "PRIMARY MANDATORY TOOL FOR ALL DATA ENTRY & MODIFICATIONS: Generates a fresh, secure 5-minute single-use interactive web form session where the user enters or edits data. Call this tool FRESH every time the user wants to add or update records. ⚠️ CRITICAL RULES: 1. Form sessions are ephemeral (5 minutes) and single-use. Once submitted, closed, or expired after 5 minutes, the form is permanently deleted from everywhere. 2. NEVER reuse, recycle, or re-send an old form link from earlier in the chat. Always call this tool to generate a brand new form session! 3. ❌ NEVER ask the user to type column values in chat or say 'I need the data first'!",
+        "description": "Generates a fresh 5-minute interactive web form session for multi-field data entry or complex updates. ⚠️ DECISION RULE: Form is NOT the default option to modify or delete data! Use this tool ONLY when adding a brand new record with many fields or when the requirement is complicated across multiple interdependent columns. For single-field updates, quick edits, or deletions, DO NOT create a form; use clickable options or direct edit instead. Ephemeral 5-minute single-use session: never reuse old links.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -995,11 +995,46 @@ class ToolCacheRegistry:
             "all_tool_names": all_tool_names,
             "cache_version": cls._cache_version,
             "cache_last_updated": cls._last_updated.isoformat(),
+            "skills": {
+                "clickable_options_ui": {
+                    "name": "clickable-options-ui",
+                    "description": (
+                        "Render choices, options, ranges, filters, and menus as interactive, clickable UI controls "
+                        "(buttons, radio groups, checkboxes, selects, or widgets) inside the chat interface with an 'Other / Custom' input."
+                    ),
+                    "when_to_use": (
+                        "Use for single-attribute updates, discrete choices (e.g. changing student status, updating a single grade), "
+                        "selecting a record to edit/delete from a list, confirming actions, or picking from a small set of options. "
+                        "Always include an 'Other / Custom Input' option or text field so the user can provide custom instructions if they reject the options."
+                    ),
+                    "core_rule": (
+                        "DO NOT by default create a form! Form is NOT the default option to modify something or add/delete. "
+                        "If the user wants to change a single value or pick an action, use clickable options."
+                    ),
+                },
+                "data_entry_form": {
+                    "name": "data-entry-form",
+                    "description": "Generates a fresh 5-minute single-use interactive web form session for multi-field data entry or complex updates.",
+                    "when_to_use": (
+                        "Use ONLY when adding a brand new record with many fields simultaneously (e.g. adding a full student profile with Name, ID, Email, Major, GPA), "
+                        "or when the data requirement is complicated and requires structured multi-field validation."
+                    ),
+                    "lifecycle": "Ephemeral 5-minute session. Single use. Never reuse or recycle old form links."
+                },
+                "decision_rule": (
+                    "Single thing or discrete choice -> Clickable Options UI. "
+                    "Many things or complicated multi-field record -> Interactive Form. "
+                    "Never default to creating a form for single-field modifications or deletes."
+                ),
+            },
             "instructions": (
                 "All server tools are packed inside this tool cache gateway. "
                 "Inspect full parameter schemas in 'tools' and execute any packed tool either by: "
                 "1) Calling 'get_tools_cache' with 'execute_tool': {'name': '<tool_name>', 'arguments': {...}}, or "
-                "2) Calling the packed tool directly by name via tools/call."
+                "2) Calling the packed tool directly by name via tools/call. "
+                "CRITICAL DECISION RULE: Form is NOT the default option to modify, add, or delete data! "
+                "For single-field changes, discrete choices, or deletions, use clickable options in chat with an 'Other / Custom' input. "
+                "Only create an interactive form when entering many fields at once or when the requirement is complicated."
             ),
             "tools": tools_catalog,
         }
