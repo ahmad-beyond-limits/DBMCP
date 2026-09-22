@@ -224,6 +224,7 @@ AI clients querying `tools/list` receive strictly a single tool: `get_tools_cach
 * Diffing Against Local Sessions: The AI model can provide `known_tools: ["workspace_info", ...]`. The server returns `new_tools_on_server` identifying newly added or changed tools that the AI client does not have.
 * Schema and Parameter Breakdown: Returns detailed JSON input schemas, categories (`data_management`, `interactive_forms`, `resource_documents`, `notes_scratchpad`, `ai_guidance_telemetry`), and lists of required and optional parameters.
 * Dynamic Tool Registration: Developers or backend services can call `ToolCacheRegistry.register_tool()` to add custom tools at runtime, immediately invalidating and updating the server cache.
+* Agent Skills & Decision Rules Packing: In addition to tool definitions, `get_tools_cache` packs interaction skills (`clickable_options_ui`, `data_entry_form`) and the operational decision matrix, ensuring connected AI models know precisely when to use clickable controls vs. full forms.
 
 ### Policy and Security Rules
 
@@ -240,15 +241,34 @@ When data access is allowed, the Anonymisation Engine modifies text before retur
 * PSEUDONYMIZE: Replaces values with deterministic pseudonyms salted by workspace secret. For example, `John Smith` becomes `Person_042` across queries in Workspace A, but becomes `Person_819` in Workspace B.
 * REMOVE: Completely strips the specified field from JSON or tabular responses.
 
-### Generative UI Interactive Data Entry
+### User Interaction: Clickable Options vs. Interactive Forms
 
-When an AI model identifies that data needs to be added or edited, rather than attempting to render non-interactive text forms in chat, it calls `generate_data_entry_form`.
+DBMCP establishes a strict, policy-enforced interaction hierarchy that eliminates conversational fatigue, prose interrogations, and hallucinated table structures:
 
-1. The server creates a short 32-character hexadecimal session token (`FormDataEntrySession`) stored in PostgreSQL.
-2. The server returns an interactive form URL: `https://<domain>/forms/view?session=<token>`.
-3. The AI presents the clickable link to the user.
-4. When opened, the standalone interface dynamically builds form controls according to the file's schema (date pickers, numeric inputs, text fields, and dropdown options).
-5. Submitting the form validates data types and updates the underlying spreadsheet or CSV directly, eliminating conversational hallucination errors.
+#### 1. Primary Skill: Elicitation
+* Governs *when* to ask and how to structure questions rather than interrogating the user with paragraphs of prose or demanding values up-front.
+* Mandates structured interactive choices whenever gathering missing information.
+
+#### 2. Companion Skill: Clickable Options UI
+* Render choices, filters, ranges, and menus as real semantic interactive controls (`<button>`, `<input type="radio">`, `<input type="checkbox">`, `<select>`) inside chat.
+* **Mandatory Custom Input**: Always provides an *"Other / Custom Input"* text field so users can specify alternative requirements if none of the provided choices fit.
+* **When to Use Clickable Options**:
+  - Modifying a single field or attribute for a student/record (e.g., status, grade, department).
+  - Selecting an action (e.g., `[Update Status]`, `[Edit Score]`, `[Delete Record]`).
+  - Selecting a record from a filtered list.
+  - Confirming deletions or updates (`[✅ Confirm Delete]`, `[❌ Cancel]`).
+  - Direct programmatic execution is handled via `edit_dataset` once the selection is made.
+
+#### 3. Interactive Forms (`generate_data_entry_form`)
+* **Form is NOT the default option** for single-field edits or deletions.
+* **When to Use Forms**:
+  - Adding a brand new record with many fields simultaneously (e.g., full student profile with 8+ columns).
+  - Complex multi-field updates requiring interdependent validation across multiple inputs.
+* **5-Minute Ephemeral Lifecycle**:
+  - Every form session is single-use and automatically expires after **5 minutes (300 seconds)**.
+  - Once submitted, closed, or expired, the session is deleted from everywhere.
+  - The exact expiration notice displayed is: *"This form might be deleted after 5 minutes, or you closed the window."*
+  - **Strict No-Recycling Rule**: AI agents are strictly prohibited from reusing or re-sending old form links. Every multi-field data entry request generates a fresh session.
 
 ### AI Guidance, Playbooks, and Global Rules
 
