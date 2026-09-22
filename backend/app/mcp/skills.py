@@ -123,6 +123,45 @@ When a user expresses ANY intent to add, modify, update, or edit data in a tabul
 
 ---
 
+### 🌐 Account Master Cross-Workspace Automation (Available with `mcp_live_acc_...` tokens)
+18. `account_info()`
+    - Returns account profile, active workspace counts, and automation capabilities.
+
+19. `list_workspaces()`
+    - Discovers all workspaces owned or accessible to this account.
+
+20. `create_workspace(name, description)`
+    - Dynamically provisions a new policy-isolated workspace under this account.
+
+21. `get_workspace(workspace_id)`
+    - Retrieves comprehensive workspace details, file metrics, and membership data.
+
+22. `list_files(workspace_id)`
+    - Lists documents, datasets, and images across all workspaces or within a target workspace.
+
+23. `upload_file(workspace_id, filename, content, is_base64, description)`
+    - Directly ingests raw text, CSV, JSON, or base64 binary files into any workspace.
+
+24. `import_cloud_link(workspace_id, url, custom_name)`
+    - Converts Google Drive, Dropbox, or web links into policy-governed MCP resources.
+
+25. `read_file_content(workspace_id, file_id)`
+    - Reads document text or structured content from any workspace with policy anonymisation applied.
+
+26. `delete_file(workspace_id, file_id)`
+    - Permanently deletes a file/resource from a workspace.
+
+27. `list_workspace_mcp_links(workspace_id)`
+    - Inspects active and revoked MCP access tokens for a workspace.
+
+28. `generate_workspace_mcp_link(workspace_id, name, can_read, can_search, can_query, can_edit, allowed_file_ids)`
+    - Issues new scoped workspace MCP tokens with granular capability flags.
+
+29. `revoke_workspace_mcp_link(workspace_id, credential_id)`
+    - Immediately revokes a workspace MCP access key.
+
+---
+
 ## ✍️ Best Practices for AI Note-Taking & Document References
 
 ### 1. Structure Notes Professionally with Markdown

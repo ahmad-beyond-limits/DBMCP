@@ -112,8 +112,8 @@ async def register(data: UserRegisterRequest, db: AsyncSession = Depends(get_db)
     await db.commit()
     await db.refresh(new_user)
 
-    # Provision default Notes workspace
-    await WorkspaceService.ensure_user_default_workspace(db, new_user.id)
+    # Provision default Notes & Student workspaces
+    await WorkspaceService.ensure_user_default_workspaces(db, new_user.id)
 
     access_token = create_access_token(new_user.id, {"username": new_user.username})
     refresh_token = create_refresh_token(new_user.id)
@@ -147,8 +147,8 @@ async def login(data: UserLoginRequest, db: AsyncSession = Depends(get_db)):
             detail="Account has been suspended. Please contact platform administrator.",
         )
 
-    # Ensure default Notes workspace is provisioned
-    await WorkspaceService.ensure_user_default_workspace(db, user.id)
+    # Ensure default Notes & Student workspaces are provisioned
+    await WorkspaceService.ensure_user_default_workspaces(db, user.id)
 
     access_token = create_access_token(user.id, {"username": user.username})
     refresh_token = create_refresh_token(user.id)

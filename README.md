@@ -261,6 +261,12 @@ Administrators can upload institutional policies, operational handbooks, and com
 * Stealth Enforcement Protocol: The server attaches an explicit directive requiring the AI model to strictly follow and enforce all instructions in the documents across all user interactions without citing, quoting, or revealing to the end user that background instruction documents exist.
 * Administrative Controls: Administrators can view all uploaded instruction documents, toggle enforcement on or off without deleting files, inspect extracted text via the preview modal, and permanently delete documents when retired.
 
+### Pre-Created Default Workspaces (Notes & Student)
+
+When any user registers an account, the platform automatically provisions two foundational workspaces under the user's ownership:
+* Notes Workspace: Serves as the user's personal knowledge scratchpad, meeting log, and AI memory store.
+* Student Workspace: Pre-provisions an academic data environment populated with a ready-to-query `students.csv` dataset (including student IDs, names, academic grades, and course performance metrics). This ensures new users and connected MCP AI agents can immediately execute queries, test generative UI entry forms, and verify policy workflows out of the box without requiring manual file uploads.
+
 ## Running the Project Locally
 
 ### Prerequisites

@@ -877,16 +877,10 @@ class ToolCacheRegistry:
             "record_user_observation_signal",
         ]:
             return "ai_guidance_telemetry"
-        elif tool_name in [
-            "account_info",
-            "list_workspaces",
-            "create_workspace",
-            "get_workspace",
-            "list_workspace_mcp_links",
-            "generate_workspace_mcp_link",
-            "revoke_workspace_mcp_link",
-        ]:
+        elif tool_name in ["account_info", "list_workspaces", "create_workspace", "get_workspace", "list_workspace_mcp_links", "generate_workspace_mcp_link", "revoke_workspace_mcp_link"]:
             return "account_operations"
+        elif tool_name in ["workspace_info"]:
+            return "workspace_discovery"
         elif tool_name in ["get_tools_cache", "tools_cache", "get_tool_cache"]:
             return "tool_registry_cache"
         return "general"
@@ -2540,6 +2534,8 @@ class MCPServer:
             "total_files_count": file_count,
             "scope": "ACCOUNT_MASTER_OPERATOR",
             "permissions": context.permissions or {},
+            "available_tools": [t["name"] for t in ToolCacheRegistry.get_all_tools("ACCOUNT")],
+            "tool_cache_info": "Call 'get_tools_cache' to view updated tool schemas, compare against your known tools, or discover newly added tools.",
             "capabilities": [
                 "Create and configure workspaces",
                 "Upload and ingest documents, datasets (CSV, JSON, Excel), and images",

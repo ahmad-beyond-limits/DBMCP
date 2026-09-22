@@ -1,9 +1,12 @@
+import logging
+import uuid
 from typing import Optional, Tuple
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import (
+    ExtractedContent,
     FileRecord,
     MCPCredential,
     Note,
@@ -12,6 +15,9 @@ from app.database.models import (
     Workspace,
     WorkspaceMember,
 )
+from app.storage.supabase_storage import get_storage_backend
+
+logger = logging.getLogger(__name__)
 
 
 class WorkspaceService:
@@ -45,6 +51,7 @@ class WorkspaceService:
         """
         Ensures the user has a default 'Notes' workspace.
         Creates one automatically if it does not exist.
+        Also guarantees the 'Student' workspace is provisioned.
         """
         stmt = (
             select(Workspace)
@@ -55,36 +62,162 @@ class WorkspaceService:
             )
         )
         notes_ws = (await db.execute(stmt)).scalar_one_or_none()
-        if notes_ws:
-            return notes_ws
+        if not notes_ws:
+            # Check by owner_id directly
+            stmt_owner = select(Workspace).where(
+                Workspace.owner_id == user_id,
+                Workspace.name.ilike("Notes"),
+            )
+            notes_ws = (await db.execute(stmt_owner)).scalar_one_or_none()
 
-        # Check by owner_id directly
-        stmt_owner = select(Workspace).where(
-            Workspace.owner_id == user_id,
-            Workspace.name.ilike("Notes"),
+        if not notes_ws:
+            # Create default Notes workspace
+            notes_ws = Workspace(
+                name="Notes",
+                description="Personal notes, knowledge base, and AI scratchpad",
+                owner_id=user_id,
+            )
+            db.add(notes_ws)
+            await db.flush()
+
+            membership = WorkspaceMember(
+                workspace_id=notes_ws.id,
+                user_id=user_id,
+                role="OWNER",
+            )
+            db.add(membership)
+            await db.commit()
+            await db.refresh(notes_ws)
+
+        # Also guarantee the Student workspace is provisioned
+        try:
+            await cls.ensure_user_student_workspace(db, user_id)
+        except Exception as e:
+            logger.warning(f"Failed to auto-provision student workspace for user {user_id}: {e}")
+
+        return notes_ws
+
+    @classmethod
+    async def ensure_user_student_workspace(cls, db: AsyncSession, user_id: str) -> Workspace:
+        """
+        Ensures the user has a pre-created 'Student' workspace.
+        Creates one automatically if it does not exist, with starter student dataset.
+        """
+        stmt = (
+            select(Workspace)
+            .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+            .where(
+                WorkspaceMember.user_id == user_id,
+                Workspace.name.ilike("Student"),
+            )
         )
-        owner_ws = (await db.execute(stmt_owner)).scalar_one_or_none()
-        if owner_ws:
-            return owner_ws
+        student_ws = (await db.execute(stmt)).scalar_one_or_none()
+        if not student_ws:
+            # Check by owner_id directly
+            stmt_owner = select(Workspace).where(
+                Workspace.owner_id == user_id,
+                Workspace.name.ilike("Student"),
+            )
+            student_ws = (await db.execute(stmt_owner)).scalar_one_or_none()
 
-        # Create default Notes workspace
-        default_ws = Workspace(
-            name="Notes",
-            description="Personal notes, knowledge base, and AI scratchpad",
+        if student_ws:
+            return student_ws
+
+        # Create pre-created Student workspace
+        student_ws = Workspace(
+            name="Student",
+            description="Student records, academic rosters, performance analytics, and grading data",
             owner_id=user_id,
         )
-        db.add(default_ws)
+        db.add(student_ws)
         await db.flush()
 
         membership = WorkspaceMember(
-            workspace_id=default_ws.id,
+            workspace_id=student_ws.id,
             user_id=user_id,
             role="OWNER",
         )
         db.add(membership)
         await db.commit()
-        await db.refresh(default_ws)
-        return default_ws
+        await db.refresh(student_ws)
+
+        # Seed starter students.csv dataset so the workspace is immediately functional
+        await cls._seed_student_workspace_dataset(db, student_ws.id, user_id)
+
+        return student_ws
+
+    @classmethod
+    async def ensure_user_default_workspaces(cls, db: AsyncSession, user_id: str) -> Tuple[Workspace, Workspace]:
+        """
+        Ensures both default 'Notes' and 'Student' workspaces are provisioned for the user.
+        """
+        notes_ws = await cls.ensure_user_default_workspace(db, user_id)
+        student_ws = await cls.ensure_user_student_workspace(db, user_id)
+        return notes_ws, student_ws
+
+    @classmethod
+    async def _seed_student_workspace_dataset(cls, db: AsyncSession, workspace_id: str, user_id: str):
+        """
+        Seeds a starter students.csv dataset into the student workspace
+        so the user and AI immediately have structured records to query and edit.
+        """
+        try:
+            existing_file = (
+                await db.execute(
+                    select(FileRecord.id).where(
+                        FileRecord.workspace_id == workspace_id,
+                        FileRecord.original_filename == "students.csv",
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing_file:
+                return
+
+            csv_text = (
+                "student_id,name,email,grade,math_score,reading_score,status\n"
+                "S001,Alice Johnson,alice@example.edu,10,88,92,Enrolled\n"
+                "S002,Bob Smith,bob@example.edu,11,74,80,Enrolled\n"
+                "S003,Charlie Brown,charlie@example.edu,10,95,91,Enrolled\n"
+                "S004,Diana Prince,diana@example.edu,12,89,94,Enrolled\n"
+                "S005,Evan Wright,evan@example.edu,11,62,70,Probation\n"
+            )
+            csv_content = csv_text.encode("utf-8")
+
+            storage = get_storage_backend()
+            storage_filename = f"{workspace_id}/{uuid.uuid4()}.csv"
+            stored_path = await storage.upload(storage_filename, csv_content, "text/csv")
+
+            from app.resources.extractor import ContentExtractor
+
+            plain_text, structured_data, detected_entities = await ContentExtractor.extract(
+                csv_content, "CSV", filename="students.csv"
+            )
+
+            file_record = FileRecord(
+                workspace_id=workspace_id,
+                original_filename="students.csv",
+                storage_path=stored_path,
+                content_type="text/csv",
+                file_size=len(csv_content),
+                file_type="CSV",
+                status="READY",
+                uploaded_by=user_id,
+            )
+            db.add(file_record)
+            await db.flush()
+
+            extracted_record = ExtractedContent(
+                file_id=file_record.id,
+                workspace_id=workspace_id,
+                plain_text=plain_text,
+                structured_data=structured_data,
+                detected_entities=detected_entities or [],
+            )
+            db.add(extracted_record)
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"Could not seed starter students.csv for workspace {workspace_id}: {e}")
+            await db.rollback()
 
     @classmethod
     async def verify_access(

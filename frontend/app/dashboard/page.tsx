@@ -18,6 +18,7 @@ import {
   Pencil,
   User as UserIcon,
   StickyNote,
+  GraduationCap,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -557,6 +558,8 @@ export default function DashboardPage() {
               );
             }
 
+            const isStudentWs = ws.name.toLowerCase() === "student" || ws.name.toLowerCase().startsWith("student");
+
             return (
               <Link
                 key={ws.id}
@@ -569,16 +572,45 @@ export default function DashboardPage() {
                   flexDirection: "column",
                   justifyContent: "space-between",
                   minHeight: "210px",
+                  borderColor: isStudentWs ? "rgba(99, 102, 241, 0.22)" : undefined,
                 }}
               >
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
-                    <div className="icon-circle-btn" style={{ width: "42px", height: "42px" }}>
-                      <FolderGit2 size={18} strokeWidth={1.5} />
+                    <div
+                      className="icon-circle-btn"
+                      style={{
+                        width: "42px",
+                        height: "42px",
+                        background: isStudentWs ? "rgba(99, 102, 241, 0.08)" : undefined,
+                        color: isStudentWs ? "#4F46E5" : undefined,
+                        borderColor: isStudentWs ? "rgba(99, 102, 241, 0.2)" : undefined,
+                      }}
+                    >
+                      {isStudentWs ? (
+                        <GraduationCap size={19} strokeWidth={1.6} />
+                      ) : (
+                        <FolderGit2 size={18} strokeWidth={1.5} />
+                      )}
                     </div>
-                    <span className="badge-status" style={{ background: ws.role === "OWNER" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.04)" }}>
-                      {ws.role === "OWNER" ? "Owner" : "Member"}
-                    </span>
+                    <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+                      {isStudentWs && (
+                        <span
+                          className="badge-status"
+                          style={{
+                            background: "rgba(99, 102, 241, 0.08)",
+                            color: "#4F46E5",
+                            borderColor: "rgba(99, 102, 241, 0.18)",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Student Hub
+                        </span>
+                      )}
+                      <span className="badge-status" style={{ background: ws.role === "OWNER" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.04)" }}>
+                        {ws.role === "OWNER" ? "Owner" : "Member"}
+                      </span>
+                    </div>
                   </div>
 
                   <h3 style={{

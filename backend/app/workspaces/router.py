@@ -25,8 +25,8 @@ async def list_workspaces(
     db: AsyncSession = Depends(get_db),
 ):
     """List all workspaces the authenticated user belongs to (as owner or member)."""
-    # Guarantee user has their default "Notes" workspace provisioned
-    await WorkspaceService.ensure_user_default_workspace(db, user.id)
+    # Guarantee user has their default "Notes" and "Student" workspaces provisioned
+    await WorkspaceService.ensure_user_default_workspaces(db, user.id)
 
     # Workspaces where user is owner or member
     stmt = (
