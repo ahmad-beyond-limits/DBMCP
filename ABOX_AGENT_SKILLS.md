@@ -5,57 +5,91 @@ Use these instructions to interact accurately, securely, and effectively with wo
 
 ---
 
+## ⚡ EXECUTIVE OPERATIONAL MANDATE: UI-FIRST DATA ENTRY & EDITING (POWERED BY STRUCTURED ELICITATION)
+When a user expresses ANY intent to add, modify, update, or edit data in a tabular dataset:
+1. **🚫 STRICT PROHIBITION ON ASKING FOR DATA IN CHAT & LATEX FORMS**:
+   - ❌ **NEVER SAY**: "I need the data first", "Please provide the values you want added", or "Send the fields you have".
+   - ❌ **YOU DO NOT NEED THE DATA FIRST!** The interactive form ITSELF collects all required fields directly from the user.
+   - ❌ **NEVER list out the columns asking the user to send values in chat.**
+   - ❌ **NEVER output a LaTeX table or markdown fill-in-the-blank boxes in chat.**
+2. **🎯 STRUCTURED ELICITATION: CUT EFFORT DOWN TO A TAP**:
+   - Trigger any time you're about to write two or more clarifying questions in prose — that's the signal this should become a structured elicitation or interactive form instead.
+   - Falling back to prose when a real widget is available defeats the purpose of cutting effort down to a tap.
+3. **PRESENT THE INTERACTIVE UI FORM IMMEDIATELY**:
+   - Immediately call `generate_data_entry_form` and present the returned form link as a clickable button:
+     `👉 **[➕ Open Interactive Data Entry Form](<url>)**`
+
+---
+
+## 🎯 AGENT SKILL: ELICITATION (STRUCTURED GATHERING & INTERACTIVE CHOICES)
+
+```yaml
+---
+name: elicitation
+description: Use whenever a task is ambiguous, underspecified, or hinges on preferences/constraints the person hasn't given you yet — picking a product, drafting something in an unspecified style, planning a trip, scoping a project, building a form/quiz/onboarding flow, or any "help me figure out X" request. Governs whether to ask at all, and if so, how to structure the ask as a short interactive choice (buttons, numbered options, a small multi-step flow) instead of a paragraph of clarifying questions. Trigger any time you're about to write two or more clarifying questions in prose — that's the signal this should become a structured elicitation instead.
+---
+```
+
+# Elicitation
+
+Elicitation is the deliberate, structured gathering of missing information from a
+person before or during a task — as opposed to guessing, or asking in one long
+paragraph and hoping they parse it. Done well, it feels like a couple of taps.
+Done badly, it feels like an interrogation or a form nobody wanted to fill out.
+
+The goal of this skill is to make the *ask* itself as low-effort as the thing
+being asked about is high-value.
+
+### Step 1: Decide whether to ask at all
+Asking is not free — it costs the person a turn, and every unnecessary question
+erodes trust that you can just handle things. Default to attempting the task
+with a stated, sensible assumption. Only stop to elicit when the missing piece
+would actually change the substance of what you produce, not just its polish.
+
+### Step 2: Scope the questions
+Ask only what changes the next step, not everything the task could ever touch.
+Order questions by leverage. Keep a single sitting to about 3-5 questions at most.
+
+### Step 3: Design each question
+- Prefer picking from options over open text when the space of likely answers is small and known.
+- 3-5 options is the sweet spot.
+- Always leave an escape hatch ("not sure yet", "something else", or a way to skip).
+- Pre-select or default the most common answer when one clearly exists.
+
+### Step 4: Pick the format
+If your environment gives you a way to render tappable choices — buttons,
+cards, a select widget, or interactive forms (`generate_data_entry_form`) — use it.
+If no such tool is available, the fallback is a short numbered list in plain text.
+
+### Step 5: After the answer comes back
+Use it and move on. Don't re-summarize the answer at length before proceeding,
+and don't re-ask something already covered earlier in the conversation.
+
+---
+
 ## 🛠️ Complete MCP Tool Suite & Capabilities
 
 1. `workspace_info()`
-   - Inspect workspace name, active policies, security boundary status, and available tools.
-
 2. `list_resources()`
-   - Discover all accessible files (CSV, Excel .xlsx, PDF, Word .docx, JSON) permitted for your session.
-
 3. `get_resource_metadata(resource_id)`
-   - Check file size, detected MIME type, formatting, and processing status.
-
 4. `get_dataset_schema(resource_id)`
-   - Retrieve table column names, detected data types, and total row count for structured datasets.
-
 5. `query_dataset(resource_id, columns, filters, limit, aggregation)`
-   - Execute exact-match filtering and aggregations over CSV, Excel (.xlsx), or JSON data files.
-   - Supports comparison operators: `{"column": {"$gt": 50}}`, `{"status": {"$ne": "archived"}}`, `{"tag": {"$in": ["A", "B"]}}`.
-
 6. `edit_dataset(resource_id, action, filters, updates, new_row)`
-   - Safely modify records in dataset files:
-     - `action: "update"`: modifies matching rows with key-value pairs in `updates`.
-     - `action: "insert"`: appends `new_row` object to the dataset.
-     - `action: "delete"`: removes rows matching `filters`.
-
-7. `search(query, limit)`
-   - Perform semantic and keyword searches across permitted documents with policy-compliant results.
-
-8. `read_resource(resource_id)`
-   - Read extracted document text with automatic real-time PII anonymisation and policy redaction applied.
+7. `generate_data_entry_form(resource_id, action, filters, target_identifier)`
+8. `search(query, limit)`
+9. `read_resource(resource_id)`
 
 ---
 
 ## ⚡ MANDATORY OPERATIONAL DIRECTIVES FOR AI AGENTS
 
 ### 1. RECONFIRM & VERIFY EVERY DATA MUTATION (CRITICAL)
-- **MANDATORY RULE**: Whenever you execute `edit_dataset` (action: `update`, `insert`, or `delete`), you MUST IMMEDIATELY execute a follow-up `query_dataset` on that same `resource_id` using the updated filter criteria.
-- **VERIFICATION WORKFLOW**:
-  1. Call `edit_dataset(...)` to perform the requested modification.
-  2. Call `query_dataset(resource_id=..., filters=...)` to fetch the updated records from disk.
-  3. Verify that the values returned by `query_dataset` match the intended changes.
-  4. Only after positive verification, confirm the result to the user with the exact updated values and affected record count.
-- Never report that data has been changed without performing this verification query.
+- Whenever you execute `edit_dataset`, you MUST IMMEDIATELY execute a follow-up `query_dataset` on that same `resource_id` to verify persisted data before confirming to the user.
 
 ### 2. ALWAYS INSPECT DATASET SCHEMA BEFORE QUERYING
-- Do not guess or assume column names.
-- Always call `get_dataset_schema(resource_id)` first when working with a new dataset to inspect exact column headers and case-sensitivity.
+- Always call `get_dataset_schema(resource_id)` first when working with a new dataset.
 
-### 3. PRECISE FILTERING & CLEAN ENCODING
-- Ensure filter values match the column data type (e.g. integer `101` vs string `"101"`).
-- For text fields, use exact matching. If a query returns no rows, check case and whitespace.
-
-### 4. RESPECT POLICY BOUNDARIES & PRIVACY REDACTIONS
-- If a resource returns `Policy Error: Access Denied` or a field contains `[REDACTED]` / `[MASKED]`, this is an intentional workspace privacy rule configured by the owner.
-- Explain the policy constraint clearly to the user instead of attempting to bypass it.
+### 3. MANDATORY UI-FIRST DATA ENTRY & MODIFICATIONS (POWERED BY ELICITATION)
+- Never interrogate in prose with multiple clarifying questions.
+- Immediately call `generate_data_entry_form` and render the prominent button:
+  `👉 **[➕ Open Interactive Data Entry Form](<form_url>)**`

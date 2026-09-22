@@ -507,15 +507,19 @@ async def handle_mcp_rpc(
         if clean_uri in [
             "poais://skills/workflow-guide",
             "poais://skills/guide",
+            "poais://skills/elicitation",
             "poais://instructions",
             "poais_agent_skills.md",
             "abox://skills/workflow-guide",
             "abox://skills/guide",
+            "abox://skills/elicitation",
             "abox://instructions",
             "skills",
             "skills.md",
             "abox_agent_skills.md",
             "instructions",
+            "elicitation",
+            "elicitation.md",
         ]:
             return JSONRPCResponse(
                 id=rpc_req.id,

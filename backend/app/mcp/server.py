@@ -1541,13 +1541,21 @@ class MCPServer:
         # Built-in skills / operational guide resource
         clean_id = resource_id.strip().lower()
         if clean_id in [
+            "poais://skills/workflow-guide",
+            "poais://skills/guide",
+            "poais://skills/elicitation",
+            "poais://instructions",
+            "poais_agent_skills.md",
             "abox://skills/workflow-guide",
             "abox://skills/guide",
+            "abox://skills/elicitation",
             "abox://instructions",
             "skills",
             "skills.md",
             "abox_agent_skills.md",
             "instructions",
+            "elicitation",
+            "elicitation.md",
         ]:
             return {
                 "content": [
