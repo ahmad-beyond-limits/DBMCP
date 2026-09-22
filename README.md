@@ -77,6 +77,10 @@ The repository is structured as a monorepo containing a Python FastAPI backend, 
 
 ```
 DBMCP/
+├── .agents/skills/           # In-agent skills (elicitation, clickable UI, session forms)
+├── AGENTS.md                 # Global agent operational directives & interaction protocols
+├── POAIS_AGENT_SKILLS.md     # Agent skills guide, elicitation framework, and tool reference
+├── ABOX_AGENT_SKILLS.md      # Account-level agent capabilities and tool guide
 ├── backend/                  # FastAPI Application and MCP Server
 │   ├── app/                  # Application source code
 │   │   ├── account_mcp/      # Account-level master MCP router and services
@@ -148,6 +152,7 @@ DBMCP/
 * `mcp/`:
   * `server.py`: Complete implementation of the Model Context Protocol JSON-RPC 2.0 interface. Handles `tools/list`, `tools/call`, `resources/list`, and `resources/read`. Contains implementations of all workspace-scoped tools.
   * `skills.py`: Textual system instructions and operational directives provided to AI agents describing tool usage, policy constraints, and data entry workflows.
+  * `companion.py`: Cognitive companion memory harness providing cross-session persistence for user preferences, domain knowledge, and project insights via `Workspace Notes`.
   * `router.py`: FastAPI endpoint exposing POST `/mcp` for workspace-scoped AI connections.
 
 * `account_mcp/`:
@@ -167,8 +172,8 @@ DBMCP/
   * `engine.py`: Engine for processing CSV, Excel (`.xlsx`), and JSON datasets. Evaluates column filters, executes projections, performs mathematical aggregations, and applies record inserts, updates, and deletes.
 
 * `forms/`:
-  * `router.py`: Serves the standalone responsive HTML/JavaScript form interface at `/forms/view` and accepts submission requests at `/forms/submit`.
-  * `service.py`: Creates short, cryptographically secure 32-character hexadecimal form tokens, validates sessions, and commits validated data mutations directly to storage.
+  * `router.py`: Serves the responsive standalone HTML/JavaScript form interface at `/forms/view`, handles instant session revocation at `/forms/close-window`, and accepts submissions at `/forms/submit`.
+  * `service.py`: Generates short-lived (5-minute / 300s) single-use form sessions, validates tokens, sanitizes against formula injection (`=`, `+`, `-`, `@`), and commits validated data mutations directly to storage. Enforces strict single-use lifecycle and instant deletion upon submission or closure.
 
 * `notes/`:
   * `router.py`: Endpoints for listing, creating, reading, updating, and deleting workspace notes.
