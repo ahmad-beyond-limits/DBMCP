@@ -679,7 +679,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Direct programmatic dataset mutation (update, insert, delete). Use for single-attribute updates, simple record modifications, or executing confirmed changes/deletions. When presenting choices for a single-field update (e.g. status, grade), present clickable options in chat first rather than creating a full form.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). Use for single-attribute updates, status changes, or executing confirmed changes/deletions. When presenting choices for a single-field update (e.g. status, grade), present clickable options in chat first. NEVER ask the user to type record details into chat in text — use generate_data_entry_form for adding records.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -710,7 +710,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Simple utility tool in the cache that opens a temporary 5-minute web form for multi-column record creation. CORE MANDATE: Always use Clickable UI until there is something significantly complex that CANNOT be done with Clickable UI (e.g., adding an entire brand new database record from scratch with 8+ interdependent fields). For everything else (answering questions, data analysis, single/few field updates, status changes, selections, deletions, and confirmations), ALWAYS use Clickable UI.",
+        "description": "Generates a fresh, temporary 5-minute interactive web form for adding new records or entering multi-field data. NEVER ask the user to type record details into chat in text! Whenever the user wants to add, create, or insert a record, call this tool to provide structured input fields with validation. Each session is single-use and valid for 5 minutes. Never reuse or recycle old form links across turns.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1125,11 +1125,34 @@ class ToolCacheRegistry:
                     "name": "clickable-options-ui",
                     "description": (
                         "Render choices, options, ranges, filters, and menus as interactive, clickable UI controls "
-                        "(buttons, radio groups, checkboxes, selects, or widgets) inside the chat interface with an 'Other / Custom' input."
+                        "(buttons, radio groups, checkboxes, selects, or widgets) inside the chat interface with an 'Other / Custom' input. "
+                        "NOTE: This is NOT an MCP tool — it is your OWN native UI rendering functionality in the chat interface."
                     ),
                     "when_to_use": (
                         "Use for single-attribute updates, discrete choices, selecting from options, and confirming actions. "
-                        "Always include an 'Other / Custom Input' option."
+                        "Always include an 'Other / Custom Input' option. Rendered directly by you in chat, not by calling a backend tool."
+                    ),
+                },
+                "interactive_clickable_forms": {
+                    "name": "interactive-clickable-forms",
+                    "description": (
+                        "Create interactive forms that users can complete directly inside the AI conversation using clickable UI controls "
+                        "(radios, checkboxes, toggles, text/number inputs, date pickers, dropdowns, rating stars, submit buttons). "
+                        "NOTE: This is NOT an MCP tool — it is your OWN native conversational UI rendering functionality."
+                    ),
+                    "when_to_use": (
+                        "Use whenever the user asks for a questionnaire, application, survey, configuration screen, or structured input form in chat. "
+                        "Choose the most appropriate interactive control for each field. Avoid unnecessary typing."
+                    ),
+                },
+                "data_entry_forms": {
+                    "name": "interactive-data-entry-forms",
+                    "description": (
+                        "Opens a clean, temporary 5-minute interactive web form for creating new database records or entering multi-field data."
+                    ),
+                    "when_to_use": (
+                        "MANDATORY: Call 'generate_data_entry_form' whenever the user wants to add/create a record. "
+                        "NEVER ask the user to type record details or field lists into chat text."
                     ),
                 },
                 "companion_memory_harness": {
@@ -1147,13 +1170,12 @@ class ToolCacheRegistry:
             },
             "instructions": (
                 "All server tools are packed inside this tool cache gateway. "
-                "PRIMARY OPERATIONAL SKILL: ELICITATION & CLICKABLE UI. "
-                "CORE MANDATE: Always use Clickable UI (clickable options, buttons, radio groups, chips, widgets, write-in inputs) "
-                "for all interactions, questions, clarifications, single or few field edits, status updates, and confirmations, "
-                "until there is something so significantly complex that it CANNOT be done with Clickable UI. "
-                "Tool 'generate_data_entry_form' is simply a minor helper utility in the tool cache, used strictly as an exceptional fallback "
-                "when a brand new record has 8+ fields that cannot practically fit into Clickable UI. "
-                "Never default to creating a form when Clickable UI can accomplish the task."
+                "CRITICAL INTERACTION PROTOCOL: "
+                "1. STRICT PROHIBITION ON ASKING FOR DETAILS IN CHAT TEXT: Never ask the user to type record details or field values into chat in text. "
+                "2. CLICKABLE UI BY DEFAULT (YOUR NATIVE CHAT FUNCTIONALITY, NOT AN MCP TOOL): Always use Clickable UI (buttons, radio groups, chips, widgets, write-in inputs) for all questions, "
+                "clarifications, choices, filters, status updates, single/few field edits, and confirmations. Include an 'Other / Custom' option. "
+                "3. FORM TOOL FOR ADDING RECORDS: Whenever the user wants to add/create a record or enter structured data, call 'generate_data_entry_form' "
+                "to provide an interactive web form with structured fields and validation. Form links expire after 5 minutes and are never recycled."
             ),
             "tools": tools_catalog,
         }
@@ -1550,8 +1572,7 @@ class MCPServer:
             "workspace_name": context.workspace_name,
             "security_protocol": "ABOX Policy Boundary Gateway v1.0",
             "available_tools": [t["name"] for t in ToolCacheRegistry.get_all_tools("WORKSPACE")],
-            "tool_cache_info": "Call 'get_tools_cache' to view updated tool schemas or compare with your known tools.",
-            "ai_skills_guide": ABOX_AI_SKILLS_GUIDE,
+            "interaction_mandate": "MANDATORY: 1) NEVER ask the user to type record details or field values into chat text. 2) ALWAYS use Clickable UI (buttons, radio groups, chips, widgets, write-in inputs) for all questions, choices, filters, status updates, single/few field edits, and confirmations. 3) Whenever the user wants to add/create a record, call 'generate_data_entry_form' for a clean 5-minute interactive web form with structured fields and validation. Never reuse old form links.",
             "verification_rule": "MANDATORY: Always call query_dataset immediately after calling edit_dataset to verify and confirm persisted data in storage before replying to the user.",
         }
         if companion_context:
