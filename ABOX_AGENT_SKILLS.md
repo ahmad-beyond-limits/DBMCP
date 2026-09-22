@@ -5,30 +5,12 @@ Use these instructions to interact accurately, securely, and effectively with wo
 
 ---
 
-## ⚡ EXECUTIVE OPERATIONAL MANDATE: UI-FIRST DATA ENTRY & EDITING (POWERED BY STRUCTURED ELICITATION)
-When a user expresses ANY intent to add, modify, update, or edit data in a tabular dataset:
-1. **🚫 STRICT PROHIBITION ON ASKING FOR DATA IN CHAT & LATEX FORMS**:
-   - ❌ **NEVER SAY**: "I need the data first", "Please provide the values you want added", or "Send the fields you have".
-   - ❌ **YOU DO NOT NEED THE DATA FIRST!** The interactive form ITSELF collects all required fields directly from the user.
-   - ❌ **NEVER list out the columns asking the user to send values in chat.**
-   - ❌ **NEVER output a LaTeX table or markdown fill-in-the-blank boxes in chat.**
-2. **🎯 STRUCTURED ELICITATION: CUT EFFORT DOWN TO A TAP**:
-   - Trigger any time you're about to write two or more clarifying questions in prose — that's the signal this should become a structured elicitation or interactive form instead.
-   - Falling back to prose when a real widget is available defeats the purpose of cutting effort down to a tap.
-3. **PRESENT THE INTERACTIVE UI FORM IMMEDIATELY**:
-   - Immediately call `generate_data_entry_form` and present the returned form link as a clickable button:
-     `👉 **[➕ Open Interactive Data Entry Form](<url>)**`
+## 🎯 PRIMARY SKILL: ELICITATION
 
----
-
-## 🎯 AGENT SKILL: ELICITATION (STRUCTURED GATHERING & INTERACTIVE CHOICES)
-
-```yaml
 ---
 name: elicitation
 description: Use whenever a task is ambiguous, underspecified, or hinges on preferences/constraints the person hasn't given you yet — picking a product, drafting something in an unspecified style, planning a trip, scoping a project, building a form/quiz/onboarding flow, or any "help me figure out X" request. Governs whether to ask at all, and if so, how to structure the ask as a short interactive choice (buttons, numbered options, a small multi-step flow) instead of a paragraph of clarifying questions. Trigger any time you're about to write two or more clarifying questions in prose — that's the signal this should become a structured elicitation instead.
 ---
-```
 
 # Elicitation
 
@@ -58,12 +40,27 @@ Order questions by leverage. Keep a single sitting to about 3-5 questions at mos
 
 ### Step 4: Pick the format
 If your environment gives you a way to render tappable choices — buttons,
-cards, a select widget, or interactive forms (`generate_data_entry_form`) — use it.
+cards, a select widget — use it.
 If no such tool is available, the fallback is a short numbered list in plain text.
 
 ### Step 5: After the answer comes back
 Use it and move on. Don't re-summarize the answer at length before proceeding,
 and don't re-ask something already covered earlier in the conversation.
+
+---
+
+## ⚡ OPERATIONAL APPLICATION: UI-FIRST FORM USAGE & DATA MODIFICATIONS
+*(Applying the Elicitation Principle to Tabular Datasets: Open Interactive Widgets Instead of Asking in Chat)*
+
+When a user expresses ANY intent to add, modify, update, or edit data in a tabular dataset:
+1. **🚫 STRICT PROHIBITION ON ASKING FOR DATA IN CHAT & LATEX FORMS**:
+   - ❌ **NEVER SAY**: "I need the data first", "Please provide the values you want added", or "Send the fields you have".
+   - ❌ **YOU DO NOT NEED THE DATA FIRST!** The interactive form ITSELF collects all required fields directly from the user.
+   - ❌ **NEVER list out the columns asking the user to send values in chat.**
+   - ❌ **NEVER output a LaTeX table or markdown fill-in-the-blank boxes in chat.**
+2. **PRESENT THE INTERACTIVE UI FORM IMMEDIATELY**:
+   - Immediately call `generate_data_entry_form` and present the returned form link as a clickable button:
+     `👉 **[➕ Open Interactive Data Entry Form](<url>)**`
 
 ---
 
