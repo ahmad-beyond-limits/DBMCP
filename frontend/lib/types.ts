@@ -244,7 +244,8 @@ export interface AIGlobalInstructionDocument {
   filename: string;
   file_size: number;
   file_type: string;
-  extracted_text_preview: string;
+  content_type?: string;
+  extracted_text_preview?: string;
   full_text?: string;
   is_active: boolean;
   uploaded_by?: string | null;

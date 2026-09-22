@@ -350,6 +350,9 @@ async def init_db() -> None:
                 await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN IF NOT EXISTS executive_summary TEXT"))
                 await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN IF NOT EXISTS table_of_contents JSONB DEFAULT '[]'::jsonb"))
                 await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
+                await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN IF NOT EXISTS content_type VARCHAR(128) DEFAULT 'application/pdf'"))
+                await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN IF NOT EXISTS storage_path VARCHAR(512)"))
+                await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN IF NOT EXISTS file_content_base64 TEXT"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_global_instruction_documents_is_active ON ai_global_instruction_documents (is_active)"))
                 logger.info("Executed schema migration: ensure ai_global_instruction_documents columns exist.")
             elif settings.DATABASE_URL.startswith("sqlite"):
@@ -359,6 +362,18 @@ async def init_db() -> None:
                     pass
                 try:
                     await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN table_of_contents JSON DEFAULT '[]'"))
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN content_type VARCHAR(128)"))
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN storage_path VARCHAR(512)"))
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(text("ALTER TABLE ai_global_instruction_documents ADD COLUMN file_content_base64 TEXT"))
                 except Exception:
                     pass
         except Exception as e:

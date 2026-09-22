@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 from typing import Any, List, Optional
@@ -609,7 +610,8 @@ class AIGlobalInstructionDocResponse(BaseModel):
     filename: str
     file_size: int
     file_type: str
-    extracted_text_preview: str
+    content_type: Optional[str] = "application/pdf"
+    extracted_text_preview: Optional[str] = ""
     full_text: Optional[str] = None
     is_active: bool
     uploaded_by: Optional[str] = None
@@ -635,8 +637,9 @@ async def list_global_instruction_documents(
             filename=d.filename,
             file_size=d.file_size,
             file_type=d.file_type,
-            extracted_text_preview=d.extracted_text[:300] + ("..." if len(d.extracted_text) > 300 else ""),
-            full_text=d.extracted_text,
+            content_type=d.content_type or ("application/pdf" if d.file_type == "PDF" else "text/plain"),
+            extracted_text_preview=(d.extracted_text[:300] + ("..." if len(d.extracted_text) > 300 else "")) if d.extracted_text else "",
+            full_text=d.extracted_text or "",
             is_active=d.is_active,
             uploaded_by=d.uploaded_by,
             created_at=d.created_at,
@@ -662,6 +665,13 @@ async def upload_global_instruction_document(
         )
 
     file_type = "PDF" if ext == ".pdf" else ("DOCX" if ext == ".docx" else "TXT")
+    content_type_map = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".txt": "text/plain",
+    }
+    content_type = content_type_map.get(ext, "application/pdf")
+
     try:
         content = await file.read()
     except Exception as e:
@@ -679,26 +689,25 @@ async def upload_global_instruction_document(
         )
 
     logger.info(f"Admin {admin.username} uploading instruction doc '{filename}' ({len(content)} bytes)...")
-    try:
-        extracted_text, _, _ = await ContentExtractor.extract(content, file_type, filename, detect_pii=False)
-    except Exception as e:
-        logger.error(f"Error extracting text from {filename}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to extract text from document '{filename}': {str(e)}",
-        )
+    
+    # Store binary directly as base64 for AI direct reading (Option 2: native multimodal ingestion)
+    b64_content = base64.b64encode(content).decode("utf-8")
 
-    extracted_text = (extracted_text or "").strip()
-    if not extracted_text or extracted_text == "[PDF Document content ready for AI query]":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Could not extract readable text from '{filename}'. The file may be an image-only/scanned PDF without an OCR text layer, or password protected. Please upload a PDF with selectable text, or a DOCX/TXT file.",
-        )
+    # Optional/best-effort text extraction as fallback (never blocks upload)
+    extracted_text = ""
+    try:
+        raw_text, _, _ = await ContentExtractor.extract(content, file_type, filename, detect_pii=False)
+        if raw_text and raw_text.strip() != "[PDF Document content ready for AI query]":
+            extracted_text = raw_text.strip()
+    except Exception as e:
+        logger.warning(f"Optional fallback text extraction skipped for '{filename}': {e}")
 
     doc = AIGlobalInstructionDocument(
         filename=filename,
         file_size=len(content),
         file_type=file_type,
+        content_type=content_type,
+        file_content_base64=b64_content,
         extracted_text=extracted_text,
         is_active=True,
         uploaded_by=admin.id,
@@ -706,15 +715,16 @@ async def upload_global_instruction_document(
     db.add(doc)
     await db.commit()
     await db.refresh(doc)
-    logger.info(f"Successfully saved instruction doc {doc.id} ({filename}) with {len(extracted_text)} chars.")
+    logger.info(f"Successfully saved raw instruction doc {doc.id} ({filename}) for direct AI reading.")
 
     return AIGlobalInstructionDocResponse(
         id=doc.id,
         filename=doc.filename,
         file_size=doc.file_size,
         file_type=doc.file_type,
-        extracted_text_preview=doc.extracted_text[:300] + ("..." if len(doc.extracted_text) > 300 else ""),
-        full_text=doc.extracted_text,
+        content_type=doc.content_type,
+        extracted_text_preview=(doc.extracted_text[:300] + ("..." if len(doc.extracted_text) > 300 else "")) if doc.extracted_text else "",
+        full_text=doc.extracted_text or "",
         is_active=doc.is_active,
         uploaded_by=doc.uploaded_by,
         created_at=doc.created_at,
@@ -743,8 +753,9 @@ async def toggle_global_instruction_document(
         filename=doc.filename,
         file_size=doc.file_size,
         file_type=doc.file_type,
-        extracted_text_preview=doc.extracted_text[:300] + ("..." if len(doc.extracted_text) > 300 else ""),
-        full_text=doc.extracted_text,
+        content_type=doc.content_type or ("application/pdf" if doc.file_type == "PDF" else "text/plain"),
+        extracted_text_preview=(doc.extracted_text[:300] + ("..." if len(doc.extracted_text) > 300 else "")) if doc.extracted_text else "",
+        full_text=doc.extracted_text or "",
         is_active=doc.is_active,
         uploaded_by=doc.uploaded_by,
         created_at=doc.created_at,
