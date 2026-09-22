@@ -751,6 +751,9 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
     let sessionToken = rawParam.trim().replace(/^['"`<([\])]+|['"`<([\])>]+$/g, '');
     let sessionData = null;
     let isSubmitted = false;
+    let remainingSeconds = 60;
+    let timerInterval = null;
+    let isClosed = false;
 
     function esc(str) {
       if (str === null || str === undefined) return '';
@@ -760,32 +763,6 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
-    }
-
-    const preloadedEl = document.getElementById('preloaded-session');
-    const serverErrEl = document.getElementById('server-error');
-
-    if (serverErrEl) {
-      try {
-        const err = JSON.parse(serverErrEl.textContent);
-        showError(err.title || "Session Verification Failed", err.detail || "Unable to verify session.");
-      } catch (e) {
-        showError("Session Verification Failed", "Unable to load session.");
-      }
-    } else if (preloadedEl) {
-      try {
-        sessionData = JSON.parse(preloadedEl.textContent);
-        if (!sessionToken && sessionData && sessionData.session_token) {
-          sessionToken = sessionData.session_token;
-        }
-        renderForm();
-      } catch (e) {
-        showError("Form Display Error", "Failed to parse session data: " + e.message);
-      }
-    } else if (sessionToken) {
-      loadSession();
-    } else {
-      showError("No Session Token Provided", "Please ask your AI assistant to generate a new data entry form link.");
     }
 
     async function loadSession() {
@@ -810,10 +787,6 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
         showError("Form Display Error", "Error rendering form fields: " + (renderErr.message || renderErr));
       }
     }
-
-    let remainingSeconds = 60;
-    let timerInterval = null;
-    let isClosed = false;
 
     function startTimer(durationSeconds) {
       remainingSeconds = durationSeconds !== undefined ? durationSeconds : 60;
@@ -1075,6 +1048,33 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
           topIndicator.innerHTML = '<span class="live-dot"></span> Active Session';
         }
       };
+    }
+
+    // Initialize session from preloaded payload, network query, or report error
+    const preloadedEl = document.getElementById('preloaded-session');
+    const serverErrEl = document.getElementById('server-error');
+
+    if (serverErrEl) {
+      try {
+        const err = JSON.parse(serverErrEl.textContent);
+        showError(err.title || "Session Verification Failed", err.detail || "Unable to verify session.");
+      } catch (e) {
+        showError("Session Verification Failed", "Unable to load session.");
+      }
+    } else if (preloadedEl) {
+      try {
+        sessionData = JSON.parse(preloadedEl.textContent);
+        if (!sessionToken && sessionData && sessionData.session_token) {
+          sessionToken = sessionData.session_token;
+        }
+        renderForm();
+      } catch (e) {
+        showError("Form Display Error", "Failed to parse session data: " + e.message);
+      }
+    } else if (sessionToken) {
+      loadSession();
+    } else {
+      showError("No Session Token Provided", "Please ask your AI assistant to generate a new data entry form link.");
     }
   </script>
 </body>
