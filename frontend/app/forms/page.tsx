@@ -36,6 +36,7 @@ function FormContent() {
   const [dirtyFields, setDirtyFields] = useState<Set<string>>(new Set());
   const [isClosed, setIsClosed] = useState(false);
   const [countdown, setCountdown] = useState<number>(300);
+  const [customSelects, setCustomSelects] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!sessionToken) {
@@ -403,21 +404,59 @@ function FormContent() {
 
                   {/* Input Rendering based on field.type */}
                   {field.type === "select" && field.options && field.options.length > 0 ? (
-                    <select
-                      id={field.name}
-                      value={val}
-                      onChange={(e) => handleInputChange(field.name, e.target.value)}
-                      className={`w-full px-4 py-2.5 rounded-xl bg-slate-950 border text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all ${
-                        isDirty ? "border-indigo-500/50" : "border-slate-800"
-                      }`}
-                    >
-                      <option value="">-- Select {field.label} --</option>
-                      {field.options.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
+                    customSelects[field.name] ? (
+                      <div className="space-y-1.5">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            id={field.name}
+                            value={val}
+                            placeholder={`Enter custom ${field.label}...`}
+                            onChange={(e) => handleInputChange(field.name, e.target.value)}
+                            className={`flex-1 px-4 py-2.5 rounded-xl bg-slate-950 border text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all ${
+                              isDirty ? "border-indigo-500/50" : "border-slate-800"
+                            }`}
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomSelects((prev) => ({ ...prev, [field.name]: false }));
+                              handleInputChange(field.name, "");
+                            }}
+                            className="px-3 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all"
+                            title="Choose from existing list"
+                          >
+                            List
+                          </button>
+                        </div>
+                        <span className="text-[10px] text-indigo-400">Custom entry mode active</span>
+                      </div>
+                    ) : (
+                      <select
+                        id={field.name}
+                        value={val}
+                        onChange={(e) => {
+                          if (e.target.value === "__custom__") {
+                            setCustomSelects((prev) => ({ ...prev, [field.name]: true }));
+                            handleInputChange(field.name, "");
+                          } else {
+                            handleInputChange(field.name, e.target.value);
+                          }
+                        }}
+                        className={`w-full px-4 py-2.5 rounded-xl bg-slate-950 border text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all ${
+                          isDirty ? "border-indigo-500/50" : "border-slate-800"
+                        }`}
+                      >
+                        <option value="">-- Select {field.label} --</option>
+                        {field.options.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                        <option value="__custom__">➕ Enter new / Custom value...</option>
+                      </select>
+                    )
                   ) : field.type === "boolean" ? (
                     <div className="flex items-center gap-3 pt-2">
                       <button

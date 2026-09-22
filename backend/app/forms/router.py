@@ -937,10 +937,16 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
 
         let inputHtml = '';
         if (field.type === 'select' && field.options && field.options.length > 0) {
-          inputHtml = `<select name="${esc(field.name)}">
-            <option value="">-- Select ${esc(field.label)} --</option>
-            ${field.options.map(opt => `<option value="${esc(opt)}" ${String(opt) === String(prefilled) ? 'selected' : ''}>${esc(opt)}</option>`).join('')}
-          </select>`;
+          inputHtml = `
+            <div style="display:flex; flex-direction:column; gap:0.4rem;">
+              <select id="sel_${esc(field.name)}" name="${esc(field.name)}" onchange="handleSelectChange(this, '${esc(field.name)}')">
+                <option value="">-- Select ${esc(field.label)} --</option>
+                ${field.options.map(opt => `<option value="${esc(opt)}" ${String(opt) === String(prefilled) ? 'selected' : ''}>${esc(opt)}</option>`).join('')}
+                <option value="__custom__">+ Enter new / Custom value...</option>
+              </select>
+              <input type="text" id="cust_${esc(field.name)}" style="display:none; margin-top:0.25rem;" placeholder="Type custom ${esc(field.label.toLowerCase())}..." oninput="handleCustomInput(this, '${esc(field.name)}')">
+            </div>
+          `;
         } else if (field.type === 'number') {
           inputHtml = `<input type="number" step="any" inputmode="decimal" name="${esc(field.name)}" value="${esc(prefilled)}" placeholder="${esc(field.placeholder || '0')}">`;
         } else if (field.type === 'date') {
@@ -964,6 +970,25 @@ STANDALONE_FORM_HTML = r"""<!DOCTYPE html>
         `;
         grid.appendChild(group);
       });
+    }
+
+    function handleSelectChange(sel, name) {
+      const custInput = document.getElementById('cust_' + name);
+      if (!custInput) return;
+      if (sel.value === '__custom__') {
+        custInput.style.display = 'block';
+        custInput.focus();
+        sel.removeAttribute('name');
+        custInput.setAttribute('name', name);
+      } else {
+        custInput.style.display = 'none';
+        sel.setAttribute('name', name);
+        custInput.removeAttribute('name');
+      }
+    }
+
+    function handleCustomInput(input, name) {
+      // Keep input active
     }
 
     document.getElementById('resetBtn').addEventListener('click', () => {

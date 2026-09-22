@@ -401,19 +401,46 @@ def infer_field_definition(col: str, sample_values: List[Any], current_val: Opti
             placeholder="YYYY-MM-DD",
         )
 
-    # 4. Select dropdown check (categoric fields with limited distinct options, excluding ID/Code/Key fields)
+    # 4. Personal identity & free-form text check (name of the person/student, contact info, notes)
     is_id_field = any(k in col_lower for k in ("id", "code", "key", "roll", "reg", "uuid", "guid", "number", "num", "no."))
-    if not is_id_field:
-        str_samples = [str(v).strip() for v in valid_samples]
+    is_personal_name = (
+        col_lower in ("name", "student_name", "student name", "student", "first_name", "last_name", "full_name", "employee_name", "person_name", "applicant_name")
+        or col_lower.endswith("_name")
+        or col_lower.startswith("name_")
+    )
+    is_free_text = any(
+        k in col_lower for k in (
+            "email", "phone", "mobile", "contact", "address", "desc", "description",
+            "comment", "note", "remark", "bio", "url", "link", "summary", "reason",
+            "detail", "text", "query", "message"
+        )
+    )
+
+    # 5. Dropdown check:
+    # Categorical attributes (major, department, track, city, status, grade, gender, role, batch, etc.)
+    # should be dropdowns so users can quickly select them without typing!
+    if not is_id_field and not is_personal_name and not is_free_text:
+        str_samples = [str(v).strip() for v in valid_samples if v is not None and str(v).strip()]
         unique_vals = list(dict.fromkeys(str_samples))
-        if len(valid_samples) >= 3 and 1 < len(unique_vals) <= 12 and all(len(u) < 40 for u in unique_vals):
+        is_known_category = any(
+            k in col_lower for k in (
+                "major", "dept", "department", "track", "program", "course", "subject", "topic",
+                "city", "state", "country", "school", "college", "university",
+                "gender", "sex", "status", "grade", "role", "type", "category", "priority",
+                "blood", "section", "semester", "term", "level", "batch", "class",
+                "result", "passed", "decision", "group", "tier", "plan"
+            )
+        )
+        # Dropdown if it matches category keywords (up to 30 unique values) or has low-cardinality repetition
+        has_repetition = len(valid_samples) >= 3 and 1 < len(unique_vals) <= 15 and all(len(u) < 50 for u in unique_vals)
+        if (is_known_category and 1 <= len(unique_vals) <= 30) or has_repetition:
             return FormFieldDefinition(
                 name=col,
                 label=clean_label,
                 type="select",
                 options=unique_vals,
                 current_value=current_val,
-                placeholder=f"Select {clean_label.lower()}",
+                placeholder=f"Select or enter {clean_label.lower()}",
             )
 
     # 5. Default text

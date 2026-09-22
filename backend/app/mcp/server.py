@@ -236,7 +236,7 @@ ACCOUNT_MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Simple utility tool in the cache that opens a temporary 5-minute standalone Session Form. Use this tool ONLY when requirements are complex (massive schemas, multi-step wizards) or when an in-chat Clickable Form cannot be used, or when explicitly requested by the user. For normal adding, modifying, or removing records, get data in clickable form by creating it directly in the conversation.",
+        "description": "Generates a dedicated temporary 5-minute standalone web Data Entry Form. ALWAYS call this tool whenever the user wants to add, create, or register a new record (e.g. adding a new student, inserting a new customer, creating a new item) or edit multiple fields at once. NEVER attempt to render an HTML form inside chat text with = [Form] or ask the user to type fields in chat. Each session is single-use and expires after 5 minutes.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -726,7 +726,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "get_dataset_schema",
-        "description": "Returns the schema, columns, and data types for a structured dataset. ⚠️ NOTE: If the user wants to make a single-field change or pick an action, present clickable options in chat with an 'Other / Custom' input. If the user wants to enter a new multi-field record or complex update, generate an interactive form.",
+        "description": "Returns the schema, columns, and data types for a structured dataset. NOTE: If the user wants to add a new record, call 'generate_data_entry_form' to provide a dedicated web entry form. If the user wants to choose an action, filter, or select a record, present clickable options in chat with an 'Other / Custom Input' option.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -759,7 +759,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "edit_dataset",
-        "description": "Direct programmatic dataset mutation (update, insert, delete). Use for creating, updating, or deleting records after gathering values via Clickable Form in chat, or after receiving instructions. NEVER ask the user to type record details into chat in plain text — get data in clickable form by creating it directly in the conversation.",
+        "description": "Direct programmatic dataset mutation (update, insert, delete). Use for modifying or deleting records after gathering values via Clickable UI in chat, or after receiving instructions. For adding new records or multi-field data entry, call 'generate_data_entry_form'. Never ask the user to type raw record values in chat.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -790,7 +790,7 @@ MCP_TOOLS_DEFINITIONS = [
     },
     {
         "name": "generate_data_entry_form",
-        "description": "Generates a dedicated temporary 5-minute standalone Session Form. Use this tool ONLY when data entry requirements are complex (e.g. extensive schemas with dozens of fields, complex multi-step wizards) or when an in-chat Clickable Form cannot be used, or when explicitly requested by the user. For normal adding, modifying, or removing records, get data in clickable form by creating it directly in the conversation. Each session is single-use and expires after 5 minutes. Never reuse or recycle old session form links across turns.",
+        "description": "Generates a dedicated temporary 5-minute standalone web Data Entry Form. ALWAYS call this tool whenever the user wants to add, create, or register a new record (e.g. adding a new student, inserting a new customer, creating a new item) or edit multiple fields at once. NEVER attempt to render an HTML form inside chat text with = [Form] or ask the user to type fields in chat. Each session is single-use and expires after 5 minutes.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1288,35 +1288,23 @@ class ToolCacheRegistry:
                 "clickable_options_ui": {
                     "name": "clickable-options-ui",
                     "description": (
-                        "Render choices, options, ranges, filters, and menus as interactive, clickable UI controls "
-                        "(buttons, radio groups, checkboxes, selects, or widgets) inside the chat interface with an 'Other / Custom' input. "
-                        "NOTE: This is NOT an MCP tool — it is your OWN native UI rendering functionality in the chat interface."
+                        "Render interactive Clickable UI directly inside the chat conversation — NOT in HTML files. "
+                        "Creates tactile buttons, chips, dropdowns, text inputs, and submit buttons."
                     ),
                     "when_to_use": (
-                        "Use for single-attribute updates, discrete choices, selecting from options, and confirming actions. "
-                        "Always include an 'Other / Custom Input' option. Rendered directly by you in chat, not by calling a backend tool."
+                        "ALWAYS use for questionnaires, preferences, and adding/editing dataset records directly in chat. "
+                        "Do NOT create .html files or output raw HTML tags. "
+                        "When adding a new record (e.g. adding a student), the entity name MUST be an open text input '[________________________]', "
+                        "NOT a dropdown of existing records. Use dropdowns or buttons for categories (Major, Department, Status, Budget)."
                     ),
                 },
-                "interactive_clickable_forms": {
-                    "name": "interactive-clickable-forms",
-                    "description": (
-                        "Create interactive forms that users can complete directly inside the AI conversation using clickable UI controls "
-                        "(radios, checkboxes, toggles, text/number inputs, date pickers, dropdowns, rating stars, submit buttons). "
-                        "NOTE: This is NOT an MCP tool — it is your OWN native conversational UI rendering functionality."
-                    ),
-                    "when_to_use": (
-                        "Use whenever the user asks for a questionnaire, application, survey, configuration screen, or structured input form in chat. "
-                        "Choose the most appropriate interactive control for each field. Avoid unnecessary typing."
-                    ),
-                },
-                "session_forms": {
+                "data_entry_forms": {
                     "name": "session-form-tool",
                     "description": (
-                        "Generates a temporary 5-minute standalone Session Form using tool 'generate_data_entry_form'."
+                        "Generates a temporary 5-minute dedicated browser web Data Entry Form using tool 'generate_data_entry_form'."
                     ),
                     "when_to_use": (
-                        "Use ONLY when requirements are complex (massive schemas, multi-step wizards) or when an in-chat Clickable Form cannot be used. "
-                        "For normal data collection, adding, modifying, or removing records, get data in clickable form by creating it directly in the conversation."
+                        "Use ONLY when the user explicitly requests an external standalone web form link or browser page."
                     ),
                 },
                 "companion_memory_harness": {
@@ -1335,9 +1323,9 @@ class ToolCacheRegistry:
             "instructions": (
                 "All server tools are packed inside this tool cache gateway. "
                 "CRITICAL INTERACTION PROTOCOL: "
-                "1. STRICT PROHIBITION ON ASKING FOR DETAILS IN CHAT TEXT: Never ask the user to type record details or field values into chat in plain text. "
-                "2. CLICKABLE FORM BY DEFAULT (YOUR NATIVE CHAT FUNCTIONALITY, NOT AN MCP TOOL): Always get data in clickable form by creating it directly in conversation (buttons, radio groups, chips, inputs, widgets, write-in inputs) to add records, modify records, remove records, and elicit preferences. "
-                "3. SESSION FORM TOOL (EXTERNAL TOOL): Use 'generate_data_entry_form' ONLY when requirements are complex or an in-chat clickable form cannot be used. Session forms expire after 5 minutes and are never recycled."
+                "1. STRICT PROHIBITION ON ASKING FOR DETAILS IN PLAIN CHAT TEXT: Never ask the user to type record details or field values into chat text. "
+                "2. CLICKABLE UI DIRECTLY IN CONVERSATION (NOT IN HTML FILES): Never generate or write .html files. Render clickable UI directly in chat using buttons [ Option ], dropdowns [Select ▼], text inputs [________________________], and action buttons [ Submit ] [ Cancel ]. "
+                "3. NEW RECORD FIELD RULES: When adding a new record (e.g. adding a student), the entity name MUST ALWAYS be an open text input '[________________________]' so the user can type the new name — NEVER make it a dropdown of existing records. Use dropdowns for categories, departments, and statuses."
             ),
             "tools": tools_catalog,
         }
@@ -1739,8 +1727,7 @@ class MCPServer:
             "workspace_id": context.workspace_id,
             "workspace_name": context.workspace_name,
             "security_protocol": "ABOX Policy Boundary Gateway v1.0",
-            "available_tools": [t["name"] for t in ToolCacheRegistry.get_all_tools("WORKSPACE")],
-            "interaction_mandate": "MANDATORY: 1) NEVER ask the user to type record details or field values into chat in plain text. 2) ALWAYS get data in clickable form by creating it directly in conversation (buttons, radio groups, chips, inputs, widgets, write-in inputs) to add, modify, or remove records. 3) Use tool 'generate_data_entry_form' (Session Form) ONLY when requirements are complex or when an in-chat clickable form cannot be used. Session forms expire after 5 minutes and are never recycled.",
+            "interaction_mandate": "MANDATORY: 1) NEVER ask the user to type record details or field values into raw chat text. 2) NEVER generate or write .html files. Render Clickable UI directly in conversation (buttons [ Option ], dropdowns [Select ▼], text inputs [________________________], submit button [ Submit ]). 3) When adding a new record (e.g. adding a student), the entity name MUST ALWAYS be an open text input '[________________________]' so the user can type the new name — NEVER a dropdown of existing records. Dropdowns and buttons are for categories, departments, and statuses. 4) If the user explicitly asks for an external web link, call 'generate_data_entry_form'.",
             "verification_rule": "MANDATORY: Always call query_dataset immediately after calling edit_dataset to verify and confirm persisted data in storage before replying to the user.",
         }
         if companion_context:
@@ -1795,9 +1782,10 @@ class MCPServer:
                 }
                 if f.file_type in DATASET_FILE_TYPES:
                     res_item["data_entry_guidance"] = (
-                        f"To add, modify, or remove records in {f.original_filename}, get data in clickable form by creating it directly in conversation. "
-                        f"If requirements are complex or an in-chat form cannot be used, call tool 'generate_data_entry_form' "
-                        f"to create a fresh 5-minute session form. Never reuse or recycle old form links."
+                        f"To add, update, or manage records in {f.original_filename}, render Clickable UI directly in conversation "
+                        f"(buttons [ Option ], dropdowns [Select ▼], text inputs [________________________], submit [ Submit ]). "
+                        f"For new records, the entity name MUST be an open text input, not a dropdown of existing records. "
+                        f"Do NOT create .html files or ask for raw fields in chat text. If an external web link is requested, call tool 'generate_data_entry_form'."
                     )
                 permitted_resources.append(res_item)
 
@@ -2083,12 +2071,10 @@ class MCPServer:
 
         safe_schema = StructuredQueryEngine.get_safe_schema(structured or {}, decision.denied_fields)
         safe_schema["data_entry_guidance"] = (
-            f"To add, modify, or remove records in {file_rec.original_filename}, "
-            f"get data in clickable form by creating it directly in conversation (buttons, radio groups, inputs, widgets). "
-            f"If requirements are complex or an in-chat form cannot be used, call tool 'generate_data_entry_form' "
-            f"to generate a fresh 5-minute single-use session form. "
-            f"Never reuse or recycle old form links from earlier in the chat. "
-            f"Never ask the user to type out or send column values in chat."
+            f"To add, update, or manage records in {file_rec.original_filename}, "
+            f"render Clickable UI directly in conversation (buttons [ Option ], dropdowns [Select ▼], text inputs [________________________], submit [ Submit ]). "
+            f"For new records, the entity name MUST be an open text input, not a dropdown of existing records. "
+            f"Do NOT create .html files or ask for raw fields in chat text. If an external web link is requested, call tool 'generate_data_entry_form'."
         )
 
         return {
