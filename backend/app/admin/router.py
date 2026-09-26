@@ -547,12 +547,14 @@ async def delete_admin_ai_guidance(
 class AIGlobalRulesResponse(BaseModel):
     id: int
     rules_text: str
+    compas_mode_active: bool = True
     updated_by: Optional[str] = None
     updated_at: Optional[datetime] = None
 
 
 class AIGlobalRulesUpdateRequest(BaseModel):
-    rules_text: str = Field(..., description="Platform-wide unconditional AI guardrail rules. One rule per line.")
+    rules_text: Optional[str] = Field(None, description="Platform-wide unconditional AI guardrail rules. One rule per line.")
+    compas_mode_active: Optional[bool] = Field(None, description="Toggle Compas character, confidentiality, and anti-hijacking shield.")
 
 
 @router.get("/ai-global-rules", response_model=AIGlobalRulesResponse)
@@ -564,13 +566,14 @@ async def get_global_ai_rules(
     row = (await db.execute(select(AIGlobalRules).where(AIGlobalRules.id == 1))).scalar_one_or_none()
     if not row:
         # Auto-create empty singleton if missing
-        row = AIGlobalRules(id=1, rules_text="")
+        row = AIGlobalRules(id=1, rules_text="", compas_mode_active=True)
         db.add(row)
         await db.commit()
         await db.refresh(row)
     return AIGlobalRulesResponse(
         id=row.id,
-        rules_text=row.rules_text,
+        rules_text=row.rules_text or "",
+        compas_mode_active=getattr(row, "compas_mode_active", True),
         updated_by=row.updated_by,
         updated_at=row.updated_at,
     )
@@ -585,17 +588,22 @@ async def update_global_ai_rules(
     """Update the platform-wide global AI rules. Admin-only."""
     row = (await db.execute(select(AIGlobalRules).where(AIGlobalRules.id == 1))).scalar_one_or_none()
     if not row:
-        row = AIGlobalRules(id=1, rules_text="")
+        row = AIGlobalRules(id=1, rules_text="", compas_mode_active=True)
         db.add(row)
 
-    row.rules_text = payload.rules_text.strip()
+    if payload.rules_text is not None:
+        row.rules_text = payload.rules_text.strip()
+    if payload.compas_mode_active is not None:
+        row.compas_mode_active = payload.compas_mode_active
+
     row.updated_by = admin.id
     await db.commit()
     await db.refresh(row)
 
     return AIGlobalRulesResponse(
         id=row.id,
-        rules_text=row.rules_text,
+        rules_text=row.rules_text or "",
+        compas_mode_active=getattr(row, "compas_mode_active", True),
         updated_by=row.updated_by,
         updated_at=row.updated_at,
     )

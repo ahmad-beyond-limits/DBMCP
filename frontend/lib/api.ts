@@ -674,10 +674,18 @@ class ApiClient {
     return this.request<AIGlobalRules>("/admin/ai-global-rules");
   }
 
-  async updateAdminGlobalAIRules(rules_text: string): Promise<AIGlobalRules> {
+  async updateAdminGlobalAIRules(data: string | { rules_text?: string; compas_mode_active?: boolean }): Promise<AIGlobalRules> {
+    const payload = typeof data === "string" ? { rules_text: data } : data;
     return this.request<AIGlobalRules>("/admin/ai-global-rules", {
       method: "PUT",
-      body: JSON.stringify({ rules_text }),
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async toggleAdminCompasMode(compas_mode_active: boolean): Promise<AIGlobalRules> {
+    return this.request<AIGlobalRules>("/admin/ai-global-rules", {
+      method: "PUT",
+      body: JSON.stringify({ compas_mode_active }),
     });
   }
 

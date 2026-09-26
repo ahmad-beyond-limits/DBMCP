@@ -379,6 +379,19 @@ async def init_db() -> None:
         except Exception as e:
             logger.warning(f"Schema migration warning for ai_global_instruction_documents: {e}")
 
+        # Schema migration: ensure ai_global_rules compas_mode_active column exists
+        try:
+            if "postgresql" in settings.DATABASE_URL:
+                await conn.execute(text("ALTER TABLE ai_global_rules ADD COLUMN IF NOT EXISTS compas_mode_active BOOLEAN DEFAULT TRUE"))
+                logger.info("Executed schema migration: ensure ai_global_rules compas_mode_active exists.")
+            elif settings.DATABASE_URL.startswith("sqlite"):
+                try:
+                    await conn.execute(text("ALTER TABLE ai_global_rules ADD COLUMN compas_mode_active BOOLEAN DEFAULT 1"))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Schema migration warning for ai_global_rules.compas_mode_active: {e}")
+
         # Schema migration: ensure user_personalizations table exists
         try:
             if "postgresql" in settings.DATABASE_URL:

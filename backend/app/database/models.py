@@ -263,6 +263,7 @@ class AIGlobalRules(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)  # Singleton row, always id=1
     rules_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    compas_mode_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     updated_by: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 

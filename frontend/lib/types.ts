@@ -235,6 +235,7 @@ export interface AIGuidancePlaybook {
 export interface AIGlobalRules {
   id: number;
   rules_text: string;
+  compas_mode_active?: boolean;
   updated_by?: string | null;
   updated_at?: string | null;
 }
