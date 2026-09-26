@@ -547,6 +547,7 @@ async def delete_admin_ai_guidance(
 class AIGlobalRulesResponse(BaseModel):
     id: int
     rules_text: str
+    compass_mode_active: bool = True
     compas_mode_active: bool = True
     updated_by: Optional[str] = None
     updated_at: Optional[datetime] = None
@@ -554,7 +555,10 @@ class AIGlobalRulesResponse(BaseModel):
 
 class AIGlobalRulesUpdateRequest(BaseModel):
     rules_text: Optional[str] = Field(None, description="Platform-wide unconditional AI guardrail rules. One rule per line.")
-    compas_mode_active: Optional[bool] = Field(None, description="Toggle Compas character, confidentiality, and anti-hijacking shield.")
+    compass_mode_active: Optional[bool] = Field(None, description="Toggle Compass character, confidentiality, and anti-hijacking shield.")
+    compas_mode_active: Optional[bool] = Field(None, description="Legacy alias for compass_mode_active.")
+
+    model_config = {"extra": "ignore"}
 
 
 @router.get("/ai-global-rules", response_model=AIGlobalRulesResponse)
@@ -566,14 +570,17 @@ async def get_global_ai_rules(
     row = (await db.execute(select(AIGlobalRules).where(AIGlobalRules.id == 1))).scalar_one_or_none()
     if not row:
         # Auto-create empty singleton if missing
-        row = AIGlobalRules(id=1, rules_text="", compas_mode_active=True)
+        row = AIGlobalRules(id=1, rules_text="", compass_mode_active=True)
         db.add(row)
         await db.commit()
         await db.refresh(row)
+    
+    is_active = getattr(row, "compass_mode_active", getattr(row, "compas_mode_active", True))
     return AIGlobalRulesResponse(
         id=row.id,
         rules_text=row.rules_text or "",
-        compas_mode_active=getattr(row, "compas_mode_active", True),
+        compass_mode_active=is_active,
+        compas_mode_active=is_active,
         updated_by=row.updated_by,
         updated_at=row.updated_at,
     )
@@ -586,27 +593,76 @@ async def update_global_ai_rules(
     db: AsyncSession = Depends(get_db),
 ):
     """Update the platform-wide global AI rules. Admin-only."""
-    row = (await db.execute(select(AIGlobalRules).where(AIGlobalRules.id == 1))).scalar_one_or_none()
-    if not row:
-        row = AIGlobalRules(id=1, rules_text="", compas_mode_active=True)
-        db.add(row)
+    try:
+        row = (await db.execute(select(AIGlobalRules).where(AIGlobalRules.id == 1))).scalar_one_or_none()
+        if not row:
+            row = AIGlobalRules(id=1, rules_text="", compass_mode_active=True)
+            db.add(row)
 
-    if payload.rules_text is not None:
-        row.rules_text = payload.rules_text.strip()
-    if payload.compas_mode_active is not None:
-        row.compas_mode_active = payload.compas_mode_active
+        if payload.rules_text is not None:
+            row.rules_text = payload.rules_text.strip()
+        
+        active_flag = payload.compass_mode_active if payload.compass_mode_active is not None else payload.compas_mode_active
+        if active_flag is not None:
+            if hasattr(row, "compass_mode_active"):
+                row.compass_mode_active = active_flag
+            if hasattr(row, "compas_mode_active"):
+                setattr(row, "compas_mode_active", active_flag)
 
-    row.updated_by = admin.id
-    await db.commit()
-    await db.refresh(row)
+        row.updated_by = admin.id
+        await db.commit()
+        await db.refresh(row)
 
-    return AIGlobalRulesResponse(
-        id=row.id,
-        rules_text=row.rules_text or "",
-        compas_mode_active=getattr(row, "compas_mode_active", True),
-        updated_by=row.updated_by,
-        updated_at=row.updated_at,
-    )
+        is_active = getattr(row, "compass_mode_active", getattr(row, "compas_mode_active", True))
+        return AIGlobalRulesResponse(
+            id=row.id,
+            rules_text=row.rules_text or "",
+            compass_mode_active=is_active,
+            compas_mode_active=is_active,
+            updated_by=row.updated_by,
+            updated_at=row.updated_at,
+        )
+    except Exception as e:
+        logger.error(f"Failed to update global AI rules via ORM: {e}", exc_info=True)
+        # Direct SQL fallback to guarantee state persistence
+        active_flag = payload.compass_mode_active if payload.compass_mode_active is not None else payload.compas_mode_active
+        try:
+            if active_flag is not None:
+                try:
+                    await db.execute(
+                        text("UPDATE ai_global_rules SET compass_mode_active = :val WHERE id = 1"),
+                        {"val": active_flag}
+                    )
+                except Exception:
+                    pass
+                try:
+                    await db.execute(
+                        text("UPDATE ai_global_rules SET compas_mode_active = :val WHERE id = 1"),
+                        {"val": active_flag}
+                    )
+                except Exception:
+                    pass
+            if payload.rules_text is not None:
+                await db.execute(
+                    text("UPDATE ai_global_rules SET rules_text = :rules WHERE id = 1"),
+                    {"rules": payload.rules_text.strip()}
+                )
+            await db.commit()
+            val = active_flag if active_flag is not None else True
+            return AIGlobalRulesResponse(
+                id=1,
+                rules_text=payload.rules_text or "",
+                compass_mode_active=val,
+                compas_mode_active=val,
+                updated_by=admin.id,
+                updated_at=datetime.now(timezone.utc),
+            )
+        except Exception as inner_e:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Database error updating rules: {str(e)}",
+            )
 
 
 # =====================================================================

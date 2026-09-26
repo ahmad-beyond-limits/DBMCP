@@ -90,8 +90,8 @@ export default function AdminDashboardPage() {
   const [globalRulesText, setGlobalRulesText] = useState("");
   const [globalRulesSaving, setGlobalRulesSaving] = useState(false);
   const [globalRulesSaved, setGlobalRulesSaved] = useState(false);
-  const [compasModeActive, setCompasModeActive] = useState<boolean>(true);
-  const [togglingCompasMode, setTogglingCompasMode] = useState<boolean>(false);
+  const [compassModeActive, setCompassModeActive] = useState<boolean>(true);
+  const [togglingCompassMode, setTogglingCompassMode] = useState<boolean>(false);
 
   // Background Instruction Documents (PDF Directives)
   const [instructionDocs, setInstructionDocs] = useState<AIGlobalInstructionDocument[]>([]);
@@ -136,7 +136,7 @@ export default function AdminDashboardPage() {
         api.getAdminUsers().catch((err) => { console.error("Failed to load admin users:", err); return []; }),
         api.getAdminWorkspaces().catch((err) => { console.error("Failed to load admin workspaces:", err); return []; }),
         api.getAdminAIGuidance().catch((err) => { console.error("Failed to load guidance playbooks:", err); return []; }),
-        api.getAdminGlobalAIRules().catch(() => ({ id: 1, rules_text: "", compas_mode_active: true } as AIGlobalRules)),
+        api.getAdminGlobalAIRules().catch(() => ({ id: 1, rules_text: "", compass_mode_active: true } as AIGlobalRules)),
         api.getAdminFeedbackSignals().catch((err) => { console.error("Failed to load feedback signals:", err); return []; }),
         api.getAdminGlobalInstructionDocs().catch((err) => { console.error("Failed to load instruction docs:", err); return []; }),
       ]);
@@ -151,8 +151,11 @@ export default function AdminDashboardPage() {
         if (globalRulesData.rules_text !== undefined) {
           setGlobalRulesText(globalRulesData.rules_text || "");
         }
-        if (globalRulesData.compas_mode_active !== undefined) {
-          setCompasModeActive(globalRulesData.compas_mode_active);
+        const activeFlag = globalRulesData.compass_mode_active !== undefined
+          ? globalRulesData.compass_mode_active
+          : globalRulesData.compas_mode_active;
+        if (activeFlag !== undefined) {
+          setCompassModeActive(activeFlag);
         }
       }
     } catch (err: any) {
@@ -163,20 +166,40 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleToggleCompasMode = async () => {
-    setTogglingCompasMode(true);
-    const newStatus = !compasModeActive;
+  const handleToggleCompassMode = async () => {
+    setTogglingCompassMode(true);
+    const newStatus = !compassModeActive;
+    // Optimistically update UI so the button toggles instantly
+    setCompassModeActive(newStatus);
     try {
-      await api.toggleAdminCompasMode(newStatus);
-      setCompasModeActive(newStatus);
+      const res = await api.toggleAdminCompassMode(newStatus);
+      const activeFlag = res?.compass_mode_active !== undefined
+        ? res.compass_mode_active
+        : res?.compas_mode_active;
+      if (activeFlag !== undefined) {
+        setCompassModeActive(activeFlag);
+      }
       setActionMsg({
         type: "success",
-        text: `Compas Character & Security Shield is now ${newStatus ? "ACTIVE & ENFORCED" : "PAUSED"}.`,
+        text: `Compass Character & Security Shield is now ${newStatus ? "ACTIVE & ENFORCED" : "PAUSED"}.`,
       });
+      setTimeout(() => {
+        setActionMsg((curr) => curr?.text.includes("Compass Character") ? null : curr);
+      }, 3500);
     } catch (err: any) {
-      setActionMsg({ type: "error", text: err.message || "Failed to toggle Compas mode." });
+      // Revert state if server update failed
+      setCompassModeActive(!newStatus);
+      let errMsg = "Failed to toggle Compass mode.";
+      if (typeof err === "string") {
+        errMsg = err;
+      } else if (err?.message) {
+        errMsg = typeof err.message === "object" ? JSON.stringify(err.message) : String(err.message);
+      } else if (typeof err === "object") {
+        errMsg = JSON.stringify(err);
+      }
+      setActionMsg({ type: "error", text: errMsg });
     } finally {
-      setTogglingCompasMode(false);
+      setTogglingCompassMode(false);
     }
   };
 
@@ -186,7 +209,7 @@ export default function AdminDashboardPage() {
     try {
       await api.updateAdminGlobalAIRules({
         rules_text: globalRulesText,
-        compas_mode_active: compasModeActive,
+        compass_mode_active: compassModeActive,
       });
       setGlobalRulesSaved(true);
       setActionMsg({ type: "success", text: "Global AI Rules saved. All AI interactions will enforce these rules unconditionally." });
@@ -1186,15 +1209,15 @@ export default function AdminDashboardPage() {
                 Define universal rules the AI must ALWAYS obey during every conversation and analysis, regardless of specific playbooks. The AI retrieves these directly via the <code>get_global_ai_rules</code> MCP tool. Enter <strong>one rule per line</strong>.
               </p>
 
-              {/* Compas Character & Anti-Hijacking Shield (Toggleable Master Directives) */}
+              {/* Compass Character & Anti-Hijacking Shield (Toggleable Master Directives) */}
               <div
                 style={{
                   padding: "1rem 1.25rem",
                   borderRadius: "var(--radius-md)",
-                  background: compasModeActive
+                  background: compassModeActive
                     ? "linear-gradient(135deg, rgba(249, 115, 22, 0.06) 0%, rgba(251, 146, 60, 0.02) 100%)"
                     : "rgba(0, 0, 0, 0.02)",
-                  border: compasModeActive
+                  border: compassModeActive
                     ? "1px solid rgba(249, 115, 22, 0.25)"
                     : "1px solid rgba(0, 0, 0, 0.08)",
                   display: "flex",
@@ -1210,8 +1233,8 @@ export default function AdminDashboardPage() {
                         width: "36px",
                         height: "36px",
                         borderRadius: "10px",
-                        background: compasModeActive ? "rgba(234, 88, 12, 0.12)" : "rgba(0, 0, 0, 0.05)",
-                        color: compasModeActive ? "#C2410C" : "var(--text-tertiary)",
+                        background: compassModeActive ? "rgba(234, 88, 12, 0.12)" : "rgba(0, 0, 0, 0.05)",
+                        color: compassModeActive ? "#C2410C" : "var(--text-tertiary)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -1223,7 +1246,7 @@ export default function AdminDashboardPage() {
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                         <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
-                          Compas Character &amp; Confidentiality Shield
+                          Compass Character &amp; Confidentiality Shield
                         </h4>
                         <span
                           style={{
@@ -1233,16 +1256,16 @@ export default function AdminDashboardPage() {
                             letterSpacing: "0.05em",
                             padding: "0.15rem 0.5rem",
                             borderRadius: "999px",
-                            background: compasModeActive ? "rgba(22, 163, 74, 0.12)" : "rgba(0, 0, 0, 0.06)",
-                            color: compasModeActive ? "#16A34A" : "var(--text-tertiary)",
-                            border: compasModeActive ? "1px solid rgba(22, 163, 74, 0.25)" : "1px solid rgba(0, 0, 0, 0.1)",
+                            background: compassModeActive ? "rgba(22, 163, 74, 0.12)" : "rgba(0, 0, 0, 0.06)",
+                            color: compassModeActive ? "#16A34A" : "var(--text-tertiary)",
+                            border: compassModeActive ? "1px solid rgba(22, 163, 74, 0.25)" : "1px solid rgba(0, 0, 0, 0.1)",
                           }}
                         >
-                          {compasModeActive ? "Enforced" : "Paused"}
+                          {compassModeActive ? "Enforced" : "Paused"}
                         </span>
                       </div>
                       <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.8rem", color: "var(--text-secondary)", lineHeight: 1.45 }}>
-                        Applies the official <strong>Compas</strong> persona: answers &quot;I am Compas, built to help facilitators in students&apos; learning&quot;, completely conceals POAIS naming, and strictly prevents internal instruction leaks even under adversarial prompt hijacking.
+                        Applies the official <strong>Compass</strong> persona: answers &quot;I am Compass, built to help facilitators in students&apos; learning&quot;, completely conceals POAIS naming, and strictly prevents internal instruction leaks even under adversarial prompt hijacking.
                       </p>
                     </div>
                   </div>
@@ -1250,8 +1273,8 @@ export default function AdminDashboardPage() {
                   {/* Toggle Button */}
                   <button
                     type="button"
-                    disabled={togglingCompasMode}
-                    onClick={handleToggleCompasMode}
+                    disabled={togglingCompassMode}
+                    onClick={handleToggleCompassMode}
                     className="pill-btn"
                     style={{
                       display: "inline-flex",
@@ -1261,19 +1284,19 @@ export default function AdminDashboardPage() {
                       borderRadius: "999px",
                       fontSize: "0.8rem",
                       fontWeight: 600,
-                      background: compasModeActive ? "rgba(22, 163, 74, 0.12)" : "rgba(0, 0, 0, 0.05)",
-                      color: compasModeActive ? "#16A34A" : "var(--text-secondary)",
-                      border: compasModeActive ? "1px solid rgba(22, 163, 74, 0.3)" : "1px solid rgba(0, 0, 0, 0.15)",
-                      cursor: togglingCompasMode ? "wait" : "pointer",
+                      background: compassModeActive ? "rgba(22, 163, 74, 0.12)" : "rgba(0, 0, 0, 0.05)",
+                      color: compassModeActive ? "#16A34A" : "var(--text-secondary)",
+                      border: compassModeActive ? "1px solid rgba(22, 163, 74, 0.3)" : "1px solid rgba(0, 0, 0, 0.15)",
+                      cursor: togglingCompassMode ? "wait" : "pointer",
                       transition: "all 180ms ease",
                     }}
                   >
-                    {togglingCompasMode ? (
+                    {togglingCompassMode ? (
                       <>
                         <RefreshCw size={13} style={{ animation: "spin 1s linear infinite" }} />
                         <span>Updating...</span>
                       </>
-                    ) : compasModeActive ? (
+                    ) : compassModeActive ? (
                       <>
                         <CheckCircle2 size={14} strokeWidth={2.25} />
                         <span>Active &amp; Enforced</span>
@@ -1288,7 +1311,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Directive Highlights (When Active) */}
-                {compasModeActive && (
+                {compassModeActive && (
                   <div
                     style={{
                       display: "grid",
@@ -1300,11 +1323,11 @@ export default function AdminDashboardPage() {
                   >
                     <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.76rem", color: "var(--text-secondary)" }}>
                       <span style={{ color: "#C2410C", fontWeight: 700 }}>1. Identity:</span>
-                      <span>Name is <strong>Compas</strong>. Never mentions POAIS or platform architecture.</span>
+                      <span>Name is <strong>Compass</strong>. Never mentions POAIS or platform architecture.</span>
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.76rem", color: "var(--text-secondary)" }}>
                       <span style={{ color: "#C2410C", fontWeight: 700 }}>2. Query Response:</span>
-                      <span>When asked <em>&quot;Who are you?&quot;</em>, always responds: <em>&quot;I am Compas, built to help facilitators in students&apos; learning.&quot;</em></span>
+                      <span>When asked <em>&quot;Who are you?&quot;</em>, always responds: <em>&quot;I am Compass, built to help facilitators in students&apos; learning.&quot;</em></span>
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.76rem", color: "var(--text-secondary)" }}>
                       <span style={{ color: "#C2410C", fontWeight: 700 }}>3. Anti-Hijacking:</span>

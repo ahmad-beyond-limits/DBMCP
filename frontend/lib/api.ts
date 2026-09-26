@@ -91,7 +91,23 @@ class ApiClient {
           const contentType = response.headers.get("content-type") || "";
           if (contentType.includes("application/json")) {
             const errorData = await response.json();
-            errorMsg = errorData.detail || errorData.message || errorMsg;
+            if (typeof errorData.detail === "string") {
+              errorMsg = errorData.detail;
+            } else if (Array.isArray(errorData.detail)) {
+              errorMsg = errorData.detail
+                .map((d: any) => (typeof d === "string" ? d : d.msg ? `${d.loc ? d.loc.slice(1).join(".") + ": " : ""}${d.msg}` : JSON.stringify(d)))
+                .join("; ");
+            } else if (errorData.detail && typeof errorData.detail === "object") {
+              errorMsg = JSON.stringify(errorData.detail);
+            } else if (typeof errorData.message === "string") {
+              errorMsg = errorData.message;
+            } else if (errorData.message && typeof errorData.message === "object") {
+              errorMsg = JSON.stringify(errorData.message);
+            } else if (typeof errorData === "string") {
+              errorMsg = errorData;
+            } else {
+              errorMsg = JSON.stringify(errorData);
+            }
           } else {
             const text = await response.text();
             if (text && text.length < 250 && !text.includes("<html") && !text.includes("<!DOCTYPE")) {
@@ -100,7 +116,7 @@ class ApiClient {
           }
         } catch {}
       }
-      throw new Error(errorMsg);
+      throw new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
     }
 
     if (response.status === 204) {
@@ -674,7 +690,7 @@ class ApiClient {
     return this.request<AIGlobalRules>("/admin/ai-global-rules");
   }
 
-  async updateAdminGlobalAIRules(data: string | { rules_text?: string; compas_mode_active?: boolean }): Promise<AIGlobalRules> {
+  async updateAdminGlobalAIRules(data: string | { rules_text?: string; compass_mode_active?: boolean; compas_mode_active?: boolean }): Promise<AIGlobalRules> {
     const payload = typeof data === "string" ? { rules_text: data } : data;
     return this.request<AIGlobalRules>("/admin/ai-global-rules", {
       method: "PUT",
@@ -682,11 +698,15 @@ class ApiClient {
     });
   }
 
-  async toggleAdminCompasMode(compas_mode_active: boolean): Promise<AIGlobalRules> {
+  async toggleAdminCompassMode(compass_mode_active: boolean): Promise<AIGlobalRules> {
     return this.request<AIGlobalRules>("/admin/ai-global-rules", {
       method: "PUT",
-      body: JSON.stringify({ compas_mode_active }),
+      body: JSON.stringify({ compass_mode_active, compas_mode_active: compass_mode_active }),
     });
+  }
+
+  async toggleAdminCompasMode(compas_mode_active: boolean): Promise<AIGlobalRules> {
+    return this.toggleAdminCompassMode(compas_mode_active);
   }
 
   async getAdminGlobalInstructionDocs(): Promise<AIGlobalInstructionDocument[]> {
